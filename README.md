@@ -81,6 +81,7 @@ Then, in a notebook cell:
 ```python
 from twinmind.utils.config import load_config
 from twinmind.utils.seed import set_seed
+
 set_seed(42)
 config = load_config("models")
 ```

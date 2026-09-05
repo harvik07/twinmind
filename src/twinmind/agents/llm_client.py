@@ -313,8 +313,9 @@ class GroqClient(LLMClient):
                     },
                 ]
 
-        raise LLMError(f"could not obtain a schema-valid response after {attempts} attempts: "
-                       f"{last_error}")
+        raise LLMError(
+            f"could not obtain a schema-valid response after {attempts} attempts: {last_error}"
+        )
 
 
 # --------------------------------------------------------------------------- #

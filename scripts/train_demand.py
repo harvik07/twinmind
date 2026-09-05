@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     """Command-line interface for this script."""
-    parser = argparse.ArgumentParser(description='Train the demand model.')
+    parser = argparse.ArgumentParser(description="Train the demand model.")
     parser.add_argument("--model", default="nhits", choices=["nhits", "patchtst", "both"])
     parser.add_argument("--max-steps", type=int, default=None, help="Override config steps.")
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])

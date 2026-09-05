@@ -73,8 +73,11 @@ def fetch_cmapss(config: DataConfig, directory: Path) -> list[Path]:
     archive.unlink(missing_ok=True)
     extract_nested_zips(directory)
 
-    wanted = [f"{kind}_{subset}.txt" for kind in ("train", "test", "RUL")
-              for subset in config.cmapss.subsets]
+    wanted = [
+        f"{kind}_{subset}.txt"
+        for kind in ("train", "test", "RUL")
+        for subset in config.cmapss.subsets
+    ]
     files = flatten_into(directory, wanted)
     found = {p.name for p in files}
     missing = sorted(set(wanted) - found)
@@ -168,8 +171,14 @@ def fetch_favorita(config: DataConfig, directory: Path) -> list[Path]:
         archive.unlink()
 
     files = sorted(p for p in directory.glob("*.csv"))
-    expected = {"train.csv", "test.csv", "stores.csv", "oil.csv",
-                "holidays_events.csv", "transactions.csv"}
+    expected = {
+        "train.csv",
+        "test.csv",
+        "stores.csv",
+        "oil.csv",
+        "holidays_events.csv",
+        "transactions.csv",
+    }
     missing = sorted(expected - {p.name for p in files})
     if missing:
         raise DownloadError(f"Kaggle download is missing expected files: {missing}")
@@ -250,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[*DATASETS, "all"],
         default="all",
         help="Which dataset to fetch. 'all' skips optional datasets unless "
-             "--include-optional is given.",
+        "--include-optional is given.",
     )
     parser.add_argument("--force", action="store_true", help="Re-download even if checksums match.")
     parser.add_argument(
@@ -277,8 +286,9 @@ def main() -> int:
             fetch_dataset(name, config, force=args.force)
         except DownloadError as exc:
             optional = name in OPTIONAL
-            logger.error("%s: %s\n%s", name, "optional dataset failed" if optional else "FAILED",
-                         exc)
+            logger.error(
+                "%s: %s\n%s", name, "optional dataset failed" if optional else "FAILED", exc
+            )
             if not optional:
                 failures.append(name)
 

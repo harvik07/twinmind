@@ -15,8 +15,9 @@ def extract_claims(explanation: str) -> list[dict[str, object]]:
     raise NotImplementedError("extract_claims is not implemented yet")
 
 
-def verify_claims(claims: list[dict[str, object]], result: TwinResult, tolerance: float = 0.01
-                  ) -> list[dict[str, object]]:
+def verify_claims(
+    claims: list[dict[str, object]], result: TwinResult, tolerance: float = 0.01
+) -> list[dict[str, object]]:
     """Check each claim against the deterministic result."""
     raise NotImplementedError("verify_claims is not implemented yet")
 

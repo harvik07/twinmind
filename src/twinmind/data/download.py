@@ -158,8 +158,9 @@ def stream_download(url: str, destination: Path, policy: FetchPolicy, label: str
                 )
                 time.sleep(delay)
 
-    raise DownloadError(f"could not download {url} after {policy.max_retries} attempts: "
-                        f"{last_error}")
+    raise DownloadError(
+        f"could not download {url} after {policy.max_retries} attempts: {last_error}"
+    )
 
 
 # --------------------------------------------------------------------------- #

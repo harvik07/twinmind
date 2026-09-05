@@ -60,15 +60,20 @@ config = load_config("data")
 # 01 - C-MAPSS
 # --------------------------------------------------------------------------- #
 CMAPSS_CELLS: list[tuple[str, str]] = [
-    ("md", """# 01 - C-MAPSS exploration
+    (
+        "md",
+        """# 01 - C-MAPSS exploration
 
 NASA turbofan degradation, the training data for **Model A** (remaining useful life).
 
 Four subsets differing in operating conditions and fault modes. Everything below
 imports from `twinmind.data`; no preprocessing logic is redefined here.
-"""),
+""",
+    ),
     ("code", PREAMBLE),
-    ("code", '''\
+    (
+        "code",
+        """\
 from twinmind.data.loaders import load_cmapss
 from twinmind.data.windowing import (
     compute_rul, compute_test_rul, drop_constant_sensors,
@@ -96,9 +101,12 @@ summary = pd.DataFrame(
         for s in cfg.subsets
     ]
 )
-summary'''),
+summary""",
+    ),
     ("md", "## Unit-length distribution per subset\n\nHow long each engine runs before failure."),
-    ("code", '''\
+    (
+        "code",
+        """\
 fig, axes = plt.subplots(2, 2, figsize=(12, 7), sharex=True)
 for ax, s in zip(axes.ravel(), cfg.subsets):
     lengths = train[s].groupby("unit").size()
@@ -112,13 +120,19 @@ for ax, s in zip(axes.ravel(), cfg.subsets):
     ax.legend(fontsize=8)
 fig.suptitle("C-MAPSS unit-length distribution by subset", fontweight="bold")
 fig.tight_layout()
-save(fig, "01_cmapss_unit_length_histogram");'''),
-    ("md", """## Per-sensor variance and which sensors get dropped
+save(fig, "01_cmapss_unit_length_histogram");""",
+    ),
+    (
+        "md",
+        """## Per-sensor variance and which sensors get dropped
 
 Constant sensors are **detected** from the training split, never hard-coded: the
 flat set differs by subset, because FD002/FD004 vary across six operating regimes.
-"""),
-    ("code", '''\
+""",
+    ),
+    (
+        "code",
+        """\
 dropped_by_subset = {}
 fig, axes = plt.subplots(2, 2, figsize=(14, 8))
 for ax, s in zip(axes.ravel(), cfg.subsets):
@@ -143,14 +157,20 @@ fig.tight_layout()
 save(fig, "01_cmapss_sensor_variance");
 
 pd.Series({s: sorted(int(c.split("_")[1]) for c in d)
-           for s, d in dropped_by_subset.items()}).to_frame("dropped sensors")'''),
-    ("md", """## The piecewise-linear RUL cap
+           for s, d in dropped_by_subset.items()}).to_frame("dropped sensors")""",
+    ),
+    (
+        "md",
+        """## The piecewise-linear RUL cap
 
 Before the cap, the target claims a brand-new engine is "300 cycles from failure",
 which the sensors cannot support. Capping at 125 asks the model only for what the
 data can actually tell it.
-"""),
-    ("code", '''\
+""",
+    ),
+    (
+        "code",
+        """\
 sub = cfg.primary_subset
 raw_rul = (
     train[sub].groupby("unit")["cycle"].transform("max") - train[sub]["cycle"]
@@ -173,9 +193,12 @@ axes[1].annotate(f"{pct:.1f}% of rows pinned at {cfg.rul_cap}",
                  bbox=dict(boxstyle="round", fc="white", ec="#C44E52"))
 fig.suptitle("Piecewise-linear RUL target", fontweight="bold")
 fig.tight_layout()
-save(fig, "01_cmapss_rul_distribution_cap");'''),
+save(fig, "01_cmapss_rul_distribution_cap");""",
+    ),
     ("md", "## Sensor trajectories for five sample units, coloured by RUL"),
-    ("code", '''\
+    (
+        "code",
+        """\
 kept, _ = drop_constant_sensors(train[sub], SENSORS, cfg.constant_variance_threshold)
 show = kept[:6]
 frame = train[sub].copy()
@@ -192,13 +215,19 @@ for ax, sensor in zip(axes.ravel(), show):
 fig.colorbar(sc, ax=axes, label="RUL (cycles)", shrink=0.8)
 fig.suptitle(f"{sub}: sensor trajectories for 5 units, coloured by RUL",
              fontweight="bold")
-save(fig, "01_cmapss_sensor_trajectories");'''),
-    ("md", """## Regime structure on FD002
+save(fig, "01_cmapss_sensor_trajectories");""",
+    ),
+    (
+        "md",
+        """## Regime structure on FD002
 
 FD002 and FD004 are flown across six operating conditions. The op settings cluster
 cleanly, which is what `fit_operating_condition_normaliser` exploits.
-"""),
-    ("code", '''\
+""",
+    ),
+    (
+        "code",
+        """\
 multi = cfg.multi_regime_subsets[0]
 fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
 axes[0].scatter(train[multi][SETTINGS[0]], train[multi][SETTINGS[1]], s=2, alpha=0.3)
@@ -216,9 +245,12 @@ ax2.hist(after, bins=60, alpha=0.6, label="within-regime z-scored", color="#55A8
 axes[1].set_title("sensor_2 before (blue) and after (green) regime normalisation")
 fig.suptitle("Operating-condition structure", fontweight="bold")
 fig.tight_layout()
-save(fig, "01_cmapss_operating_regimes");'''),
+save(fig, "01_cmapss_operating_regimes");""",
+    ),
     ("md", "## End-to-end preprocessing check\n\nThe exact path `train_health.py` will take."),
-    ("code", '''\
+    (
+        "code",
+        """\
 frame = train[sub].copy()
 frame["rul"] = compute_rul(frame, cap=cfg.rul_cap)
 tr, va = split_by_unit(frame, cfg.val_fraction, seed=config.splits.seed)
@@ -232,7 +264,8 @@ Xv, yv, _ = make_windows(norm.transform(va), kept, window=cfg.window_length)
 print(f"kept {len(kept)} sensors, dropped {len(dropped)}")
 print(f"train windows {X.shape}  targets {y.shape}  units {len(np.unique(units))}")
 print(f"val   windows {Xv.shape}  targets {yv.shape}")
-print(f"target range [{y.min()}, {y.max()}]")'''),
+print(f"target range [{y.min()}, {y.max()}]")""",
+    ),
 ]
 
 
@@ -240,7 +273,9 @@ print(f"target range [{y.min()}, {y.max()}]")'''),
 # 02 - AI4I
 # --------------------------------------------------------------------------- #
 AI4I_CELLS: list[tuple[str, str]] = [
-    ("md", """# 02 - AI4I 2020 exploration
+    (
+        "md",
+        """# 02 - AI4I 2020 exploration
 
 UCI predictive-maintenance data, training the failure-probability head of **Model A**.
 
@@ -248,9 +283,12 @@ UCI predictive-maintenance data, training the failure-probability head of **Mode
 failure modes, and their OR reproduces the `machine_failure` target. Any model given
 them scores ~1.0 and has learned nothing. `load_ai4i` therefore returns the features,
 the target and the modes as three separate objects.
-"""),
+""",
+    ),
     ("code", PREAMBLE),
-    ("code", '''\
+    (
+        "code",
+        """\
 from twinmind.data.loaders import load_ai4i
 
 cfg = config.ai4i
@@ -261,9 +299,12 @@ print(f"target   {target.shape}, name={target.name!r}")
 print(f"modes    {modes.shape}: {list(modes.columns)}")
 assert not set(features.columns) & set(cfg.failure_mode_columns)
 print("\\nconfirmed: no failure-mode column is in the feature frame")
-features.describe().T'''),
+features.describe().T""",
+    ),
     ("md", "## Class balance\n\nSeverely imbalanced, which drives the choice of loss and metric."),
-    ("code", '''\
+    (
+        "code",
+        """\
 counts = target.value_counts().sort_index()
 fig, axes = plt.subplots(1, 2, figsize=(12, 4.2))
 axes[0].bar(["no failure", "failure"], counts.to_numpy(),
@@ -282,13 +323,19 @@ axes[1].set_title("Failure count by mode")
 axes[1].set_ylabel("occurrences")
 fig.suptitle("AI4I 2020 class balance and failure modes", fontweight="bold")
 fig.tight_layout()
-save(fig, "02_ai4i_class_balance");'''),
-    ("md", """## Why the mode columns are quarantined
+save(fig, "02_ai4i_class_balance");""",
+    ),
+    (
+        "md",
+        """## Why the mode columns are quarantined
 
 The OR of the five modes reproduces the target almost exactly. This cell measures
 that agreement, so the separation in `load_ai4i` is justified by evidence.
-"""),
-    ("code", '''\
+""",
+    ),
+    (
+        "code",
+        """\
 agreement = (modes.max(axis=1) == target).mean()
 without_rnf = (modes.drop(columns=["rnf"]).max(axis=1) == target).mean()
 print(f"OR(all five modes)      == target for {agreement*100:.2f}% of rows")
@@ -303,9 +350,12 @@ pd.Series({"OR(all modes)": agreement, "OR(no RNF)": without_rnf}).plot.barh(
 ax.set_xlim(0.95, 1.0); ax.set_xlabel("agreement with target")
 ax.set_title("Failure modes reconstruct the target", fontweight="bold")
 fig.tight_layout()
-save(fig, "02_ai4i_leakage_evidence");'''),
+save(fig, "02_ai4i_leakage_evidence");""",
+    ),
     ("md", "## Feature distributions, split by outcome"),
-    ("code", '''\
+    (
+        "code",
+        """\
 numeric = list(cfg.feature_columns)
 fig, axes = plt.subplots(2, 3, figsize=(15, 7))
 for ax, column in zip(axes.ravel(), numeric):
@@ -316,13 +366,19 @@ for ax, column in zip(axes.ravel(), numeric):
 axes.ravel()[-1].axis("off")
 fig.suptitle("Feature distributions by outcome (density-normalised)", fontweight="bold")
 fig.tight_layout()
-save(fig, "02_ai4i_feature_distributions");'''),
-    ("md", """## Correlation
+save(fig, "02_ai4i_feature_distributions");""",
+    ),
+    (
+        "md",
+        """## Correlation
 
 Including the modes and target here **for analysis only** — it makes the leakage
 visible rather than leaving it as an assertion.
-"""),
-    ("code", '''\
+""",
+    ),
+    (
+        "code",
+        """\
 combined = pd.concat(
     [features[numeric], modes, target.rename("machine_failure")], axis=1
 )
@@ -336,7 +392,8 @@ save(fig, "02_ai4i_correlation_heatmap");
 
 print("\\nCorrelation with the target:")
 print(combined.corr()["machine_failure"].drop("machine_failure")
-      .sort_values(ascending=False).to_string())'''),
+      .sort_values(ascending=False).to_string())""",
+    ),
 ]
 
 
@@ -344,16 +401,21 @@ print(combined.corr()["machine_failure"].drop("machine_failure")
 # 03 - Favorita
 # --------------------------------------------------------------------------- #
 FAVORITA_CELLS: list[tuple[str, str]] = [
-    ("md", """# 03 - Favorita demand exploration
+    (
+        "md",
+        """# 03 - Favorita demand exploration
 
 Kaggle Store Sales, the training data for **Model B** (multi-quantile demand).
 
 This notebook runs against the real download when `data/raw/favorita` is present,
 and otherwise falls back to the synthetic fixture used by the test suite, so it
 always executes top-to-bottom. The banner below says which one you are looking at.
-"""),
+""",
+    ),
     ("code", PREAMBLE),
-    ("code", '''\
+    (
+        "code",
+        """\
 from twinmind.data.features import (
     build_demand_features, make_rolling_origin_splits, prepare_oil,
 )
@@ -373,15 +435,21 @@ except DataNotDownloadedError as exc:
 
 print(f"data source: {SOURCE.upper()}")
 for name, frame in frames.items():
-    print(f"  {name:<14} {frame.shape}")'''),
-    ("code", '''\
+    print(f"  {name:<14} {frame.shape}")""",
+    ),
+    (
+        "code",
+        """\
 features = build_demand_features(frames, cfg, top_n=cfg.top_series)
 print(f"{len(features):,} rows | {features['unique_id'].nunique()} series "
       f"| {features.shape[1]} columns")
 print(f"{features['ds'].min().date()} to {features['ds'].max().date()}")
-features.head()'''),
+features.head()""",
+    ),
     ("md", "## Total sales over time"),
-    ("code", '''\
+    (
+        "code",
+        """\
 daily = features.groupby("ds")["y"].sum()
 fig, ax = plt.subplots(figsize=(14, 4.5))
 ax.plot(daily.index, daily.to_numpy(), lw=0.8, color="#4C72B0")
@@ -391,9 +459,12 @@ ax.set_title(f"Total daily sales across {features['unique_id'].nunique()} series
              f"({SOURCE} data)", fontweight="bold")
 ax.set_xlabel("date"); ax.set_ylabel("units"); ax.legend()
 fig.tight_layout()
-save(fig, "03_favorita_total_sales");'''),
+save(fig, "03_favorita_total_sales");""",
+    ),
     ("md", "## Weekly and yearly seasonality"),
-    ("code", '''\
+    (
+        "code",
+        """\
 fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
 by_dow = features.groupby("dow")["y"].mean()
 axes[0].bar(["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], by_dow.to_numpy(),
@@ -406,9 +477,12 @@ axes[1].set_xticks(range(1, 13))
 axes[1].set_title("Mean sales by month"); axes[1].set_xlabel("month")
 fig.suptitle("Seasonality", fontweight="bold")
 fig.tight_layout()
-save(fig, "03_favorita_seasonality");'''),
+save(fig, "03_favorita_seasonality");""",
+    ),
     ("md", "## Promotion effect"),
-    ("code", '''\
+    (
+        "code",
+        """\
 fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
 promo = features["onpromotion"] > 0
 axes[0].boxplot([features.loc[~promo, "y"], features.loc[promo, "y"]],
@@ -427,13 +501,19 @@ axes[1].set_xlabel("items on promotion")
 lift = features.loc[promo, "y"].mean() / max(features.loc[~promo, "y"].mean(), 1e-9)
 fig.suptitle(f"Promotion effect (mean lift {lift:.2f}x)", fontweight="bold")
 fig.tight_layout()
-save(fig, "03_favorita_promotion_effect");'''),
-    ("md", """## Rolling-origin fold diagram
+save(fig, "03_favorita_promotion_effect");""",
+    ),
+    (
+        "md",
+        """## Rolling-origin fold diagram
 
 Folds walk forward in time. A random split would train on the future to predict
 the past and report an accuracy the model can never achieve live.
-"""),
-    ("code", '''\
+""",
+    ),
+    (
+        "code",
+        """\
 folds = make_rolling_origin_splits(features, n_splits=cfg.n_splits, horizon=cfg.horizon)
 
 fig, ax = plt.subplots(figsize=(13, 3.2))
@@ -458,9 +538,12 @@ pd.DataFrame([
      "val_rows": len(v), "val_start": features["ds"].iloc[v].min().date(),
      "val_end": features["ds"].iloc[v].max().date()}
     for i, (t, v) in enumerate(folds)
-])'''),
+])""",
+    ),
     ("md", "## Oil, and the feature inventory"),
-    ("code", '''\
+    (
+        "code",
+        """\
 oil = prepare_oil(frames["oil"], features["ds"])
 fig, ax = plt.subplots(figsize=(13, 3.5))
 ax.plot(oil["date"], oil["oil_price"], color="#937860", lw=1)
@@ -483,7 +566,8 @@ groups = {
 for name, columns in groups.items():
     print(f"{name:<14} {len(columns):>2}  {', '.join(columns[:6])}"
           f"{' ...' if len(columns) > 6 else ''}")
-print(f"\\nTOTAL {features.shape[1]} columns, {len(features):,} rows")'''),
+print(f"\\nTOTAL {features.shape[1]} columns, {len(features):,} rows")""",
+    ),
 ]
 
 
@@ -498,12 +582,13 @@ def build(name: str, cells: list[tuple[str, str]]) -> Path:
     """Write one notebook to notebooks/<name>."""
     notebook = new_notebook(
         cells=[
-            new_markdown_cell(body) if kind == "md" else new_code_cell(body)
-            for kind, body in cells
+            new_markdown_cell(body) if kind == "md" else new_code_cell(body) for kind, body in cells
         ],
         metadata={
             "kernelspec": {
-                "display_name": "Python 3", "language": "python", "name": "python3",
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3",
             },
             "language_info": {"name": "python", "version": sys.version.split()[0]},
         },
@@ -521,9 +606,10 @@ def execute(path: Path, timeout: int = 900) -> None:
 
     notebook = nbformat.read(path, as_version=4)
     client = NotebookClient(
-        notebook, timeout=timeout, kernel_name="python3", resources={
-            "metadata": {"path": str(PROJECT_ROOT)}
-        },
+        notebook,
+        timeout=timeout,
+        kernel_name="python3",
+        resources={"metadata": {"path": str(PROJECT_ROOT)}},
     )
     client.execute()
     nbformat.write(notebook, path)

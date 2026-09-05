@@ -59,8 +59,9 @@ def test_broken_cost_ratio_is_rejected(tmp_path: Path, config_dir: Path) -> None
         load_config("twin", tmp_path)
 
 
-def test_env_interpolation(tmp_path: Path, config_dir: Path, monkeypatch: pytest.MonkeyPatch
-                           ) -> None:
+def test_env_interpolation(
+    tmp_path: Path, config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("TWINMIND_TEST_MEMORY_PATH", "reports/from_env.duckdb")
     raw = yaml.safe_load((config_dir / "agent.yaml").read_text(encoding="utf-8"))
     raw["memory"]["path"] = "${TWINMIND_TEST_MEMORY_PATH}"

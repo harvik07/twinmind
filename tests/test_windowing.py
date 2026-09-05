@@ -253,9 +253,7 @@ def test_window_count_matches_the_stride_arithmetic() -> None:
 
 def test_short_units_are_left_padded_with_their_first_observation() -> None:
     """A unit shorter than the window must still yield exactly one window."""
-    frame = make_cmapss(
-        n_units=3, min_cycles=50, max_cycles=60, seed=15, short_unit_cycles=12
-    )
+    frame = make_cmapss(n_units=3, min_cycles=50, max_cycles=60, seed=15, short_unit_cycles=12)
     frame["rul"] = compute_rul(frame)
     features = SENSORS[:5]
 

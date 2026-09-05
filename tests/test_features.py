@@ -126,9 +126,7 @@ def test_transfer_row_marks_the_date_the_holiday_actually_happened(
     assert rows["is_holiday"].sum() == len(rows), "the Transfer date must be a holiday"
 
 
-def test_work_day_is_not_a_holiday(
-    frames: dict[str, pd.DataFrame], features: pd.DataFrame
-) -> None:
+def test_work_day_is_not_a_holiday(frames: dict[str, pd.DataFrame], features: pd.DataFrame) -> None:
     """A Work Day repays a Bridge -- it is the opposite of a day off."""
     holidays = frames["holidays"]
     work = holidays[holidays["type"].eq("Work Day")]["date"].iloc[0]
@@ -164,9 +162,7 @@ def test_local_and_regional_holidays_apply_only_to_matching_stores(
     assert flagged <= expected, "a local holiday leaked to stores in other cities"
 
 
-def test_holiday_flags_are_one_row_per_date_store(
-    frames: dict[str, pd.DataFrame]
-) -> None:
+def test_holiday_flags_are_one_row_per_date_store(frames: dict[str, pd.DataFrame]) -> None:
     flags = build_holiday_flags(frames["holidays"], frames["stores"])
     assert not flags.duplicated(["date", "store_nbr"]).any()
     assert flags["store_nbr"].notna().all()
@@ -255,15 +251,14 @@ def test_features_are_non_anticipative_under_truncation(
     partial = build_demand_features(truncated_raw, favorita_config, top_n=4)
 
     derived = [
-        c for c in partial.columns
+        c
+        for c in partial.columns
         if c.startswith(("lag_", "roll_", "fourier_"))
         or c in {"oil_price", "is_holiday", "is_work_day", "dow", "month", "is_payday"}
     ]
     assert derived, "no derived columns found to check"
 
-    merged = full.merge(
-        partial, on=["unique_id", "ds"], suffixes=("_full", "_part"), how="inner"
-    )
+    merged = full.merge(partial, on=["unique_id", "ds"], suffixes=("_full", "_part"), how="inner")
     assert len(merged) > 0
 
     for column in derived:
@@ -301,9 +296,7 @@ def test_validation_windows_are_the_requested_horizon(features: pd.DataFrame) ->
 
 def test_folds_walk_forward_without_overlapping_validation(features: pd.DataFrame) -> None:
     folds = make_rolling_origin_splits(features, n_splits=3, horizon=28)
-    windows = [
-        (features["ds"].iloc[v].min(), features["ds"].iloc[v].max()) for _, v in folds
-    ]
+    windows = [(features["ds"].iloc[v].min(), features["ds"].iloc[v].max()) for _, v in folds]
     for earlier, later in itertools.pairwise(windows):
         assert earlier[1] < later[0], "validation windows overlap"
     assert all(len(folds[i][0]) < len(folds[i + 1][0]) for i in range(len(folds) - 1))

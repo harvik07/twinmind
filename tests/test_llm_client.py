@@ -280,7 +280,6 @@ def test_groq_client_requests_json_mode(llm_config: LLMConfig, tmp_path: Path) -
     assert sent["response_format"] == {"type": "json_object"}
 
 
-def test_groq_client_without_schema_returns_raw_text(llm_config: LLMConfig, tmp_path: Path
-                                                     ) -> None:
+def test_groq_client_without_schema_returns_raw_text(llm_config: LLMConfig, tmp_path: Path) -> None:
     client = _groq_client(["just prose"], llm_config, tmp_path)
     assert client.complete([{"role": "user", "content": "explain"}]) == "just prose"

@@ -49,9 +49,7 @@ def make_cmapss(
             if s <= n_constant:
                 block[f"sensor_{s}"] = np.full(n, 10.0 + s)
             else:
-                block[f"sensor_{s}"] = (
-                    100.0 + 5.0 * s + 20.0 * progress**2 + rng.normal(0, 0.4, n)
-                )
+                block[f"sensor_{s}"] = 100.0 + 5.0 * s + 20.0 * progress**2 + rng.normal(0, 0.4, n)
         rows.append(pd.DataFrame(block))
 
     return pd.concat(rows, ignore_index=True)
@@ -163,27 +161,74 @@ def make_favorita(
     holidays = pd.DataFrame(
         [
             # A holiday that was MOVED: it did not happen on this date.
-            {"date": dates[10], "type": "Holiday", "locale": "National",
-             "locale_name": "Ecuador", "description": "Primer Grito moved", "transferred": True},
+            {
+                "date": dates[10],
+                "type": "Holiday",
+                "locale": "National",
+                "locale_name": "Ecuador",
+                "description": "Primer Grito moved",
+                "transferred": True,
+            },
             # ...it was actually observed here.
-            {"date": dates[12], "type": "Transfer", "locale": "National",
-             "locale_name": "Ecuador", "description": "Primer Grito", "transferred": False},
+            {
+                "date": dates[12],
+                "type": "Transfer",
+                "locale": "National",
+                "locale_name": "Ecuador",
+                "description": "Primer Grito",
+                "transferred": False,
+            },
             # An ordinary national holiday.
-            {"date": dates[40], "type": "Holiday", "locale": "National",
-             "locale_name": "Ecuador", "description": "Navidad", "transferred": False},
+            {
+                "date": dates[40],
+                "type": "Holiday",
+                "locale": "National",
+                "locale_name": "Ecuador",
+                "description": "Navidad",
+                "transferred": False,
+            },
             # A bridge day and the Work Day that repays it.
-            {"date": dates[41], "type": "Bridge", "locale": "National",
-             "locale_name": "Ecuador", "description": "Puente", "transferred": False},
-            {"date": dates[45], "type": "Work Day", "locale": "National",
-             "locale_name": "Ecuador", "description": "Recupero", "transferred": False},
+            {
+                "date": dates[41],
+                "type": "Bridge",
+                "locale": "National",
+                "locale_name": "Ecuador",
+                "description": "Puente",
+                "transferred": False,
+            },
+            {
+                "date": dates[45],
+                "type": "Work Day",
+                "locale": "National",
+                "locale_name": "Ecuador",
+                "description": "Recupero",
+                "transferred": False,
+            },
             # Regional and local, which apply to a subset of stores only.
-            {"date": dates[60], "type": "Holiday", "locale": "Regional",
-             "locale_name": "Pichincha", "description": "Provincializacion",
-             "transferred": False},
-            {"date": dates[70], "type": "Holiday", "locale": "Local",
-             "locale_name": "Guayaquil", "description": "Fundacion", "transferred": False},
-            {"date": dates[80], "type": "Additional", "locale": "National",
-             "locale_name": "Ecuador", "description": "Navidad-1", "transferred": False},
+            {
+                "date": dates[60],
+                "type": "Holiday",
+                "locale": "Regional",
+                "locale_name": "Pichincha",
+                "description": "Provincializacion",
+                "transferred": False,
+            },
+            {
+                "date": dates[70],
+                "type": "Holiday",
+                "locale": "Local",
+                "locale_name": "Guayaquil",
+                "description": "Fundacion",
+                "transferred": False,
+            },
+            {
+                "date": dates[80],
+                "type": "Additional",
+                "locale": "National",
+                "locale_name": "Ecuador",
+                "description": "Navidad-1",
+                "transferred": False,
+            },
         ]
     )
 

@@ -36,14 +36,18 @@ class CostAccumulator:
 
 
 def compute_oee(
-    planned_hours: float, downtime_hours: float, actual_units: float, theoretical_units: float,
+    planned_hours: float,
+    downtime_hours: float,
+    actual_units: float,
+    theoretical_units: float,
     good_units: float,
 ) -> float:
     """Availability x Performance x Quality, clipped to [0, 1]."""
     raise NotImplementedError("compute_oee is not implemented yet")
 
 
-def build_kpi_vector(accumulator: CostAccumulator, costs: CostConfig, **counters: float
-                     ) -> KPIVector:
+def build_kpi_vector(
+    accumulator: CostAccumulator, costs: CostConfig, **counters: float
+) -> KPIVector:
     """Turn raw counters into the canonical :class:`KPIVector`."""
     raise NotImplementedError("build_kpi_vector is not implemented yet")

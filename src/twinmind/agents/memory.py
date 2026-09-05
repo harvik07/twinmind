@@ -19,8 +19,9 @@ class EpisodeMemory:
         """Create the schema if it does not exist."""
         raise NotImplementedError("EpisodeMemory.initialise is not implemented yet")
 
-    def record(self, query: str, result: TwinResult, metadata: dict[str, Any] | None = None
-               ) -> None:
+    def record(
+        self, query: str, result: TwinResult, metadata: dict[str, Any] | None = None
+    ) -> None:
         """Persist one evaluated scenario."""
         raise NotImplementedError("EpisodeMemory.record is not implemented yet")
 

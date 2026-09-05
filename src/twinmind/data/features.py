@@ -39,9 +39,7 @@ def add_calendar_features(frame: pd.DataFrame, date_column: str = "ds") -> pd.Da
     out["is_weekend"] = dates.dt.dayofweek.ge(5).astype("int8")
     # Ecuadorian public-sector wages are paid on the 15th and the last day of the
     # month, and Favorita sales visibly spike around both.
-    out["is_payday"] = (
-        dates.dt.day.eq(15) | dates.dt.is_month_end
-    ).astype("int8")
+    out["is_payday"] = (dates.dt.day.eq(15) | dates.dt.is_month_end).astype("int8")
     return out
 
 
@@ -127,9 +125,13 @@ def build_holiday_flags(
     def _by_locale(rows: pd.DataFrame, key: str, column: str) -> None:
         if rows.empty:
             return
-        merged = rows[["date", "locale_name"]].drop_duplicates().merge(
-            store_meta, left_on="locale_name", right_on=key, how="inner"
-        )[["date", "store_nbr"]]
+        merged = (
+            rows[["date", "locale_name"]]
+            .drop_duplicates()
+            .merge(store_meta, left_on="locale_name", right_on=key, how="inner")[
+                ["date", "store_nbr"]
+            ]
+        )
         if merged.empty:
             return
         merged[column] = 1
@@ -142,15 +144,19 @@ def build_holiday_flags(
     _national(events[events["type"].eq("Work Day")], "is_work_day")
 
     columns = [
-        "is_national_holiday", "is_regional_holiday", "is_local_holiday", "is_work_day",
+        "is_national_holiday",
+        "is_regional_holiday",
+        "is_local_holiday",
+        "is_work_day",
     ]
     if pieces:
         flags = pieces[0]
         for piece in pieces[1:]:
             flags = flags.merge(piece, on=["date", "store_nbr"], how="outer")
     else:  # pragma: no cover - only when the events file is empty
-        flags = pd.DataFrame({"date": pd.Series(dtype="datetime64[ns]"),
-                              "store_nbr": pd.Series(dtype="int64")})
+        flags = pd.DataFrame(
+            {"date": pd.Series(dtype="datetime64[ns]"), "store_nbr": pd.Series(dtype="int64")}
+        )
 
     # Fill only after every merge; an earlier fillna would be undone by the next
     # outer join and leave NaNs that break the int8 cast.
@@ -163,8 +169,9 @@ def build_holiday_flags(
     flags["is_holiday"] = flags[columns[:3]].max(axis=1).astype("int8")
 
     n_moved = int((events["type"].eq("Holiday") & events["transferred"]).sum())
-    logger.info("holiday flags built; %d transferred holidays excluded from their listed date",
-                n_moved)
+    logger.info(
+        "holiday flags built; %d transferred holidays excluded from their listed date", n_moved
+    )
     return flags[["date", "store_nbr", "is_holiday", *columns]]
 
 
@@ -224,9 +231,7 @@ def add_lag_features(
             raise ValueError(f"rolling window must be >= 1, got {window}")
         roll = shifted.groupby(out[group_column], sort=False).rolling(window, min_periods=1)
         out[f"roll_mean_{window}"] = roll.mean().reset_index(level=0, drop=True)
-        out[f"roll_std_{window}"] = (
-            roll.std().reset_index(level=0, drop=True).fillna(0.0)
-        )
+        out[f"roll_std_{window}"] = roll.std().reset_index(level=0, drop=True).fillna(0.0)
 
     return out.reset_index(drop=True)
 
@@ -273,12 +278,8 @@ def build_demand_features(
     train["date"] = pd.to_datetime(train["date"])
     train["store_nbr"] = train["store_nbr"].astype("int64")
 
-    long = train.rename(
-        columns={"date": "ds", config.target_column: "y"}
-    )
-    long["unique_id"] = (
-        long["store_nbr"].astype(str) + "_" + long["family"].astype(str)
-    )
+    long = train.rename(columns={"date": "ds", config.target_column: "y"})
+    long["unique_id"] = long["store_nbr"].astype(str) + "_" + long["family"].astype(str)
     long["y"] = long["y"].astype("float64")
     long = long[["unique_id", "ds", "y", "store_nbr", "family", "onpromotion"]]
     long["onpromotion"] = long["onpromotion"].fillna(0).astype("float64")
@@ -310,8 +311,11 @@ def build_demand_features(
         validate="many_to_one",
     )
     for column in (
-        "is_holiday", "is_national_holiday", "is_regional_holiday",
-        "is_local_holiday", "is_work_day",
+        "is_holiday",
+        "is_national_holiday",
+        "is_regional_holiday",
+        "is_local_holiday",
+        "is_work_day",
     ):
         long[column] = long[column].fillna(0).astype("int8")
 
@@ -382,7 +386,6 @@ def make_rolling_origin_splits(
         train_mask = dates < val_start
         splits.append((positions[train_mask.to_numpy()], positions[val_mask.to_numpy()]))
         logger.debug(
-            "fold %d: train < %s, val %s..%s", i, val_start.date(), val_start.date(),
-            val_end.date()
+            "fold %d: train < %s, val %s..%s", i, val_start.date(), val_start.date(), val_end.date()
         )
     return splits

@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     """Command-line interface for this script."""
-    parser = argparse.ArgumentParser(description='Train the machine-health model.')
+    parser = argparse.ArgumentParser(description="Train the machine-health model.")
     parser.add_argument("--subset", default="FD001", help="C-MAPSS subset.")
     parser.add_argument("--epochs", type=int, default=None, help="Override config epochs.")
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])

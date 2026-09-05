@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     """Command-line interface for this script."""
-    parser = argparse.ArgumentParser(description='Run the optimisation benchmark.')
+    parser = argparse.ArgumentParser(description="Run the optimisation benchmark.")
     parser.add_argument(
         "--method",
         choices=["agent", "random", "grid", "tpe", "cmaes", "all"],

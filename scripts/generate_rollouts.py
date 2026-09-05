@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 def build_parser() -> argparse.ArgumentParser:
     """Command-line interface for this script."""
-    parser = argparse.ArgumentParser(description='Generate simulator rollouts for Model C.')
+    parser = argparse.ArgumentParser(description="Generate simulator rollouts for Model C.")
     parser.add_argument("--n", type=int, default=65000, help="Number of rollouts.")
     parser.add_argument("--reps", type=int, default=5, help="Replications per scenario.")
     parser.add_argument("--workers", type=int, default=1, help="Parallel processes.")
