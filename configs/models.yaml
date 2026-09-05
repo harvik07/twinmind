@@ -1,0 +1,66 @@
+# Hyperparameters for Models A (health), B (demand) and C (surrogate).
+seed: 42
+device: auto            # auto | cpu | cuda
+
+health:
+  # CNN-BiLSTM on C-MAPSS with an auxiliary failure-probability head.
+  architecture: cnn_bilstm
+  input_window: 30
+  conv_channels: [32, 64]
+  kernel_size: 5
+  lstm_hidden: 128
+  lstm_layers: 2
+  bidirectional: true
+  dropout: 0.3
+  head_hidden: 64
+  batch_size: 256
+  epochs: 60
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  grad_clip: 1.0
+  early_stopping_patience: 10
+  rul_loss: mse
+  failure_loss: bce
+  failure_loss_weight: 0.3
+  mc_dropout_samples: 50
+  checkpoint_name: health_cnn_bilstm.pt
+
+demand:
+  # Nixtla neuralforecast; requires the optional "forecast" extra.
+  models: [nhits, patchtst]
+  horizon: 28
+  input_size: 112
+  quantiles: [0.1, 0.5, 0.9]
+  loss: multiquantile
+  max_steps: 2000
+  batch_size: 32
+  windows_batch_size: 256
+  learning_rate: 0.001
+  early_stop_patience_steps: 10
+  val_check_steps: 100
+  scaler_type: robust
+  checkpoint_dir: models/demand
+
+surrogate:
+  # Heteroscedastic residual MLP emulating the twin (~10,000x faster).
+  architecture: het_residual_mlp
+  input_dim: 18
+  output_dim: 8            # matches KPIVector
+  hidden_dims: [256, 256, 256]
+  residual_blocks: 3
+  activation: silu
+  dropout: 0.1
+  predict_log_variance: true
+  min_log_variance: -8.0
+  max_log_variance: 4.0
+  batch_size: 512
+  epochs: 200
+  learning_rate: 0.0005
+  weight_decay: 0.00001
+  lr_scheduler: cosine
+  early_stopping_patience: 20
+  n_rollouts: 65000
+  val_fraction: 0.1
+  test_fraction: 0.1
+  target_scaler: standard
+  checkpoint_name: surrogate_het_mlp.pt

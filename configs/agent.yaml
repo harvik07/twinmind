@@ -1,0 +1,51 @@
+# Agent layer: LLM backend, rate limits and LangGraph node budgets.
+llm:
+  provider: groq            # groq | echo   (echo = offline deterministic stub)
+  model: llama-3.3-70b-versatile
+  temperature: 0.2
+  max_tokens: 2048
+  timeout_seconds: 60
+  api_key_env: GROQ_API_KEY
+  json_mode: true
+  max_parse_retries: 2      # 2 retries => up to 3 attempts per call
+  rate_limit:
+    # Groq free tier is ~30 RPM / 6k TPM; stay under.
+    requests_per_minute: 28
+    tokens_per_minute: 5500
+  call_log: reports/llm_calls.jsonl
+
+graph:
+  nodes: [planner, explorer, evaluator, critic, explainer]
+  max_iterations: 5
+  early_stop_on_no_improvement: true
+
+planner:
+  max_objectives: 3
+  default_objective: profit
+
+explorer:
+  # The LLM proposes parameter vectors; the surrogate screens them.
+  proposals_per_iteration: 40
+  surrogate_screen_top_k: 8      # only these are re-verified on the real twin
+  perturbation_scale: 0.15
+
+evaluator:
+  twin_replications: 20
+  confidence_level: 0.95
+  objective: profit
+  tie_break: unit_cost
+
+critic:
+  # Deterministic Python enforces every constraint; the LLM never decides pass/fail.
+  enforce_constraints: true
+  min_effect_size: 0.02          # relative improvement worth reporting
+  require_non_overlapping_ci: true
+
+explainer:
+  max_words: 250
+  cite_kpis: true
+
+memory:
+  backend: duckdb
+  path: reports/agent_memory.duckdb
+  max_episodes: 500

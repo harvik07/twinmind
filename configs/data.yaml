@@ -1,0 +1,50 @@
+# Dataset locations and preprocessing parameters.
+raw_dir: data/raw
+interim_dir: data/interim
+processed_dir: data/processed
+
+cmapss:
+  # NASA C-MAPSS turbofan degradation, used for Model A (RUL).
+  kaggle_dataset: behrad3d/nasa-cmaps
+  subsets: [FD001, FD002, FD003, FD004]
+  primary_subset: FD001
+  sensor_columns:
+    [s_2, s_3, s_4, s_7, s_8, s_9, s_11, s_12, s_13, s_14, s_15, s_17, s_20, s_21]
+  setting_columns: [setting_1, setting_2, setting_3]
+  rul_cap: 125            # piecewise-linear RUL clipping, standard for C-MAPSS
+  window_length: 30
+  window_stride: 1
+  val_fraction: 0.2
+  normalisation: minmax
+
+ai4i:
+  # UCI AI4I 2020 predictive-maintenance set, used for the failure-probability head.
+  kaggle_dataset: stephanmatzka/predictive-maintenance-dataset-ai4i-2020
+  target_column: "Machine failure"
+  failure_mode_columns: [TWF, HDF, PWF, OSF, RNF]
+  feature_columns:
+    - "Air temperature [K]"
+    - "Process temperature [K]"
+    - "Rotational speed [rpm]"
+    - "Torque [Nm]"
+    - "Tool wear [min]"
+  test_fraction: 0.2
+  stratify: true
+
+favorita:
+  # Kaggle Store Sales / Favorita, used for Model B (demand).
+  kaggle_competition: store-sales-time-series-forecasting
+  target_column: sales
+  id_columns: [store_nbr, family]
+  date_column: date
+  frequency: D
+  horizon: 28
+  input_size: 112
+  quantiles: [0.1, 0.5, 0.9]
+  val_days: 56
+  test_days: 28
+  top_series: 200         # cap on series count so training fits a Kaggle session
+
+splits:
+  seed: 42
+  shuffle: true
