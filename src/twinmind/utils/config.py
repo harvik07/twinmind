@@ -38,26 +38,61 @@ class _Base(BaseModel):
 # --------------------------------------------------------------------------- #
 # data.yaml
 # --------------------------------------------------------------------------- #
+class DownloadConfig(_Base):
+    timeout_seconds: float = Field(gt=0)
+    max_retries: int = Field(ge=1)
+    backoff_factor: float = Field(gt=1.0)
+    chunk_bytes: int = Field(gt=0)
+
+
 class CMAPSSConfig(_Base):
-    kaggle_dataset: str
+    url: str
     subsets: list[str]
     primary_subset: str
-    sensor_columns: list[str]
     setting_columns: list[str]
+    n_sensors: int = Field(gt=0)
     rul_cap: int = Field(gt=0)
     window_length: int = Field(gt=0)
     window_stride: int = Field(gt=0)
     val_fraction: float = Field(ge=0.0, lt=1.0)
-    normalisation: Literal["minmax", "standard", "none"]
+    constant_variance_threshold: float = Field(gt=0)
+    n_operating_conditions: int = Field(gt=0)
+    multi_regime_subsets: list[str]
+
+    @property
+    def sensor_columns(self) -> list[str]:
+        """Canonical sensor column names, sensor_1 .. sensor_N."""
+        return [f"sensor_{i}" for i in range(1, self.n_sensors + 1)]
+
+    @model_validator(mode="after")
+    def _check_subsets(self) -> CMAPSSConfig:
+        if self.primary_subset not in self.subsets:
+            raise ValueError(f"primary_subset {self.primary_subset!r} not in subsets")
+        unknown = set(self.multi_regime_subsets) - set(self.subsets)
+        if unknown:
+            raise ValueError(f"multi_regime_subsets not in subsets: {sorted(unknown)}")
+        return self
 
 
 class AI4IConfig(_Base):
-    kaggle_dataset: str
+    uci_id: int = Field(gt=0)
+    csv_url: str
     target_column: str
     failure_mode_columns: list[str]
     feature_columns: list[str]
+    categorical_columns: list[str]
     test_fraction: float = Field(ge=0.0, lt=1.0)
     stratify: bool
+
+    @model_validator(mode="after")
+    def _no_leakage(self) -> AI4IConfig:
+        """The failure-mode columns must never be declared as features."""
+        overlap = set(self.feature_columns) & set(self.failure_mode_columns)
+        if overlap:
+            raise ValueError(f"failure-mode columns leaked into features: {sorted(overlap)}")
+        if self.target_column in self.feature_columns:
+            raise ValueError(f"target {self.target_column!r} declared as a feature")
+        return self
 
 
 class FavoritaConfig(_Base):
@@ -72,6 +107,26 @@ class FavoritaConfig(_Base):
     val_days: int = Field(ge=0)
     test_days: int = Field(ge=0)
     top_series: int = Field(gt=0)
+    lags: list[int]
+    rolling_windows: list[int]
+    fourier_weekly_k: int = Field(ge=0)
+    fourier_yearly_k: int = Field(ge=0)
+    n_splits: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _check_lags(self) -> FavoritaConfig:
+        if any(lag <= 0 for lag in self.lags):
+            raise ValueError("lags must all be positive; a lag of 0 would leak the target")
+        if any(w <= 0 for w in self.rolling_windows):
+            raise ValueError("rolling_windows must all be positive")
+        return self
+
+
+class SKABConfig(_Base):
+    optional: bool
+    base_url: str
+    groups: list[str]
+    label_column: str
 
 
 class SplitsConfig(_Base):
@@ -83,9 +138,11 @@ class DataConfig(_Base):
     raw_dir: str
     interim_dir: str
     processed_dir: str
+    download: DownloadConfig
     cmapss: CMAPSSConfig
     ai4i: AI4IConfig
     favorita: FavoritaConfig
+    skab: SKABConfig
     splits: SplitsConfig
 
 

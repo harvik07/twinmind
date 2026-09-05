@@ -1,33 +1,54 @@
-# Dataset locations and preprocessing parameters.
+# Dataset locations, download sources and preprocessing parameters.
 raw_dir: data/raw
 interim_dir: data/interim
 processed_dir: data/processed
 
+download:
+  timeout_seconds: 60
+  max_retries: 3
+  backoff_factor: 2.0
+  chunk_bytes: 1048576
+
 cmapss:
   # NASA C-MAPSS turbofan degradation, used for Model A (RUL).
-  kaggle_dataset: behrad3d/nasa-cmaps
+  url: https://phm-datasets.s3.amazonaws.com/NASA/6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip
   subsets: [FD001, FD002, FD003, FD004]
   primary_subset: FD001
-  sensor_columns:
-    [s_2, s_3, s_4, s_7, s_8, s_9, s_11, s_12, s_13, s_14, s_15, s_17, s_20, s_21]
-  setting_columns: [setting_1, setting_2, setting_3]
+  # Raw files are headerless and space-delimited: unit, cycle, 3 op settings, 21 sensors.
+  setting_columns: [op_setting_1, op_setting_2, op_setting_3]
+  n_sensors: 21
   rul_cap: 125            # piecewise-linear RUL clipping, standard for C-MAPSS
   window_length: 30
   window_stride: 1
   val_fraction: 0.2
-  normalisation: minmax
+  # Sensors whose training variance falls below this are dropped as uninformative.
+  # 1e-4 sits inside a wide empirical gap on every subset: the largest dropped
+  # variance is <= 2.2e-05 and the smallest kept variance is >= 3.3e-04. It is set
+  # here (not 1e-6) so that FD001 sensor_6 -- which takes exactly two values,
+  # 21.60 and 21.61, variance 1.9e-06 -- is correctly treated as constant.
+  constant_variance_threshold: 1.0e-4
+  # FD002/FD004 are flown across six operating regimes; cluster then z-score within regime.
+  n_operating_conditions: 6
+  multi_regime_subsets: [FD002, FD004]
 
 ai4i:
   # UCI AI4I 2020 predictive-maintenance set, used for the failure-probability head.
-  kaggle_dataset: stephanmatzka/predictive-maintenance-dataset-ai4i-2020
-  target_column: "Machine failure"
-  failure_mode_columns: [TWF, HDF, PWF, OSF, RNF]
+  uci_id: 601
+  csv_url: https://archive.ics.uci.edu/static/public/601/ai4i+2020+predictive+maintenance+dataset.zip
+  target_column: machine_failure
+  # LEAKAGE TRAP: the OR of these five columns is essentially the target. They are
+  # returned in a separate frame and must never enter the feature set.
+  failure_mode_columns: [twf, hdf, pwf, osf, rnf]
+  # Canonical snake_case names. The raw source spells these differently depending
+  # on where it comes from: the UCI CSV has unit suffixes ("Air temperature [K]"),
+  # ucimlrepo strips them ("Air temperature"). The loader normalises both.
   feature_columns:
-    - "Air temperature [K]"
-    - "Process temperature [K]"
-    - "Rotational speed [rpm]"
-    - "Torque [Nm]"
-    - "Tool wear [min]"
+    - air_temperature_k
+    - process_temperature_k
+    - rotational_speed_rpm
+    - torque_nm
+    - tool_wear_min
+  categorical_columns: [type]
   test_fraction: 0.2
   stratify: true
 
@@ -44,6 +65,18 @@ favorita:
   val_days: 56
   test_days: 28
   top_series: 200         # cap on series count so training fits a Kaggle session
+  lags: [1, 7, 14, 28]
+  rolling_windows: [7, 28]
+  fourier_weekly_k: 3
+  fourier_yearly_k: 5
+  n_splits: 3
+
+skab:
+  # Skoltech Anomaly Benchmark. Optional: only fetched with --include-optional.
+  optional: true
+  base_url: https://raw.githubusercontent.com/waico/SKAB/master
+  groups: [valve1, valve2, other]
+  label_column: anomaly
 
 splits:
   seed: 42
