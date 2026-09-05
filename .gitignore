@@ -8,7 +8,19 @@
 !/models/**/.gitkeep
 mlruns/
 
+# Secrets. .env holds the real values; .env.example holds placeholders only.
 .env
+.env.*
+!.env.example
+# Kaggle API tokens, wherever they land.
+kaggle.json
+.kaggle/
+# Other credential shapes worth refusing outright.
+*.pem
+*.key
+credentials.json
+service-account*.json
+
 *.ckpt
 *.pt
 *.pth
