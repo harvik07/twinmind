@@ -13,9 +13,12 @@ default_language_version:
 
 exclude: '^notebooks/.*\.ipynb$'
 
+# ruff is pinned exactly, here and in pyproject.toml, because it is a
+# formatter: `~=0.6` on a 0.x package resolves to any 0.x, so CI and the
+# hook would silently run different versions and disagree on formatting.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.16.5
     hooks:
       - id: ruff
         name: ruff (lint)

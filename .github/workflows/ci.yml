@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+# A new push supersedes an in-flight run on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -28,8 +33,39 @@ jobs:
       - name: Ruff
         run: python -m ruff check .
 
+      - name: Ruff format
+        run: python -m ruff format --check .
+
       - name: Mypy
         run: python -m mypy src/
 
+      # The runner has no datasets and never will: C-MAPSS is ~45 MB, and
+      # Favorita needs credentials plus per-user acceptance of the competition
+      # rules. Tests that need real files are marked "data" and deselected here.
+      # Everything else runs against the synthetic fixtures in tests/synthetic.py.
       - name: Pytest
-        run: python -m pytest --cov=twinmind --cov-report=term-missing
+        run: python -m pytest -m "not data" --cov=twinmind --cov-report=term-missing
+
+      # Guards the arrangement above. If a test needing data is added without
+      # the marker it fails in the Pytest step; if the marker is dropped from
+      # the config, the step above would silently deselect nothing and stop
+      # protecting anything, so assert here that it still selects tests.
+      - name: Verify the data marker is registered and in use
+        run: |
+          python -m pytest -m "data" --collect-only -q
+          python -m pytest -m "data" --collect-only -q \
+            | grep -qE '^tests/.+: [0-9]+' \
+            || { echo "::error::the 'data' marker selected no tests"; exit 1; }
+
+  hooks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pre-commit
+        run: python -m pip install pre-commit
+      - name: Run hooks
+        run: python -m pre_commit run --all-files --show-diff-on-failure

@@ -120,9 +120,9 @@ def test_ai4i_modes_really_do_reconstruct_the_target() -> None:
 
     _, target, modes = load_ai4i()
     agreement = (modes.max(axis=1) == target).mean()
-    assert (
-        agreement > 0.99
-    ), f"expected the OR of the failure modes to reproduce the target; got {agreement:.4f}"
+    assert agreement > 0.99, (
+        f"expected the OR of the failure modes to reproduce the target; got {agreement:.4f}"
+    )
 
 
 @pytest.mark.data
