@@ -15,7 +15,7 @@ dependencies = [
     "torch~=2.4",
     "numpy~=1.26",
     "pandas~=2.2",
-    "pyarrow~=17.0",
+    "pyarrow~=21.0",
     "scipy~=1.13",
     "scikit-learn~=1.5",
     "lightgbm~=4.5",
@@ -30,6 +30,11 @@ dependencies = [
     "plotly~=5.24",
     "python-dotenv~=1.0",
     "tqdm~=4.66",
+    "requests~=2.32",
+    "ucimlrepo~=0.0.7",
+    "kaggle~=1.6",
+    "matplotlib~=3.9",
+    "seaborn~=0.13",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +44,10 @@ dev = [
     "ruff~=0.6",
     "mypy~=1.11",
     "types-PyYAML~=6.0",
+    "types-requests~=2.32",
+    "nbformat~=5.10",
+    "nbconvert~=7.16",
+    "ipykernel~=6.29",
 ]
 forecast = [
     "neuralforecast~=1.7",
@@ -73,3 +82,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "data: requires downloaded datasets in data/raw (deselect with -m 'not data')",
+]
