@@ -10,6 +10,7 @@ import pytest
 import twinmind
 
 MODULES = [
+    "twinmind.data.download",
     "twinmind.data.loaders",
     "twinmind.data.windowing",
     "twinmind.data.features",
