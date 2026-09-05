@@ -48,6 +48,7 @@ dev = [
     "nbformat~=5.10",
     "nbconvert~=7.16",
     "ipykernel~=6.29",
+    "pre-commit~=4.0",
 ]
 forecast = [
     "neuralforecast~=1.7",

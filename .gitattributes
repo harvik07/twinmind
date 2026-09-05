@@ -1,0 +1,15 @@
+# Normalise to LF in the repository. The development machine is Windows and CI
+# is Linux; without this, git re-introduces CRLF on checkout and the
+# mixed-line-ending hook fights it on every commit.
+* text=auto eol=lf
+
+# Binary: never touch these.
+*.png binary
+*.pdf binary
+*.parquet binary
+*.zip binary
+*.pt binary
+*.ckpt binary
+
+# Notebooks are JSON; keep them diffable but never CRLF-converted.
+*.ipynb text eol=lf
