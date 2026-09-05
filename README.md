@@ -216,6 +216,32 @@ is unchanged. Any feature peeking into the future would move.
 Tests needing downloaded files are marked `@pytest.mark.data`, so `pytest -m "not data"`
 passes on a clean checkout and CI stays green without any dataset.
 
+## Working on this repo
+
+`main` stays green: every commit passes ruff, mypy and pytest, enforced by CI on
+Python 3.11 and 3.12. Feature work goes on `feat/<area>` branches and is
+squash-merged with a conventional-commit title. Full conventions, including the
+release tags for each roadmap week, are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Install the pre-commit hooks once per clone:
+
+```bash
+python -m pre_commit install
+```
+
+They run ruff (lint and format), whitespace and end-of-file fixers, a 1 MB
+file-size ceiling so a stray parquet or checkpoint cannot be committed, and
+`detect-private-key`.
+
+CI runs `pytest -m "not data"`. The runner has no datasets and never will --
+C-MAPSS is ~45 MB and Favorita needs credentials plus per-user acceptance of the
+competition rules -- so tests that need real files carry the `data` marker and
+are deselected there. They still run locally once the data is downloaded.
+
+**The repository is private**, because Favorita data cannot be redistributed
+under the competition rules and this is graded work. `.env.example` is tracked
+and holds placeholders only; real credentials belong in `.env`, which is ignored.
+
 ## Current status
 
 **Data layer complete. No models, simulator or agent yet.**
