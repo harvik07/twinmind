@@ -3,14 +3,17 @@
 
 PYTHON ?= python
 
-.PHONY: setup test lint format clean data train-health train-demand rollouts \
-        train-surrogate benchmark app
+.PHONY: setup test test-fast lint format clean data data-optional eda notebooks \
+        train-health train-demand rollouts train-surrogate benchmark app
 
 setup:
 	$(PYTHON) -m pip install -e ".[dev]"
 
 test:
 	$(PYTHON) -m pytest
+
+test-fast:
+	$(PYTHON) -m pytest -m "not data"
 
 lint:
 	$(PYTHON) -m ruff check . && $(PYTHON) -m mypy src/
@@ -23,6 +26,15 @@ clean:
 
 data:
 	$(PYTHON) scripts/download_data.py --dataset all
+
+data-optional:
+	$(PYTHON) scripts/download_data.py --dataset all --include-optional
+
+eda:
+	$(PYTHON) scripts/build_notebooks.py --execute
+
+notebooks:
+	$(PYTHON) scripts/build_notebooks.py
 
 train-health:
 	$(PYTHON) scripts/train_health.py --subset FD001
