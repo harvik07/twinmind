@@ -1,0 +1,20 @@
+# Generated from pyproject.toml [project.dependencies].
+# Flat file for Kaggle/Colab notebooks: `pip install -r requirements.txt`.
+torch~=2.4
+numpy~=1.26
+pandas~=2.2
+pyarrow~=17.0
+scipy~=1.13
+scikit-learn~=1.5
+lightgbm~=4.5
+simpy~=4.1
+pydantic~=2.8
+pyyaml~=6.0
+duckdb~=1.0
+optuna~=4.0
+langgraph~=0.2
+groq~=0.11
+streamlit~=1.38
+plotly~=5.24
+python-dotenv~=1.0
+tqdm~=4.66

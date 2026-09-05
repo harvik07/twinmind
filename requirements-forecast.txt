@@ -1,0 +1,3 @@
+# Optional "forecast" extra: heavy dependency tree, install only for Model B training.
+-r requirements.txt
+neuralforecast~=1.7
