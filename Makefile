@@ -4,7 +4,8 @@
 PYTHON ?= python
 
 .PHONY: setup test test-fast lint format clean data data-optional eda notebooks \
-        train-health train-demand rollouts train-surrogate benchmark app
+        baselines train-health train-ai4i train-demand rollouts \
+        train-surrogate benchmark app figures results-table
 
 setup:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -30,14 +31,29 @@ data:
 data-optional:
 	$(PYTHON) scripts/download_data.py --dataset all --include-optional
 
+check-auth:
+	$(PYTHON) scripts/download_data.py --check-auth
+
 eda:
 	$(PYTHON) scripts/build_notebooks.py --execute
 
 notebooks:
 	$(PYTHON) scripts/build_notebooks.py
 
+baselines:
+	$(PYTHON) scripts/train_baselines.py --subset all --seeds 3
+
 train-health:
-	$(PYTHON) scripts/train_health.py --subset FD001
+	$(PYTHON) scripts/train_health.py --subset all --seeds 3
+
+train-ai4i:
+	$(PYTHON) scripts/train_ai4i.py --model both --seeds 3
+
+figures:
+	$(PYTHON) scripts/make_figures.py
+
+results-table:
+	$(PYTHON) -m twinmind.eval.registry
 
 train-demand:
 	$(PYTHON) scripts/train_demand.py --model nhits

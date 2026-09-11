@@ -1,13 +1,9 @@
 # Data card — Corporación Favorita Store Sales
 
-> **Status: not yet downloaded.** This dataset requires Kaggle credentials and
-> acceptance of the competition rules, neither of which was available when the
-> data layer was built. Everything below describes the published schema and the
-> pipeline that has been written and tested against it; the shape and volume
-> figures will be filled in on first successful download. The feature pipeline is
-> exercised by a synthetic fixture with the identical schema
-> (`tests/synthetic.py`), so its logic is tested — but no claim here about
-> *observed* Favorita values has been verified against the real file.
+> **Status: downloaded and verified** (2026-09-10). Every figure below is measured
+> from the real files, not predicted. Acquisition needed a client upgrade: Kaggle
+> now issues `KGAT_` access tokens, which `kaggle` 1.x cannot use — see
+> "Authentication" below.
 
 ## Source and licence
 
@@ -33,13 +29,29 @@ oil-dependent); `holidays_events.csv` lists national, regional and local holiday
 `transactions.csv` gives per-store daily transaction counts; `test.csv` is the
 competition's unlabelled horizon.
 
-The published dataset covers 54 stores × 33 product families = 1,782 series, daily
-from 2013-01-01 to 2017-08-15, for roughly 3 million rows.
+**Measured on the downloaded files:**
+
+| Table | Rows | Columns |
+| --- | --- | --- |
+| `train.csv` | 3,000,888 | 6 |
+| `test.csv` | 28,512 | 5 |
+| `transactions.csv` | 83,488 | 3 |
+| `oil.csv` | 1,218 | 2 |
+| `holidays_events.csv` | 350 | 6 |
+| `stores.csv` | 54 | 5 |
+
+54 stores × 33 product families = **1,782 series**, daily from **2013-01-01 to
+2017-08-15**, 124.8 MB across 7 files.
 
 TwinMind reduces this to the **top 200 series by total volume** (`favorita.top_series`).
-Most of the 1,782 are near-zero sellers whose forecast error has no bearing on the
-digital twin's order book, and training on all of them costs a Kaggle GPU session
-for no benefit.
+Those 200 series — 11.2% of the 1,782 — carry **75.5% of all units sold**, which is
+the ratio that justifies the cut: the long tail is near-zero sellers whose forecast
+error has no bearing on the digital twin's order book, and training on all of them
+costs a Kaggle GPU session for no benefit.
+
+After feature building the frame is **336,800 rows × 47 columns** (200 series ×
+1,684 days), assembled in about 4 seconds. Of those rows 8.21% fall on a holiday
+and 1,000 on a Work Day.
 
 ## Target definition
 
@@ -150,9 +162,30 @@ per-fold metrics.
 The output is a long frame carrying `unique_id`, `ds`, `y` and roughly 40 exogenous
 columns, ready to hand to `NeuralForecast` without further reshaping.
 
-## To complete this card
+## Authentication
 
-Run `python scripts/download_data.py --dataset favorita` with valid credentials and
-accepted rules, then re-run `notebooks/03_favorita_eda.ipynb`. The notebook detects
-the real data automatically and prints the observed row count, series count, date
-range and per-fold sizes; those figures replace this section.
+Kaggle runs two credential schemes and they are not interchangeable:
+
+* **Access token** — a single `KGAT_`-prefixed value in `KAGGLE_API_TOKEN` or
+  `~/.kaggle/access_token`. Supported from `kaggle` 2.x.
+* **Legacy API key** — `KAGGLE_USERNAME` plus a 32-character hex `KAGGLE_KEY`, sent
+  as HTTP Basic auth. This is what `kaggle.json` holds.
+
+Putting a `KGAT_` token in `KAGGLE_KEY` on a 1.x client sends it as a Basic-auth
+password and the server answers **401** — which reads as a bad password rather than
+the wrong scheme, and is how this dataset stayed undownloaded for a week.
+`twinmind.data.kaggle_auth` resolves the scheme, recognises a token that has been
+put in the key variable, and separates 401 (credentials rejected) from 403 (rules
+not accepted). Verify with:
+
+```bash
+python scripts/download_data.py --check-auth
+```
+
+Observed rolling-origin folds (3 folds, horizon 28):
+
+| Fold | Train rows | Train ends | Val rows | Val window |
+| --- | --- | --- | --- | --- |
+| 0 | 320,000 | 2017-05-23 | 5,600 | 2017-05-24 → 2017-06-20 |
+| 1 | 325,600 | 2017-06-20 | 5,600 | 2017-06-21 → 2017-07-18 |
+| 2 | 331,200 | 2017-07-18 | 5,600 | 2017-07-19 → 2017-08-15 |

@@ -20,12 +20,16 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from twinmind.utils.paths import CONFIG_DIR
 
-try:
-    from dotenv import load_dotenv
+# TWINMIND_SKIP_DOTENV lets a test run the real CLI with a deliberately empty
+# credential environment; without it .env would be loaded and the test could not
+# observe the missing-credentials path.
+if not os.getenv("TWINMIND_SKIP_DOTENV"):
+    try:
+        from dotenv import load_dotenv
 
-    load_dotenv()
-except ImportError:  # pragma: no cover - dotenv is a hard dependency in practice
-    pass
+        load_dotenv()
+    except ImportError:  # pragma: no cover - dotenv is a hard dependency in practice
+        pass
 
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")

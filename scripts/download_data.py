@@ -12,12 +12,12 @@ exits 0. Use --force to re-download regardless.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 import zipfile
 from pathlib import Path
 from typing import cast
 
+from twinmind.data import kaggle_auth
 from twinmind.data.download import (
     DownloadError,
     FetchPolicy,
@@ -36,21 +36,6 @@ logger = get_logger("download_data")
 
 DATASETS = ["cmapss", "ai4i", "favorita", "skab"]
 OPTIONAL = {"skab"}
-
-KAGGLE_403_HELP = """
-Kaggle refused the download (HTTP 403).
-
-For a *competition* dataset this almost always means the competition rules have
-not been accepted on the website yet -- an API key alone is not enough.
-
-  1. Sign in at https://www.kaggle.com/competitions/store-sales-time-series-forecasting
-  2. Click "Join Competition" / "I Understand and Accept" to accept the rules.
-  3. Re-run this command.
-
-If you have accepted the rules, check that KAGGLE_USERNAME and KAGGLE_KEY in
-.env match a current token from https://www.kaggle.com/settings/account
-("Create New Token" downloads kaggle.json containing both values).
-""".strip()
 
 
 def _policy(config: DataConfig) -> FetchPolicy:
@@ -137,33 +122,26 @@ def fetch_ai4i(config: DataConfig, directory: Path) -> list[Path]:
 # Favorita (Kaggle)
 # --------------------------------------------------------------------------- #
 def fetch_favorita(config: DataConfig, directory: Path) -> list[Path]:
-    """Download the Kaggle competition files, with an actionable 403 message."""
-    username, key = os.getenv("KAGGLE_USERNAME"), os.getenv("KAGGLE_KEY")
-    if not username or not key:
-        raise DownloadError(
-            "KAGGLE_USERNAME and KAGGLE_KEY are not set.\n"
-            "Copy .env.example to .env and paste the values from a Kaggle API token "
-            "(https://www.kaggle.com/settings/account -> Create New Token), then "
-            "accept the competition rules at\n"
-            f"https://www.kaggle.com/competitions/{config.favorita.kaggle_competition}"
-        )
+    """Download the Kaggle competition files.
 
-    try:
-        from kaggle.api.kaggle_api_extended import KaggleApi
-    except ImportError as exc:  # pragma: no cover - kaggle is a hard dependency
-        raise DownloadError("the 'kaggle' package is not installed") from exc
+    Authentication is delegated to :mod:`twinmind.data.kaggle_auth`, which
+    resolves the credential scheme, normalises the value and maps 401 and 403
+    onto separate, actionable errors. Every kaggle import is deferred until
+    after .env has been loaded, because the package authenticates at import.
+    """
+    slug = config.favorita.kaggle_competition
+    api, resolved = kaggle_auth.authenticate()
 
-    api = KaggleApi()
-    api.authenticate()
-    logger.info("downloading Kaggle competition %s", config.favorita.kaggle_competition)
+    logger.info("downloading Kaggle competition %s", slug)
     try:
-        api.competition_download_files(
-            config.favorita.kaggle_competition, path=str(directory), quiet=False
-        )
-    except Exception as exc:  # noqa: BLE001 - the kaggle client raises bare ApiException
-        if "403" in str(exc) or "forbidden" in str(exc).lower():
-            raise DownloadError(KAGGLE_403_HELP) from exc
-        raise DownloadError(f"Kaggle download failed: {exc}") from exc
+        api.competition_download_files(slug, path=str(directory), quiet=False)
+    except Exception as exc:  # noqa: BLE001 - the client raises bare API exceptions
+        code = kaggle_auth.status_code(exc)
+        if code == 403:
+            raise kaggle_auth.KaggleForbiddenError(slug, resolved.source, str(exc)[:200]) from exc
+        if code == 401:
+            raise kaggle_auth.KaggleUnauthorizedError(resolved.source, str(exc)[:200]) from exc
+        raise DownloadError(f"Kaggle download failed: {str(exc)[:300]}") from exc
 
     archives = sorted(directory.glob("*.zip"))
     for archive in archives:
@@ -251,6 +229,36 @@ def fetch_dataset(name: str, config: DataConfig, force: bool = False) -> bool:
     return True
 
 
+def _check_auth(config: DataConfig) -> int:
+    """Authenticate and read one competition's metadata, downloading nothing."""
+    slug = config.favorita.kaggle_competition
+    try:
+        info = kaggle_auth.check_auth(slug)
+    except kaggle_auth.KaggleAuthError as exc:
+        logger.error("%s", exc)
+        return 1
+
+    logger.info("Kaggle authentication OK")
+    for field in (
+        "username",
+        "auth_method",
+        "source",
+        "client_version",
+        "supports_access_token",
+    ):
+        logger.info("  %-22s %s", field, info[field])
+    found = info["competitions_found"]
+    logger.info("  %-22s %s", "competitions matching", found or "(none listed)")
+    if not any(slug in name for name in found):
+        logger.warning(
+            "%r was not in the listing. Credentials work, but you may not have "
+            "accepted its rules yet: %s",
+            slug,
+            kaggle_auth.COMPETITION_URL.format(slug=slug),
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Command-line interface for this script."""
     parser = argparse.ArgumentParser(description="Download the raw datasets.")
@@ -262,6 +270,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-optional is given.",
     )
     parser.add_argument("--force", action="store_true", help="Re-download even if checksums match.")
+    parser.add_argument(
+        "--check-auth",
+        action="store_true",
+        help="Verify Kaggle credentials and list one competition, without downloading.",
+    )
     parser.add_argument(
         "--include-optional",
         action="store_true",
@@ -275,6 +288,9 @@ def main() -> int:
     args = build_parser().parse_args()
     config = cast(DataConfig, load_config("data"))
 
+    if args.check_auth:
+        return _check_auth(config)
+
     if args.dataset == "all":
         targets = [d for d in DATASETS if d not in OPTIONAL or args.include_optional]
     else:
@@ -284,7 +300,7 @@ def main() -> int:
     for name in targets:
         try:
             fetch_dataset(name, config, force=args.force)
-        except DownloadError as exc:
+        except (DownloadError, kaggle_auth.KaggleAuthError) as exc:
             optional = name in OPTIONAL
             logger.error(
                 "%s: %s\n%s", name, "optional dataset failed" if optional else "FAILED", exc

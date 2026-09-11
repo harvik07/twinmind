@@ -103,7 +103,11 @@ Windows without `make`, run the raw command instead.
 | `make data-optional` | `python scripts/download_data.py --dataset all --include-optional` |
 | `make notebooks` | `python scripts/build_notebooks.py` |
 | `make eda` | `python scripts/build_notebooks.py --execute` |
-| `make train-health` | `python scripts/train_health.py --subset FD001` |
+| `make baselines` | `python scripts/train_baselines.py --subset all --seeds 3` |
+| `make train-health` | `python scripts/train_health.py --subset all --seeds 3` |
+| `make train-ai4i` | `python scripts/train_ai4i.py --model both --seeds 3` |
+| `make figures` | `python scripts/make_figures.py` |
+| `make results-table` | `python -m twinmind.eval.registry` |
 | `make train-demand` | `python scripts/train_demand.py --model nhits` |
 | `make rollouts` | `python scripts/generate_rollouts.py --n 65000` |
 | `make train-surrogate` | `python scripts/train_surrogate.py` |
@@ -244,7 +248,7 @@ and holds placeholders only; real credentials belong in `.env`, which is ignored
 
 ## Current status
 
-**Data layer complete. No models, simulator or agent yet.**
+**Data layer and Model A complete. No simulator or agent yet.**
 
 | Component | Status |
 | --- | --- |
@@ -255,13 +259,18 @@ and holds placeholders only; real credentials belong in `.env`, which is ignored
 | `configs/` — all four YAMLs with real values | Done |
 | Data acquisition + manifests | Done |
 | Loaders — C-MAPSS, AI4I, SKAB | Done |
-| Loader — Favorita | Written, **not run** (needs Kaggle credentials) |
+| Loader — Favorita | Done, verified on real data (3,000,888 rows) |
 | C-MAPSS preprocessing — RUL, sensors, regimes, windows, splits | Done |
-| Favorita feature pipeline | Done, verified on a synthetic fixture |
-| Data cards | Done (Favorita's shape figures pending download) |
+| Favorita feature pipeline | Done — 200 series, 336,800 rows, 47 columns |
+| Data cards | Done, all four measured from real data |
 | EDA notebooks 01–03 | Done, execute end to end |
-| Test suite (177 tests; 155 without data) | Passing |
-| Model A — machine health | Stubs only |
+| Test suite (318 tests; 295 without data) | Passing |
+| Model A1 — C-MAPSS RUL + failure head | Done on FD001; **misses target**, see below |
+| Model A2 — AI4I failure classifier | Done; 2 of 3 targets missed, see model card |
+| Baselines — Ridge, random forest, LSTM | Done, all four subsets |
+| Metrics + last-window protocol | Done |
+| Result registry (`runs.jsonl`) + summary table | Done |
+| Model cards | Done — `reports/model_cards/` |
 | Model B — demand | Stubs only |
 | Digital twin (SimPy) | Stubs only |
 | Model C — surrogate | Stubs only |
@@ -270,18 +279,3 @@ and holds placeholders only; real credentials belong in `.env`, which is ignored
 
 Every stub raises `NotImplementedError` with the function's name, so nothing
 fails silently as it gets filled in.
-
-### To finish the data layer
-
-Favorita needs a Kaggle API token **and** acceptance of the competition rules on
-the website — a token alone returns HTTP 403. Put `KAGGLE_USERNAME` and
-`KAGGLE_KEY` in `.env`, accept the rules at
-<https://www.kaggle.com/competitions/store-sales-time-series-forecasting>, then:
-
-```bash
-python scripts/download_data.py --dataset favorita
-```
-
-Then re-run `notebooks/03_favorita_eda.ipynb`, which detects the real data
-automatically (it falls back to the synthetic fixture otherwise), and fill the
-shape figures into `reports/data_cards/favorita.md`.

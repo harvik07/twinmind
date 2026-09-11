@@ -11,9 +11,14 @@ import twinmind
 
 MODULES = [
     "twinmind.data.download",
+    "twinmind.data.cmapss_prep",
+    "twinmind.data.kaggle_auth",
     "twinmind.data.loaders",
     "twinmind.data.windowing",
     "twinmind.data.features",
+    "twinmind.models.a1_cnn_bilstm",
+    "twinmind.models.a1_train",
+    "twinmind.models.ai4i",
     "twinmind.models.health",
     "twinmind.models.demand",
     "twinmind.models.surrogate",
@@ -31,7 +36,9 @@ MODULES = [
     "twinmind.agents.tools",
     "twinmind.agents.memory",
     "twinmind.agents.llm_client",
+    "twinmind.eval.figures",
     "twinmind.eval.metrics",
+    "twinmind.eval.registry",
     "twinmind.eval.ablations",
     "twinmind.eval.faithfulness",
     "twinmind.utils.paths",
@@ -57,12 +64,12 @@ def test_every_module_on_disk_is_covered() -> None:
 
 
 def test_stubs_raise_not_implemented() -> None:
-    from twinmind.eval.metrics import rmse
+    from twinmind.eval.metrics import surrogate_fidelity
     from twinmind.optimise.oracle import regret
     from twinmind.twin.inventory import InventoryPolicy
 
     with pytest.raises(NotImplementedError):
-        rmse(None, None)  # type: ignore[arg-type]
+        surrogate_fidelity(None, None)  # type: ignore[arg-type]
     with pytest.raises(NotImplementedError):
         regret(None, None)  # type: ignore[arg-type]
     with pytest.raises(NotImplementedError):
