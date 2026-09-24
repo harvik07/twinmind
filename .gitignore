@@ -44,3 +44,4 @@ dist/
 !/reports/figures/.gitkeep
 
 .DS_Store
+.kaggle_staging/
