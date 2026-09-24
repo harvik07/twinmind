@@ -17,6 +17,7 @@ MODULES = [
     "twinmind.data.windowing",
     "twinmind.data.features",
     "twinmind.models.a1_cnn_bilstm",
+    "twinmind.models.a1_cv",
     "twinmind.models.a1_train",
     "twinmind.models.ai4i",
     "twinmind.models.health",

@@ -11,6 +11,7 @@ Everything that learns a statistic is fitted on the training split only.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -81,6 +82,7 @@ def prepare_cmapss(
     config: CMAPSSConfig,
     seed: int = 42,
     val_fraction: float | None = None,
+    scaling: Literal["zscore", "minmax"] = "zscore",
 ) -> CMAPSSData:
     """Load, target, split, select sensors, normalise and window one subset.
 
@@ -128,6 +130,19 @@ def prepare_cmapss(
     x_val, y_val, units_val = make_windows(val_z, kept, window=window, stride=stride)
     # One window per test engine: the benchmark scores a single prediction each.
     x_test, y_test, units_test = make_last_windows(test_z, kept, window=window)
+
+    if scaling == "minmax":
+        # H6: rescale each sensor to [-1, 1], the most common C-MAPSS convention.
+        # Fitted on the training windows ONLY, then applied unchanged to
+        # validation and test -- fitting on all three would leak test statistics.
+        lo = x_train.min(axis=(0, 1), keepdims=True)
+        hi = x_train.max(axis=(0, 1), keepdims=True)
+        span = np.maximum(hi - lo, 1e-8)
+
+        def rescale(a: NDArray[np.float32]) -> NDArray[np.float32]:
+            return np.clip(2.0 * (a - lo) / span - 1.0, -3.0, 3.0).astype("float32")
+
+        x_train, x_val, x_test = rescale(x_train), rescale(x_val), rescale(x_test)
 
     data = CMAPSSData(
         subset=subset,
