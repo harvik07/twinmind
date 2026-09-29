@@ -141,6 +141,51 @@ HYPOTHESES: list[Hypothesis] = [
         arch={"trend_branch": True},
     ),
     Hypothesis(
+        "HC",
+        "combined: small trunk + no conv norm + full augmentation",
+        "The three changes that individually helped, stacked. H2 cut capacity "
+        "(-0.57), H4b removed the BatchNorm/Dropout interaction (-1.03) and H3d "
+        "added augmentation (-1.35); they address different failure modes, so "
+        "they should compose.",
+        arch={
+            "conv1_channels": 32,
+            "conv2_channels": 64,
+            "lstm_hidden": 64,
+            "lstm_layers": 1,
+            "conv_norm": "none",
+        },
+        train={"noise_sigma": 0.03, "mask_prob": 0.1, "jitter": 0.05},
+    ),
+    Hypothesis(
+        "HCt",
+        "combined + trend branch",
+        "The combination plus the explicit degradation trend from H7.",
+        arch={
+            "conv1_channels": 32,
+            "conv2_channels": 64,
+            "lstm_hidden": 64,
+            "lstm_layers": 1,
+            "conv_norm": "none",
+            "trend_branch": True,
+        },
+        train={"noise_sigma": 0.03, "mask_prob": 0.1, "jitter": 0.05},
+    ),
+    Hypothesis(
+        "HCcv",
+        "combined + trend + 5-fold CV ensemble",
+        "Everything that worked, with the fold ensemble on top.",
+        arch={
+            "conv1_channels": 32,
+            "conv2_channels": 64,
+            "lstm_hidden": 64,
+            "lstm_layers": 1,
+            "conv_norm": "none",
+            "trend_branch": True,
+        },
+        train={"noise_sigma": 0.03, "mask_prob": 0.1, "jitter": 0.05},
+        cross_validate=True,
+    ),
+    Hypothesis(
         "H7cv",
         "trend branch + 5-fold CV ensemble",
         "The two most promising changes together.",

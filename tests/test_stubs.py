@@ -20,6 +20,7 @@ MODULES = [
     "twinmind.models.a1_cv",
     "twinmind.models.a1_train",
     "twinmind.models.ai4i",
+    "twinmind.models.forest_health",
     "twinmind.models.health",
     "twinmind.models.demand",
     "twinmind.models.surrogate",

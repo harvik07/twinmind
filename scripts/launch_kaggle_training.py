@@ -10,9 +10,23 @@ leaves this machine.
     python scripts/launch_kaggle_training.py             # package and push
     python scripts/launch_kaggle_training.py --status     # poll the run
 
-CREDENTIALS. A ``KGAT_`` access token is enough: it uploads the dataset and
-pushes the kernel. It cannot call ``kernels_list``, which 401s, so ``--status``
-uses ``kernels_status`` on the known slug instead of enumerating.
+CREDENTIALS -- and a scope limit worth knowing about. A ``KGAT_`` access token
+uploads the dataset and pushes the kernel, but its scope stops short of the rest:
+
+* ``kernels_list`` returns 401 and ``dataset_list_files`` returns 403, so
+  ``--status`` queries ``kernels_status`` on the known slug rather than
+  enumerating.
+* More importantly, a kernel pushed under an access token **runs with neither
+  the requested GPU nor the attached private dataset**, even though
+  ``kernel-metadata.json`` carries ``enable_gpu: true`` and the correct
+  ``dataset_sources``. The kernel then fails at
+  ``/kaggle/input/twinmind-src`` not existing, with ``nvidia-smi`` absent.
+
+A legacy API token carries the missing scope. Create one at
+kaggle.com/settings/account -> "Create New Token", which downloads kaggle.json,
+then either put its username/key into .env as KAGGLE_USERNAME / KAGGLE_KEY or
+drop the file at ~/.kaggle/kaggle.json, and re-run this script. Nothing else
+needs to change.
 """
 
 from __future__ import annotations
@@ -53,13 +67,17 @@ SRC = Path("/kaggle/input/twinmind-src")
 WORK = Path("/kaggle/working/twinmind")
 OUT = Path("/kaggle/working/out")
 
-print(
-    subprocess.run(
+# nvidia-smi is absent entirely when no accelerator is attached, so this has to
+# be guarded: an unguarded probe raises FileNotFoundError and kills the run
+# before any training starts.
+try:
+    gpu = subprocess.run(
         ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
-        capture_output=True, text=True,
+        capture_output=True, text=True, check=False,
     ).stdout.strip()
-    or "NO GPU -- enable the accelerator"
-)
+except FileNotFoundError:
+    gpu = ""
+print("accelerator:", gpu or "NONE (nvidia-smi absent)", flush=True)
 
 if WORK.exists():
     shutil.rmtree(WORK)
