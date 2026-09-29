@@ -1,6 +1,6 @@
 # Results
 
-Generated 2026-09-11T05:59:47+00:00 from `reports/results/runs.jsonl`: 46 of 56 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
+Generated 2026-09-29T05:16:12+00:00 from `reports/results/runs.jsonl`: 49 of 62 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
 
 Every cell is **mean +/- std across seeds**; `n` is the number of independent training runs behind it. C-MAPSS rows use the last-window-per-unit protocol (one prediction per test engine).
 
@@ -13,13 +13,14 @@ Every cell is **mean +/- std across seeds**; `n` is the number of independent tr
 
 ## cmapss / FD001
 
-| model | n | rmse | mae | nasa_score | fail_pr_auc | mean_rul_std | n_units | n_windows_seen |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| a1_cnn_bilstm | 3 | 15.44 +/- 1.11 | 11.36 +/- 1.06 | 587.04 +/- 281.45 | 0.9567 +/- 0.0174 | 6.5461 +/- 0.2750 | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
-| a1_ensemble | 1 | 14.70 +/- 0.00 | 10.86 +/- 0.00 | 432.37 +/- 0.00 | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
-| lstm | 3 | 14.95 +/- 0.64 | 11.05 +/- 0.23 | 506.04 +/- 151.74 | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
-| random_forest | 3 | 12.72 +/- 0.16 | 9.5143 +/- 0.0133 | 245.22 +/- 4.46 | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
-| ridge | 3 | 15.08 +/- 0.08 | 12.14 +/- 0.17 | 373.81 +/- 14.58 | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| model | n | rmse | mae | nasa_score | fail_pr_auc | mean_p_fail | mean_rul_std | n_units | n_windows_seen |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| a1_cnn_bilstm | 3 | 15.44 +/- 1.11 | 11.36 +/- 1.06 | 587.04 +/- 281.45 | 0.9567 +/- 0.0174 | -- | 6.5461 +/- 0.2750 | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| a1_ensemble | 1 | 14.70 +/- 0.00 | 10.86 +/- 0.00 | 432.37 +/- 0.00 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| forest_health | 3 | 12.72 +/- 0.16 | 9.5143 +/- 0.0133 | 245.22 +/- 4.46 | -- | 0.2134 +/- 0.0017 | 16.37 +/- 0.21 | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| lstm | 3 | 14.95 +/- 0.64 | 11.05 +/- 0.23 | 506.04 +/- 151.74 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| random_forest | 3 | 12.72 +/- 0.16 | 9.5143 +/- 0.0133 | 245.22 +/- 4.46 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| ridge | 3 | 15.08 +/- 0.08 | 12.14 +/- 0.17 | 373.81 +/- 14.58 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
 
 ## cmapss / FD002
 

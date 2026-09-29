@@ -62,10 +62,66 @@ class A1Config:
     lambda_fail: float = 0.5
     focal_gamma: float = 2.0
 
+    # --- remediation options (H2, H4, H5, H7). Defaults reproduce v0.3-health. ---
+    #: Normalisation inside the conv block. BatchNorm immediately followed by
+    #: Dropout is a known bad pairing: dropout shifts the variance BN just
+    #: normalised, so BN's running statistics are estimated from a distribution
+    #: that never occurs at inference. "layer" and "none" are the alternatives.
+    conv_norm: Literal["batch", "layer", "none"] = "batch"
+    #: Detach the trunk before the failure head, so the auxiliary task cannot
+    #: push gradients back into the shared representation.
+    detach_fail_head: bool = False
+    #: Concatenate handcrafted per-sensor trend features (last value, linear-fit
+    #: slope, delta from first) through a small MLP before the heads. This is the
+    #: feature set the random forest wins with, handed to the network directly.
+    trend_branch: bool = False
+    trend_hidden: int = 64
+
+    @property
+    def n_trend_features(self) -> int:
+        """Three statistics per sensor."""
+        return self.n_features * 3
+
     @property
     def trunk_width(self) -> int:
         """BiLSTM output width: hidden size doubled for the two directions."""
         return self.lstm_hidden * 2
+
+
+class _ChannelLayerNorm(nn.Module):
+    """LayerNorm over the channel axis of a ``[B, C, T]`` conv output."""
+
+    def __init__(self, channels: int):
+        super().__init__()
+        self.norm = nn.LayerNorm(channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalise each timestep across channels."""
+        return self.norm(x.transpose(1, 2)).transpose(1, 2)
+
+
+def trend_features(x: torch.Tensor) -> torch.Tensor:
+    """Per-sensor degradation summary of a window: last, slope, delta-from-first.
+
+    ``x`` is ``[B, T, C]``; the result is ``[B, 3C]``.
+
+    This is the part of the random forest's feature set that a sequence model
+    has to infer rather than being given. The slope in particular is the
+    degradation trend stated outright -- an ordinary least-squares fit over the
+    window, computed in closed form so it stays differentiable and cheap.
+    """
+    batch, steps, _ = x.shape
+    t = torch.arange(steps, dtype=x.dtype, device=x.device)
+    t_centred = t - t.mean()
+    denominator = (t_centred**2).sum().clamp_min(1e-8)
+
+    last = x[:, -1, :]
+    first = x[:, 0, :]
+    # slope = sum((t - t_bar) * (x - x_bar)) / sum((t - t_bar)^2)
+    slope = ((x - x.mean(dim=1, keepdim=True)) * t_centred.view(1, steps, 1)).sum(
+        dim=1
+    ) / denominator
+    return torch.cat([last, slope, last - first], dim=-1).reshape(batch, -1)
 
 
 class AdditiveAttentionPooling(nn.Module):
@@ -98,13 +154,22 @@ class A1Net(nn.Module):
         self.config = config
         p = config.dropout
 
+        def norm(channels: int) -> nn.Module:
+            if config.conv_norm == "batch":
+                return nn.BatchNorm1d(channels)
+            if config.conv_norm == "layer":
+                # Conv output is [B, C, T]; LayerNorm over C needs the channel
+                # axis last, so transpose around it.
+                return _ChannelLayerNorm(channels)
+            return nn.Identity()
+
         self.conv = nn.Sequential(
             nn.Conv1d(config.n_features, config.conv1_channels, config.kernel1, padding="same"),
-            nn.BatchNorm1d(config.conv1_channels),
+            norm(config.conv1_channels),
             nn.GELU(),
             nn.Dropout(p),
             nn.Conv1d(config.conv1_channels, config.conv2_channels, config.kernel2, padding="same"),
-            nn.BatchNorm1d(config.conv2_channels),
+            norm(config.conv2_channels),
             nn.GELU(),
             nn.Dropout(p),
         )
@@ -119,15 +184,27 @@ class A1Net(nn.Module):
         self.attention = AdditiveAttentionPooling(config.trunk_width, config.head_hidden)
         self.head_dropout = nn.Dropout(p)
 
-        def head() -> nn.Sequential:
+        self.trend_mlp: nn.Module | None = None
+        head_width = config.trunk_width
+        if config.trend_branch:
+            self.trend_mlp = nn.Sequential(
+                nn.Linear(config.n_trend_features, config.trend_hidden),
+                nn.GELU(),
+                nn.Dropout(p),
+                nn.Linear(config.trend_hidden, config.trend_hidden),
+                nn.GELU(),
+            )
+            head_width += config.trend_hidden
+
+        def wide_head() -> nn.Sequential:
             return nn.Sequential(
-                nn.Linear(config.trunk_width, config.head_hidden),
+                nn.Linear(head_width, config.head_hidden),
                 nn.GELU(),
                 nn.Linear(config.head_hidden, 1),
             )
 
-        self.rul_head = head()
-        self.fail_head = head()
+        self.rul_head = wide_head()
+        self.fail_head = wide_head()
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """``x`` is ``[B, T, C]``. Returns normalised RUL, failure logit, attention."""
@@ -138,9 +215,16 @@ class A1Net(nn.Module):
         sequence, _ = self.lstm(features)
         pooled, weights = self.attention(sequence)
         pooled = self.head_dropout(pooled)
+
+        if self.trend_mlp is not None:
+            pooled = torch.cat([pooled, self.trend_mlp(trend_features(x))], dim=-1)
+
+        # H5: the failure head is auxiliary. Detaching stops its gradient reaching
+        # the trunk, so it can read the representation without reshaping it.
+        fail_input = pooled.detach() if self.config.detach_fail_head else pooled
         return (
             self.rul_head(pooled).squeeze(-1),
-            self.fail_head(pooled).squeeze(-1),
+            self.fail_head(fail_input).squeeze(-1),
             weights,
         )
 

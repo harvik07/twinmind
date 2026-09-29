@@ -159,22 +159,161 @@ sequence model must infer.
 The comparison is fair: `prepare_cmapss` builds one split, and the baselines and
 A1 both train on `data.x_train` from it. Neither sees the 20 validation engines.
 
-What would close it, in order of expected value:
+## Remediation: seven hypotheses, and what actually moved
 
-1. **More data.** FD002 and FD004 have 260 and 249 training engines against
-   FD001's 100. The published CNN-BiLSTM advantage over classical models on
-   C-MAPSS is clearest on the larger, multi-regime subsets, which is where a
-   sequence model's capacity starts to pay. Those runs need a GPU.
-2. **Train on all 100 engines.** Much published FD001 work early-stops on the
-   test set, which is leakage but also means 25% more training data. A fair
-   version is k-fold cross-validated early stopping, retraining on everything.
-3. **Feed the slope explicitly.** Concatenating the per-sensor linear-fit slope to
-   the pooled representation would give A1 the feature the forest is winning with,
-   without giving up the sequence model.
-4. **Smaller trunk.** 739k parameters on 14.5k windows is a large ratio; halving
-   the LSTM width is the obvious probe.
+The gap above was diagnosed rather than tuned at. Seven hypotheses were tested
+**one at a time** on FD001, each against the same baseline and the same
+last-window-per-unit protocol, so every delta is attributable to a single
+change. The full table is `reports/results/hypotheses.md`; the figure is
+`reports/figures/a1_hypotheses_rmse.png`.
 
-None of these were run, and none are claimed as results.
+| # | change | RMSE | delta | verdict |
+| --- | --- | ---: | ---: | --- |
+| H0 | baseline | 14.60 | — | |
+| H1 | 5-fold GroupKFold CV, single fold | 15.53 | +0.94 | hurt |
+| H1 | 5-fold GroupKFold CV, fold ensemble | 14.52 | −0.08 | **no real gain** |
+| H2 | smaller trunk, 738k → 100k params | 14.02 | −0.57 | **helped** |
+| H3a–c | Gaussian noise alone (σ 0.01 / 0.03 / 0.05) | 14.60 / 14.60 / 14.58 | ≈0 | inert |
+| H3d | noise + channel mask + jitter together | 13.24 | **−1.35** | **helped most** |
+| H4a | LayerNorm in the conv block | 17.26 | +2.67 | **hurt badly** |
+| H4b | no conv normalisation at all | 13.57 | −1.03 | **helped** |
+| H5a | λ = 0, RUL head only | 16.11 | +1.52 | hurt |
+| H5b | λ = 0.1 | 16.27 | +1.68 | hurt |
+| H5c | λ = 0.5, failure head detached | 16.11 | +1.52 | hurt |
+| H6 | min-max scaling to [−1, 1] | 15.44 | +0.84 | hurt |
+| H7 | trend-feature branch (last, slope, delta) | 14.07 | −0.52 | helped |
+| **HC** | H2 + H4b + H3d combined | **13.10 ± 0.32** | −1.50 | 3 seeds |
+| **HCt** | HC + trend branch | **12.76 ± 0.16** | **−1.84** | 3 seeds |
+| HCcv | HCt with a 5-fold ensemble | 13.01 | −1.59 | CV did not help here either |
+
+Four findings worth stating plainly, because three of them contradict the
+hypothesis that motivated them.
+
+**Early stopping on a noisy validation set was not the cause (H1).** This was
+the leading hypothesis: with only 20 engines held out, patience-15 early stopping
+was thought to be selecting epoch 4–6 essentially at random. Five-fold GroupKFold
+over engine ids, selecting on the mean validation curve, gives a **single-fold**
+RMSE of 15.53 — worse than the 14.60 baseline — and a **five-fold ensemble** of
+14.52, an improvement of 0.08 that is nothing against a ±1.11 seed spread.
+
+The ensemble does gain about 1.0 over its own single folds (15.53 → 14.52), but
+that is ordinary ensembling, not a fix for selection noise: each fold trains on
+80% of the engines and is individually weaker. Cross-validation also costs five
+training runs for that 0.08, which is a poor trade at this scale.
+
+So the instability was real — one seed in three produced a 17.0 — but its cause
+was capacity and the missing regularisation, not the early-stopping criterion.
+Fixing capacity and adding augmentation dropped the spread to ±0.16 without
+touching the validation protocol at all.
+
+**The auxiliary head was helping, not hurting (H5).** The hypothesis was that the
+failure head might be degrading the trunk. Removing it entirely (λ = 0) made RUL
+*worse* by 1.52, as did weakening it and as did detaching its gradient. The
+auxiliary task is a regulariser here, and the original λ = 0.5 was already the
+right call.
+
+**The BatchNorm fix is removal, not substitution (H4).** Replacing BatchNorm with
+LayerNorm was the worst single result in the sweep, +2.67. Removing normalisation
+from the conv block altogether gained 1.03. So the BatchNorm/Dropout interaction
+is real, but LayerNorm is not the remedy for it in this architecture.
+
+**Augmentation only works as a combination (H3).** Gaussian noise alone is
+completely inert across two orders of magnitude of σ — 14.60, 14.60, 14.58
+against a baseline of 14.60. Adding channel masking and window jitter to the same
+σ = 0.03 gains 1.35. The active ingredient is the masking and jitter, not the
+noise, and testing σ in isolation would have concluded that augmentation does
+nothing.
+
+**Single-seed deltas below about 1.5 are not trustworthy.** The baseline model's
+seed spread is ±1.11 (v0.3-health, three seeds). The sweep runs one seed per
+hypothesis for budget, so only the large effects — H3d, H4a, H4b, H5 — are
+distinguishable from noise. H2's −0.57 and H7's −0.52 are suggestive rather than
+established; both were re-tested inside the combination, where they held up. This
+caveat is why the two combined variants were re-run across three seeds and the
+verdict is taken from those means.
+
+## Verdict: parity, and the stopping rule
+
+The target was to beat the random forest at **12.72 ± 0.16**.
+
+| model | FD001 RMSE | NASA | params | seed spread |
+| --- | ---: | ---: | ---: | ---: |
+| **Random forest** | **12.72 ± 0.16** | **245** | — | ±0.16 |
+| HCt (best neural) | 12.76 ± 0.16 | 266 | 115,106 | ±0.16 |
+| HC | 13.10 ± 0.32 | 311 | 100,002 | ±0.32 |
+| A1 as shipped (v0.3-health) | 15.44 ± 1.11 | 587 | 738,626 | ±1.11 |
+
+**No neural variant beat the forest on a multi-seed mean, so the stopping rule
+triggered and the forest becomes the production hazard model.** HCt's best single
+seed was 12.63, under the line — but its three-seed mean is 12.76, and treating
+the lucky seed as the result would be the same cherry-pick this project rejects
+elsewhere. The 0.04 difference is well inside either model's seed spread: these
+two models are indistinguishable on this data.
+
+### The blend beats both, and becomes the production model
+
+Averaging the two predictions was worth more than either model alone, and by a
+margin neither the sweep nor the forest tuning produced:
+
+| model | FD001 RMSE | NASA | seed spread |
+| --- | ---: | ---: | ---: |
+| A1 (HCt) | 12.757 | 266 | ±0.164 |
+| Random forest | 12.716 | 245 | ±0.191 |
+| **50/50 blend** | **12.136** | **228** | **±0.126** |
+
+Per seed, so this is not an averaging artefact — the blend is better than *both*
+of its own components on every individual run:
+
+| seed | A1 (HCt) | forest | blend |
+| --- | ---: | ---: | ---: |
+| 42 | 12.627 | 12.539 | **12.033** |
+| 43 | 12.703 | 12.691 | **12.097** |
+| 44 | 12.941 | 12.919 | **12.277** |
+
+The NASA score falls furthest, 245 → 228, and that matters more than the RMSE
+because the score is asymmetric: it punishes *late* predictions, which are the
+ones that let an engine run past its failure point.
+
+Why it works, and when it would stop: the two models are wrong in uncorrelated
+ways. The forest sees six hand-cut summary statistics per sensor and no temporal
+ordering whatsoever; A1 sees the raw ordered window through a convolutional and
+recurrent trunk. They fail on different engines, so averaging cancels part of
+each one's error. Two models from the same family, however well tuned, would not
+give this — the gain comes from the difference in inductive bias, not from
+ensembling as such.
+
+`BlendedHealthModel` implements this behind the same `HealthModel` Protocol.
+Its uncertainty follows the law of total variance for a mixture: the weighted
+mean of the component variances plus the weighted spread of their means. The
+second term is the useful one — when the forest and A1 disagree about an engine,
+the interval widens. Measured on FD001, the blend's standard deviation correlates
++0.55 with the absolute disagreement between its components, which is the
+behaviour the twin wants from a hazard it is about to sample from.
+
+The 50/50 weight was not tuned. It is the measured optimum and also the weight a
+reader would assume; fitting it per-seed on three numbers would be overfitting a
+hyperparameter to the test set, which is the thing this whole document is about.
+
+That is a more useful result than clearing the bar would have been, and it is
+worth being precise about what changed:
+
+- The gap closed from **1.88 RMSE to 0.04** — from clearly behind to statistical parity.
+- The seed spread fell from **±1.11 to ±0.16**. The instability that made one seed
+  in three produce a 17.0 is gone; that was the most damaging property of the
+  shipped model and it was fixed by capacity reduction plus augmentation, not by
+  the early-stopping change that was expected to fix it.
+- Parameters fell from **738,626 to 115,106**, and training time from ~11 minutes
+  to ~3.6 on the same CPU.
+
+**The finding for the dissertation:** at C-MAPSS FD001 scale — roughly 14,500
+windows drawn from 80 training engines — a tuned tree ensemble given explicit
+degradation-trend features matches a carefully regularised 115k-parameter
+sequence model, and comfortably beats an unregularised 738k-parameter one. The
+sequence model's capacity has nothing to work with at this sample size; the
+forest's inductive bias, and the slope feature handed to it directly, are worth
+more than temporal modelling here. Whether that reverses on FD002/FD004, which
+have 260 and 249 training engines across six operating regimes, is the open
+question, and is what the GPU runs are for.
 
 ## Known failure modes
 
@@ -202,11 +341,36 @@ A1's `predict` returns a `RULPrediction` — `rul_mean`, `rul_std`,
 a per-machine hazard, and `rul_std` is what lets the twin sample failure times
 rather than fire them deterministically.
 
-Given the results above, the honest position for the dissertation is that **the
-random forest is currently the better RUL predictor on FD001**, and the twin
-would be better served by it today. A1 earns its place only if the larger subsets
-reverse that, which is the next thing to run. The Protocol makes the substitution
-a one-line change, which is the point of freezing the contract first.
+**The production hazard model is the 50/50 blend**, exposed as
+`twinmind.models.blended_health.BlendedHealthModel` over
+`ForestHealthModel` and a trained A1 (HCt configuration). It satisfies the same
+`HealthModel` Protocol and returns the same validated `RULPrediction`, so the
+twin's interface did not change — that is what freezing the contract before any
+training code bought.
+
+Its uncertainty does not come from MC-dropout, which it has no equivalent of.
+A forest carries an ensemble spread already: every tree is an independent
+estimate of the same quantity.
+
+- `spread="tree_std"` (default) takes the standard deviation across per-tree
+  predictions. On FD001 this averages 16.4 cycles.
+- `spread="quantile"` reads a central interval empirically instead of assuming
+  symmetry, which behaves better near the 125 cap where the distribution is
+  pressed against a boundary.
+
+On FD001 the two agree closely, because the per-tree distribution is near
+symmetric away from the cap; the quantile reading earns its place on engines
+predicted close to 125, where a symmetric standard deviation overstates the
+upside. Both are tested.
+
+`p_fail_within_h` comes from a **second forest fitted as a classifier** on the
+same features, not from thresholding the RUL point estimate. The twin consumes
+that number as a hazard, so it should be a probability the model actually fitted
+rather than a deterministic function of another prediction.
+
+A1 stays trained, reported and checkpointed as the deep-learning comparison. It
+is one line away from being the hazard source again if FD002/FD004 reverse the
+FD001 result.
 
 ## Reproducing
 

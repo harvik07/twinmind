@@ -45,6 +45,16 @@ class TrainConfig:
     lambda_candidates: tuple[float, ...] = (0.1, 0.5, 1.0)
     amp: bool = True
 
+    # --- H3 augmentation. All default to off, reproducing v0.3-health. ---
+    #: Gaussian noise added to normalised sensors each batch. Sensors are already
+    #: z-scored, so sigma is in standard deviations.
+    noise_sigma: float = 0.0
+    #: Probability of zeroing an entire sensor channel for a sample, which forces
+    #: the model to spread its reliance rather than lean on one trace.
+    mask_prob: float = 0.0
+    #: Scale each window by 1 +/- jitter, a crude stand-in for rate variation.
+    jitter: float = 0.0
+
 
 @dataclass
 class TrainResult:
@@ -86,6 +96,42 @@ def _loaders(
     return loader, x_val, y_val_rul, y_val_fail, alpha
 
 
+def augment(
+    xb: torch.Tensor, settings: TrainConfig, generator: torch.Generator | None = None
+) -> torch.Tensor:
+    """Apply the configured augmentations to one batch of normalised windows.
+
+    A no-op when every knob is zero, which is the default, so the ordinary path
+    is unchanged. Augmentation only ever touches training batches -- validation
+    and test windows are passed through untouched, or the comparison would be
+    against a different distribution.
+    """
+    if settings.noise_sigma <= 0 and settings.mask_prob <= 0 and settings.jitter <= 0:
+        return xb
+
+    out = xb
+    if settings.jitter > 0:
+        # One scale per sample, shared across the window so the trajectory shape
+        # survives and only its magnitude moves.
+        low, high = 1.0 - settings.jitter, 1.0 + settings.jitter
+        scale = torch.empty(out.shape[0], 1, 1, device=out.device).uniform_(
+            low, high, generator=generator
+        )
+        out = out * scale
+    if settings.noise_sigma > 0:
+        noise = torch.randn(out.shape, device=out.device, generator=generator)
+        out = out + noise * settings.noise_sigma
+    if settings.mask_prob > 0:
+        # Drop whole channels, not individual readings: a dead sensor is the
+        # realistic failure, and per-element dropout is what nn.Dropout already does.
+        keep = (
+            torch.rand(out.shape[0], 1, out.shape[2], device=out.device, generator=generator)
+            >= settings.mask_prob
+        )
+        out = out * keep
+    return out
+
+
 def _scheduler(
     optimiser: torch.optim.Optimizer, epochs: int, warmup: int
 ) -> torch.optim.lr_scheduler.LambdaLR:
@@ -114,6 +160,7 @@ def train_a1(
     device: str = "cpu",
     checkpoint_dir: Path | None = None,
     quiet: bool = False,
+    arch_overrides: dict[str, Any] | None = None,
 ) -> tuple[A1Net, TrainResult]:
     """Train one A1 model on one subset with one seed.
 
@@ -126,7 +173,15 @@ def train_a1(
     settings = train_config or TrainConfig()
     if lambda_fail is None and len(settings.lambda_candidates) > 1:
         return _train_with_lambda_search(
-            data, seed, horizon_h, dropout, settings, device, checkpoint_dir, quiet
+            data,
+            seed,
+            horizon_h,
+            dropout,
+            settings,
+            device,
+            checkpoint_dir,
+            quiet,
+            arch_overrides,
         )
 
     chosen_lambda = lambda_fail if lambda_fail is not None else settings.lambda_candidates[0]
@@ -147,8 +202,13 @@ def train_a1(
             horizon_h=horizon_h,
             rul_cap=data.rul_cap,
             lambda_fail=chosen_lambda,
+            **(arch_overrides or {}),
         )
     ).to(torch_device)
+
+    # Seeded separately from the global RNG so augmentation draws are
+    # reproducible without perturbing weight initialisation.
+    generator = torch.Generator(device=torch_device).manual_seed(seed + 9973)
 
     optimiser = torch.optim.AdamW(
         model.parameters(), lr=settings.learning_rate, weight_decay=settings.weight_decay
@@ -167,6 +227,7 @@ def train_a1(
         batches = 0
         for xb, y_rul, y_fail in loader:
             xb = xb.to(torch_device, non_blocking=True)
+            xb = augment(xb, settings, generator)
             y_rul = y_rul.to(torch_device, non_blocking=True)
             y_fail = y_fail.to(torch_device, non_blocking=True)
 
@@ -292,6 +353,7 @@ def _train_with_lambda_search(
     device: str,
     checkpoint_dir: Path | None,
     quiet: bool,
+    arch_overrides: dict[str, Any] | None = None,
 ) -> tuple[A1Net, TrainResult]:
     """Try each lambda and keep the best by validation RMSE."""
     best: tuple[A1Net, TrainResult] | None = None
@@ -307,6 +369,7 @@ def _train_with_lambda_search(
             device=device,
             checkpoint_dir=None,
             quiet=quiet,
+            arch_overrides=arch_overrides,
         )
         if best is None or result.best_val_rmse < best[1].best_val_rmse:
             best = (model, result)
