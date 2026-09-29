@@ -330,3 +330,114 @@ def test_forest_round_trips_through_disk(tmp_path) -> None:  # type: ignore[no-u
     assert (
         restored.predict(data.x_test[0]).model_dump() == model.predict(data.x_test[0]).model_dump()
     )
+
+
+# --------------------------------------------------------------------------- #
+# The blended production model
+# --------------------------------------------------------------------------- #
+class _StubNetwork:
+    """A predict_arrays source with a controllable offset, for blend arithmetic."""
+
+    def __init__(self, offset: float = 0.0, std: float = 2.0, p: float = 0.3) -> None:
+        self.offset, self.std, self.p = offset, std, p
+
+    def predict_arrays(self, windows):  # type: ignore[no-untyped-def]
+        n = len(windows)
+        return (
+            np.full(n, 60.0 + self.offset),
+            np.full(n, self.std),
+            np.full(n, self.p),
+        )
+
+
+def test_blend_satisfies_the_protocol_and_returns_valid_predictions() -> None:
+    from twinmind.models.blended_health import BlendConfig, BlendedHealthModel
+
+    data = _data()
+    forest = ForestHealthModel(ForestConfig(n_estimators=12)).fit(data, seed=0)
+    blend = BlendedHealthModel(forest, _StubNetwork(), BlendConfig())
+
+    assert isinstance(blend, HealthModel)
+    single = blend.predict(data.x_test[0])
+    assert isinstance(single, RULPrediction)
+    assert 0.0 <= single.rul_mean <= 125.0
+
+
+def test_blend_mean_is_the_weighted_average_of_its_components() -> None:
+    from twinmind.models.blended_health import BlendConfig, BlendedHealthModel
+
+    data = _data()
+    forest = ForestHealthModel(ForestConfig(n_estimators=12)).fit(data, seed=0)
+    network = _StubNetwork(offset=0.0)
+
+    forest_mean, _, _ = forest.predict_arrays(data.x_test)
+    net_mean, _, _ = network.predict_arrays(data.x_test)
+
+    for weight in (0.0, 0.25, 0.5, 1.0):
+        blend = BlendedHealthModel(forest, network, BlendConfig(forest_weight=weight))
+        mean, _, _ = blend.predict_arrays(data.x_test)
+        expected = np.clip(weight * forest_mean + (1 - weight) * net_mean, 0.0, 125.0)
+        np.testing.assert_allclose(mean, expected, rtol=1e-9)
+
+
+def test_blend_variance_follows_the_law_of_total_variance() -> None:
+    """Exact arithmetic: within-model variance plus between-model spread.
+
+    Both components are stubs with known constant means and stds, so the
+    expected blend std can be written down rather than approximated.
+    """
+    from twinmind.models.blended_health import BlendConfig, BlendedHealthModel
+
+    data = _data()
+    low = _StubNetwork(offset=-20.0, std=3.0)  # mean 40, std 3
+    high = _StubNetwork(offset=+20.0, std=5.0)  # mean 80, std 5
+
+    blend = BlendedHealthModel(low, high, BlendConfig(forest_weight=0.5))
+    mean, std, _ = blend.predict_arrays(data.x_test)
+
+    # mean = 0.5*40 + 0.5*80 = 60
+    np.testing.assert_allclose(mean, 60.0, rtol=1e-9)
+    # within  = 0.5*9 + 0.5*25 = 17
+    # between = 0.5*(40-60)^2 + 0.5*(80-60)^2 = 400
+    np.testing.assert_allclose(std, np.sqrt(17.0 + 400.0), rtol=1e-9)
+
+
+def test_blend_interval_widens_when_the_components_disagree() -> None:
+    """The between-model term is the point: disagreement must raise the spread."""
+    from twinmind.models.blended_health import BlendConfig, BlendedHealthModel
+
+    agreeing = BlendedHealthModel(
+        _StubNetwork(offset=0.0, std=3.0), _StubNetwork(offset=0.0, std=3.0), BlendConfig()
+    )
+    disagreeing = BlendedHealthModel(
+        _StubNetwork(offset=-15.0, std=3.0), _StubNetwork(offset=15.0, std=3.0), BlendConfig()
+    )
+
+    data = _data()
+    _, agree_std, _ = agreeing.predict_arrays(data.x_test)
+    _, disagree_std, _ = disagreeing.predict_arrays(data.x_test)
+
+    assert float(agree_std.mean()) == pytest.approx(3.0), "identical models add no spread"
+    assert float(disagree_std.mean()) > 5 * float(agree_std.mean())
+
+
+def test_blend_rejects_a_bad_weight_and_a_network_without_predict_arrays() -> None:
+    from twinmind.models.blended_health import BlendConfig, BlendedHealthModel
+
+    with pytest.raises(ValueError, match=r"must be in \[0, 1\]"):
+        BlendConfig(forest_weight=1.5)
+
+    forest = ForestHealthModel(ForestConfig(n_estimators=8)).fit(_data(), seed=0)
+    with pytest.raises(TypeError, match="predict_arrays"):
+        BlendedHealthModel(forest, object())
+
+
+def test_blend_rejects_wrongly_shaped_input() -> None:
+    from twinmind.models.blended_health import BlendedHealthModel
+
+    forest = ForestHealthModel(ForestConfig(n_estimators=8)).fit(_data(), seed=0)
+    blend = BlendedHealthModel(forest, _StubNetwork())
+    with pytest.raises(ValueError, match="single window"):
+        blend.predict(_windows(4))
+    with pytest.raises(ValueError, match="batch"):
+        blend.predict_arrays(_windows(4)[0])

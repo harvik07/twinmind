@@ -8,6 +8,7 @@ The line to beat is the random forest at **RMSE 12.72** (NASA 245).
 | key | change | RMSE | delta | NASA | params | best epoch | mins | beats forest |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | :---: |
 | H0 | baseline (v0.3-health) | 14.60 | -- | 437 | 738,626 | 10 | 10.7 | no |
+| H1 | 5-fold GroupKFold CV + fold ensemble | 14.52 | -0.08 | 482 | 738,626 | 10 | 45.1 | no |
 | H2 | smaller trunk (32/64 conv, 64 LSTM x1) | 14.02 | -0.57 | 346 | 100,194 | 28 | 3.3 | no |
 | H3a | noise sigma 0.01 | 14.60 | +0.00 | 436 | 738,626 | 10 | 8.0 | no |
 | H3b | noise sigma 0.03 | 14.60 | -0.00 | 433 | 738,626 | 10 | 7.8 | no |
@@ -21,6 +22,7 @@ The line to beat is the random forest at **RMSE 12.72** (NASA 245).
 | H6 | min-max scaling to [-1, 1] | 15.44 | +0.84 | 351 | 738,626 | 16 | 10.7 | no |
 | H7 | trend-feature branch (last, slope, delta) | 14.07 | -0.52 | 290 | 753,730 | 9 | 7.5 | no |
 | HC | combined: small trunk + no conv norm + full augmentation (3 seeds) | 13.10 +/- 0.32 | -1.50 | 311 | 100,002 | 30 | 3.0 | no |
+| HCcv | combined + trend + 5-fold CV ensemble | 13.01 | -1.58 | 281 | 115,106 | 24 | 12.9 | no |
 | HCt | combined + trend branch (3 seeds) | 12.76 +/- 0.16 | -1.84 | 266 | 115,106 | 33 | 3.6 | no |
 
 ## Verdict
