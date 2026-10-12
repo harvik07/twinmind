@@ -3,8 +3,12 @@ name: twinmind-line-v1
 seed: 42
 
 simulation:
-  horizon_days: 90
-  warmup_days: 7          # discarded before KPIs are accumulated
+  # 28 to match the demand contract: Model B forecasts origin+1..origin+28, so a
+  # longer twin horizon would be running on demand nobody forecast. This was 90,
+  # while the simulator used 28, which is the kind of disagreement that stays
+  # invisible until someone reads the config and believes it.
+  horizon_days: 28
+  warmup_days: 0          # see twin_design.md section 10: no warm-up is discarded
   time_step_minutes: 1
   default_replications: 20
   confidence_level: 0.95

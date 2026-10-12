@@ -264,17 +264,37 @@ def figure_sensitivity_tornado() -> None:
     axis.axvline(0, color="black", lw=1)
 
     span = max(max(np.abs(low), default=1.0), max(np.abs(high), default=1.0))
-    for position, rho in zip(positions, rhos, strict=True):
+    # A parameter that is exactly inert at the baseline draws an empty bar, which
+    # reads as "this does not matter" and is the opposite of the truth for
+    # price_elasticity. Those rows carry their off-baseline effect instead.
+    off_baseline = sensitivity.get("off_baseline", {}).get("parameters", {})
+    for position, name, rho in zip(positions, names, rhos, strict=True):
         unstable = rho < 0.8
+        label = f"rho = {rho:.3f}" + ("  RANK UNSTABLE" if unstable else "")
         axis.text(
             span * 1.08,
             position,
-            f"rho = {rho:.3f}" + ("  RANK UNSTABLE" if unstable else ""),
+            label,
             va="center",
             fontsize=8.5,
             color=RED if unstable else "black",
             fontweight="bold" if unstable else "normal",
         )
+        if rows[name]["max_abs_profit_pct_change"] < 0.01 and name in off_baseline:
+            worst = max(
+                abs(off_baseline[name]["minus25"]["profit_pct_change"]),
+                abs(off_baseline[name]["plus25"]["profit_pct_change"]),
+            )
+            axis.text(
+                span * 0.04,
+                position,
+                f"inert at baseline (speed = price = 1.0); {worst:.1f}% off-baseline",
+                va="center",
+                ha="left",
+                fontsize=8,
+                style="italic",
+                color="dimgrey",
+            )
 
     axis.set_yticks(positions)
     axis.set_yticklabels([n.replace("_", " ") for n in names], fontsize=9)

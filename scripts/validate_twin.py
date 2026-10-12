@@ -87,16 +87,27 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _perturbed(resources: TwinResources, name: str, factor: float) -> TwinResources:
-    """``resources`` with one assumed parameter scaled by ``factor``."""
+    """``resources`` with one assumed parameter scaled by ``factor``.
+
+    ``demand_capacity_ratio`` needs special handling. It is consumed once, in
+    ``build_resources``, to derive ``demand_scale``; the simulation itself never
+    reads it. Perturbing it without recalibrating therefore changes nothing at
+    all, and the first run of this study duly reported a 0.00% effect -- a null
+    that looked like a finding and was an artefact of the harness. Recalibrating
+    is what actually propagates it.
+    """
     import dataclasses
 
     config = resources.config
     assumptions = dict(config.assumptions)
     entry = assumptions[name]
     assumptions[name] = entry.model_copy(update={"value": entry.value * factor})
-    return dataclasses.replace(
+    perturbed = dataclasses.replace(
         resources, config=config.model_copy(update={"assumptions": assumptions})
     )
+    if name == "demand_capacity_ratio":
+        perturbed = dataclasses.replace(perturbed, demand_scale=resources.demand_scale * factor)
+    return perturbed
 
 
 def _with_value(resources: TwinResources, name: str, value: float) -> TwinResources:
@@ -577,8 +588,10 @@ def sensitivity(resources: TwinResources, reps: int, n_rank: int, rank_reps: int
             "stable" if entry["rank_stable"] else "RANKING UNSTABLE",
         )
 
+    offbase = _offbaseline_sensitivity(resources, reps)
     spread = demand_spread_study(resources, reps, rank_scenarios, baseline_ranking, rank_reps)
     return {
+        "off_baseline": offbase,
         "baseline_kpis": baseline_means,
         "reps": reps,
         "n_rank_scenarios": n_rank,
@@ -587,6 +600,50 @@ def sensitivity(resources: TwinResources, reps: int, n_rank: int, rank_reps: int
         "demand_spread_multiplier_study": spread,
         "unstable_parameters": [n for n, r in rows.items() if not r["rank_stable"]],
     }
+
+
+#: Parameters that enter only through ``speed ** k`` or ``price ** k`` and are
+#: therefore EXACTLY inert at the baseline, where both are 1.0. A one-at-a-time
+#: study run only at the baseline cannot see them, and reporting their 0.00%
+#: as "this assumption does not matter" would be wrong.
+STRUCTURALLY_INERT_AT_BASELINE: tuple[str, ...] = ("wear_exponent", "price_elasticity")
+
+
+def _offbaseline_sensitivity(resources: TwinResources, reps: int) -> dict[str, Any]:
+    """Re-run the inert parameters at a scenario where they can act.
+
+    ``wear_exponent`` enters as ``speed ** wear_exponent`` and
+    ``price_elasticity`` as ``price_multiplier ** elasticity``. At the baseline
+    both bases are exactly 1.0, so any exponent gives 1.0 and the measured
+    effect is identically zero -- correct arithmetic, useless evidence. This
+    repeats the perturbation at speed 1.20 and price 1.15, where they bite.
+    """
+    scenario = Scenario(
+        price_multiplier=1.15, **{f"speed_setpoint_M{i}": 1.20 for i in range(1, 6)}
+    )
+    reference = replicate(scenario, n_reps=reps, base_seed=3, resources=resources).means()
+    rows: dict[str, Any] = {
+        "scenario": {"speed_setpoint": 1.20, "price_multiplier": 1.15},
+        "reference_profit": reference["profit"],
+        "parameters": {},
+    }
+    for name in STRUCTURALLY_INERT_AT_BASELINE:
+        entry: dict[str, Any] = {}
+        for label, factor in (("minus25", 0.75), ("plus25", 1.25)):
+            perturbed = _perturbed(resources, name, factor)
+            means = replicate(scenario, n_reps=reps, base_seed=3, resources=perturbed).means()
+            entry[label] = {
+                "profit_pct_change": _pct(means["profit"], reference["profit"]),
+                "units_pct_change": _pct(means["units_produced"], reference["units_produced"]),
+            }
+        rows["parameters"][name] = entry
+        logger.info(
+            "%-32s off-baseline profit %+6.2f%% / %+6.2f%%",
+            name,
+            entry["minus25"]["profit_pct_change"],
+            entry["plus25"]["profit_pct_change"],
+        )
+    return rows
 
 
 def demand_spread_study(
@@ -699,6 +756,58 @@ def scenario_table(resources: TwinResources, reps: int) -> dict[str, Any]:
     return {"reps": reps, "modes": table}
 
 
+def _log_to_registry(resources: TwinResources, payload: dict[str, Any]) -> None:
+    """Merge the scenario results into the shared run registry and summary.
+
+    The registry is how every model in this project reports, so the twin reports
+    the same way rather than leaving its numbers only in a JSON nobody reads. One
+    row per (scenario, hazard mode), keyed on a config hash that includes the
+    assumptions, so a run under different assumptions is a different row instead
+    of silently overwriting this one.
+    """
+    from twinmind.eval.registry import (
+        RunRecord,
+        config_hash,
+        current_device,
+        log_run,
+        write_summary,
+    )
+
+    modes = payload["scenarios"]["modes"]
+    reps = payload["scenarios"]["reps"]
+    benchmark = results_dir() / "twin_benchmark.json"
+    duration = 0.0
+    if benchmark.exists():
+        duration = float(json.loads(benchmark.read_text(encoding="utf-8"))["worst_mean_s"])
+
+    for mode, scenarios in modes.items():
+        for name, kpis in scenarios.items():
+            log_run(
+                RunRecord(
+                    model=f"twin_{mode}",
+                    dataset="simulated",
+                    subset=name,
+                    seed=11,
+                    metrics={kpi: float(v["mean"]) for kpi, v in kpis.items()},
+                    config_hash=config_hash(
+                        {
+                            "mode": mode,
+                            "scenario": name,
+                            "reps": reps,
+                            "assumptions": resources.assumptions,
+                            "pool": resources.config.health_replay.subset,
+                            "model_seed": resources.config.health_replay.model_seed,
+                        }
+                    ),
+                    duration_s=duration * reps,
+                    device=current_device(),
+                    notes=f"{reps} reps, CRN base_seed=11, 52-engine FD002 replay pool",
+                )
+            )
+    write_summary()
+    logger.info("merged %d twin rows into the run registry", sum(len(v) for v in modes.values()))
+
+
 def main() -> int:
     """Entry point."""
     args = build_parser().parse_args()
@@ -729,11 +838,26 @@ def main() -> int:
             resources, args.reps, args.rank_scenarios, args.rank_reps
         )
 
+    if "scenarios" in payload:
+        _log_to_registry(resources, payload)
+
+    # MERGE into whatever is already there rather than overwriting. Running one
+    # section (--sensitivity, say) used to replace the whole file and silently
+    # destroy the others, which is a bad property for a results artifact that
+    # takes forty minutes to regenerate -- and it did destroy them once. Sections
+    # this run produced win; sections it did not touch are preserved.
     destination = results_dir() / "twin_validation.json"
+    merged: dict[str, Any] = {}
+    if destination.exists():
+        try:
+            merged = json.loads(destination.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            logger.warning("%s was not valid JSON; replacing it", destination.name)
+    merged.update(payload)
     destination.write_text(
-        json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8", newline="\n"
+        json.dumps(merged, indent=2, default=str) + "\n", encoding="utf-8", newline="\n"
     )
-    logger.info("wrote %s", destination)
+    logger.info("wrote %s (sections: %s)", destination, ", ".join(sorted(merged)))
     return 0
 
 
