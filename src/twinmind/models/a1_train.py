@@ -150,6 +150,29 @@ def _scheduler(
     return torch.optim.lr_scheduler.LambdaLR(optimiser, factor)
 
 
+def _architecture_tag(config: A1Config) -> str:
+    """A short, stable identifier for an architecture.
+
+    Derived from the fields that change what the network *is*, so two runs that
+    differ architecturally can never land on the same checkpoint filename.
+    """
+    import hashlib
+
+    payload = {
+        "conv1": config.conv1_channels,
+        "conv2": config.conv2_channels,
+        "lstm_hidden": config.lstm_hidden,
+        "lstm_layers": config.lstm_layers,
+        "conv_norm": config.conv_norm,
+        "trend_branch": config.trend_branch,
+        "detach_fail_head": config.detach_fail_head,
+        "dropout": config.dropout,
+        "window": config.window,
+    }
+    blob = repr(sorted(payload.items())).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()[:8]
+
+
 def train_a1(
     data: CMAPSSData,
     seed: int = 42,
@@ -161,6 +184,7 @@ def train_a1(
     checkpoint_dir: Path | None = None,
     quiet: bool = False,
     arch_overrides: dict[str, Any] | None = None,
+    checkpoint_tag: str | None = None,
 ) -> tuple[A1Net, TrainResult]:
     """Train one A1 model on one subset with one seed.
 
@@ -307,16 +331,15 @@ def train_a1(
     checkpoint_path = None
     if checkpoint_dir is not None:
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
-        checkpoint_path = checkpoint_dir / f"a1_{data.subset}_seed{seed}.pt"
+        # The tag carries the preset and a hash of the architecture, so two
+        # cohorts cannot write the same file. Keying on (subset, seed) alone is
+        # what let a stray baseline FD002 run overwrite the production one and a
+        # probe run replace a real fit -- both happened, and both were silent.
+        tag = checkpoint_tag or _architecture_tag(model.config)
+        checkpoint_path = checkpoint_dir / f"a1_{data.subset}_{tag}_seed{seed}.pt"
         if checkpoint_path.exists():
-            # Checkpoints are keyed by subset and seed only, so a short probe run
-            # (--epochs 3) silently replaces a long one. Warn rather than fail:
-            # overwriting is usually intended, but losing a 13-minute fit to a
-            # 30-second smoke test is not. Pass --output-dir to keep them apart.
             logger.warning(
-                "overwriting existing checkpoint %s -- pass --output-dir to keep "
-                "a probe run separate from a real one",
-                checkpoint_path.name,
+                "overwriting %s (same subset, seed and architecture)", checkpoint_path.name
             )
         torch.save(
             {
@@ -354,6 +377,7 @@ def _train_with_lambda_search(
     checkpoint_dir: Path | None,
     quiet: bool,
     arch_overrides: dict[str, Any] | None = None,
+    checkpoint_tag: str | None = None,
 ) -> tuple[A1Net, TrainResult]:
     """Try each lambda and keep the best by validation RMSE."""
     best: tuple[A1Net, TrainResult] | None = None
@@ -370,6 +394,7 @@ def _train_with_lambda_search(
             checkpoint_dir=None,
             quiet=quiet,
             arch_overrides=arch_overrides,
+            checkpoint_tag=checkpoint_tag,
         )
         if best is None or result.best_val_rmse < best[1].best_val_rmse:
             best = (model, result)

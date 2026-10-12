@@ -1,0 +1,492 @@
+# Model B — Demand (Favorita)
+
+Produces a 28-day-ahead probabilistic demand forecast for the digital twin: a
+q10/q50/q90 band per day, and correlated sample paths for the SimPy inventory
+simulation to consume.
+
+- **Branch / tag:** `feat/model-demand` → `v0.4-demand`
+- **Data:** Corporación Favorita grocery sales, top 200 series by volume
+  (75.5% of total units across 1,782 store×family series)
+- **Horizon:** 28 days, direct multi-horizon
+- **Protocol:** 3 chronological rolling-origin folds, identical for every model
+- **Production artefact:** `models/demand/` (7 LightGBM boosters in `.txt`,
+  `copula.npz`, `conformal.npz`, `config.json`)
+
+---
+
+## 1. Which model won, and by how much
+
+All models are scored on the **same three folds, the same rows, the same
+indices**, inside one loop in `scripts/train_demand.py`. Values are the mean ±
+sd across folds (n_folds = 3).
+
+| Model | RMSLE | MAE / best-naive MAE | q50 pinball |
+|---|---|---|---|
+| Seasonal naive, lag 7 | — | 1.000 (reference) | — |
+| Seasonal naive, lag 364 | — | — | — |
+| LightGBM point (L2) | 0.2950 ± 0.1770 | — | 229.23 ± 47.33 |
+| **LightGBM quantile (production)** | **0.2527 ± 0.1020** | **0.8784 ± 0.1579** | **221.26 ± 39.29** |
+| N-HiTS (MQLoss) | **0.1972 ± 0.0053** | **0.8382 ± 0.0340** | **211.22 ± 8.65** |
+
+**The LightGBM quantile model is the production model, but it is not the most
+accurate model here — N-HiTS is.** N-HiTS wins on every accuracy metric and on
+fold-to-fold stability; LightGBM ships because it is the model wired to the
+conformal calibration and the copula path sampler that the twin consumes. The
+full comparison, including the fact that the aggregate margin comes from a
+single fold, is §6. Read that before quoting any number in this table.
+
+Against the L2 point booster, the quantile model wins on both RMSLE (0.2527 vs
+0.2950, a 14.3% reduction) and q50 pinball (221.26 vs 229.23, 3.5% better).
+
+That second comparison is worth a sentence, because the first version of it was
+meaningless. The "point" baseline was originally a LightGBM fitted at
+`alpha=0.5` under the quantile objective — which *is* the quantile model's own
+median booster, so the table was comparing the model against itself and the
+margin was noise. The point model is now fitted with `objective="regression"`,
+genuinely estimating the conditional mean under squared error. That is a
+different estimator, and the comparison is real.
+
+Against the seasonal naive baselines:
+
+| Metric | Value | Zero denominators excluded |
+|---|---|---|
+| MASE vs lag-7 | 0.9953 ± 0.1195 | 0 |
+| MASE vs lag-364 | 0.5238 ± 0.0560 | 0 |
+| Relative MAE vs **best** naive | 0.8784 ± 0.1579 | — |
+
+Both seasonal-naive denominators are computed on **training data only** and
+zero denominators are excluded and counted; the count was zero in every fold,
+so nothing was silently dropped.
+
+MASE vs lag-7 is 0.9953. The learned model barely beats last week. This is the
+honest headline and it should not be buried: on a top-200 high-volume retail
+subset with strong weekly structure, a one-line seasonal naive is a genuinely
+hard baseline, and 28 days out the model's edge over it is about half a
+percent. The lag-364 comparison looks much better (0.52) only because the
+year-ago baseline is much worse. Relative MAE is reported against the *better*
+of the two naives, which is the strict version of the comparison.
+
+### Targets
+
+| Target | Result | Value |
+|---|---|---|
+| Relative MAE ≤ 0.85 | **MISS** | 0.8784 |
+| 80% coverage in [0.76, 0.84] | **HIT** (post-conformal) | 0.7765 |
+| Quantile beats point on q50 pinball | **HIT** | 221.26 vs 229.23 |
+
+Two of three, for the production model. The relative-MAE miss is not marginal
+enough to explain away: 0.878 against a 0.85 target, with a fold sd of 0.158.
+It is reported as a miss — and it is a miss that **N-HiTS does not have**
+(0.8382, §6), which is part of why that section matters.
+
+---
+
+## 2. Leakage strategy
+
+The forecast is **direct multi-horizon with a horizon-step feature**. One
+training row is `(series, origin, k)` for `k = 1..28`. Every history feature is
+computed **as of the origin** and is therefore identical across all 28 rows of
+that origin; `k` tells the model how far ahead it is predicting.
+
+This exists to avoid a specific trap. `twinmind.data.features` builds lags
+{1, 7, 14, 28} shifted by one day, which is correct for one-step-ahead
+forecasting and silently wrong for 28. At a 28-day horizon, `lag_1` for target
+day `origin+28` is the sales of day `origin+27` — a number that does not exist
+when the forecast is made. A model trained on that column validates beautifully
+and is unusable in the twin.
+
+Every covariate is classified, in `src/twinmind/models/demand_features.py`:
+
+| Class | Members | Read from |
+|---|---|---|
+| **Known future** | `dow`, `dom`, `month`, `week_of_year`, `is_weekend`, `is_payday`, the 5 holiday flags, 6 weekly + 10 yearly Fourier terms, `onpromotion` | the **target** day |
+| **Static** | `store_nbr`, `cluster` | constant |
+| **Origin only** | `oil_price`, `transactions` | the **origin** day (`*_at_origin`) |
+| **Target history** | lags 1/7/14/28/364, rolling mean+sd over 7/28/91, 28-day trend, 28-day nonzero rate | strictly ≤ origin |
+
+`onpromotion` is classified as known-future on the stated assumption that
+promotions are *planned*, so a retailer does know them in advance. In the twin
+this becomes a scenario lever, which is the point of the assumption.
+
+`transactions` is classified even though the current featurised frame does not
+carry it. It is one of the six Favorita tables and an obvious later merge, and
+store footfall is emphatically not known 28 days ahead. Classifying it now
+means adding the column cannot silently become a leak.
+
+The target is modelled under `log1p`. Quantiles are equivariant under monotone
+transforms, so the q10/q50/q90 of `log1p(y)` map back through `expm1` to the
+q10/q50/q90 of `y` exactly — no smearing correction is needed, which would not
+be true of a mean forecast.
+
+### The guard, and its negative control
+
+`origin_features(history, target)` reads only the frame it is handed, and the
+caller slices that frame to end at the origin. Truncation invariance therefore
+holds by construction rather than by care — but "by construction" is a claim
+that needs a test that can fail.
+
+`DemandData.truncate(origin)` blanks the **unknowable** columns on future rows
+(realised sales, oil price, transactions) and keeps calendar, holidays and
+planned promotions. An earlier version deleted future rows outright and the
+invariance test failed on 100% of elements — correctly, because deleting the
+known-future covariates made the model fall back to zeros for `onpromotion` and
+`is_holiday`, i.e. the test was measuring the removal of information a deployed
+system genuinely has. `hard=True` still drops future rows entirely, for callers
+that want that.
+
+Two tests in `tests/test_demand.py`:
+
+- `test_forecast_is_invariant_to_truncation` — predictions from the full frame
+  and from the truncated frame are elementwise identical.
+- `test_negative_control_leaky_feature_breaks_truncation_invariance` — a
+  deliberately leaky builder (`_leaky_inference_rows`, which adds a `lag_1`
+  shorter than the step ahead) is run through **the same guard**, and the test
+  asserts the guard **fails** on it.
+
+Evidence from the final run:
+
+```
+REAL builder  PASSES (no leak)
+LEAKY control FAILS -> leaking via ['leaky_lag_1']
+```
+
+A guard that has never been seen to fail is not evidence of anything.
+
+---
+
+## 3. The conformal step
+
+Raw 80% interval coverage on the full 200-series run was **0.6562 ± 0.0155** —
+well below nominal, so split-conformal calibration is applied.
+
+By horizon bucket, before calibration:
+
+| Bucket | Coverage |
+|---|---|
+| d1–7 | 0.700 |
+| d8–14 | 0.630 |
+| d15–28 | 0.647 |
+| overall | 0.656 |
+
+The shortfall is real but not pathological. A systematically over-confident
+quantile booster is the expected failure mode here: LightGBM's pinball
+objective is fitted per-quantile with no mechanism tying the two tails to an
+actual interval, and the direct multi-horizon setup means a single origin's 28
+rows share all their history features, so their errors are strongly dependent
+and the effective sample size behind each quantile is far smaller than the row
+count suggests. 0.656 against 0.80 is consistent with that; it is not the
+near-zero coverage that would indicate a broken transform or a misaligned join.
+No deeper cause was pursued, on the stated threshold that below ~0.6 would have
+warranted it.
+
+Calibration is **CQR-style split conformal with per-step offsets**: one offset
+per horizon step `k`, from the conformity scores
+`max(q10 − y, y − q90)`, at the finite-sample-corrected level
+`ceil((n+1)(1−α))/n`. Per-step rather than pooled, because the width needed at
+day 1 and day 28 are not the same quantity.
+
+After calibration: **0.7765** overall (d1–7 0.830, d8–14 0.716,
+d15–28 0.780). The overall figure is inside the [0.76, 0.84] target band;
+the d8–14 bucket is not. See limitation 3 in §8 — the target was met on
+average and not uniformly.
+
+---
+
+## 4. Fold fairness — what was calibrated on what
+
+`make_rolling_origin_splits(n_splits=3, horizon=28)`:
+
+| Fold | Train through | Validate |
+|---|---|---|
+| 0 | 2017-05-23 | 2017-05-24 … 2017-06-20 |
+| 1 | 2017-06-20 | 2017-06-21 … 2017-07-18 |
+| 2 | 2017-07-18 | 2017-07-19 … 2017-08-15 |
+
+Chronology is asserted in `_fold_frames`, not assumed.
+
+- **Conformal offsets are fitted on fold 0 only.**
+- **Conformal-adjusted coverage is scored on folds 1 and 2 only** — the folds
+  the offsets have never seen. Reported as `coverage_after = 0.7765`.
+- **Every other metric** (RMSLE, MAE, MASE, pinball, relative MAE,
+  pre-conformal coverage) is averaged over **all 3 folds**.
+- **Every model** — both seasonal naives, the L2 point booster and the quantile
+  booster — is scored inside the same `_fold_frames` loop on **identical
+  evaluation indices**. No model sees a fold another model does not.
+
+`n_folds = 3` is recorded in the results table. The honest caveat: with three
+folds, a fold standard deviation is an estimate from three numbers, and every
+± in this card should be read as indicative rather than as a confidence
+interval.
+
+---
+
+## 5. Sampling: Gaussian copula over calibrated marginals
+
+The twin needs *paths*, not bands. Drawing each day independently from its own
+marginal would produce a trajectory that zig-zags across the band every day and
+would badly understate the probability of a sustained run of high demand —
+which is exactly the event an inventory policy must survive.
+
+`sample_paths` therefore:
+
+1. Predicts the 7-quantile grid (0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95) for all
+   28 steps via `_predict_grid`.
+2. **Applies the conformal offsets**, then `np.sort(..., axis=1)` to restore
+   monotonicity. This is the single shared code path — `quantiles()` and
+   `sample_paths()` both call `_predict_grid`, so the sampler's marginals are
+   the *calibrated* ones by construction, not the raw boosters'.
+3. Draws `z ~ N(0, Σ)` and maps through the normal CDF to uniforms.
+4. Inverts each day's empirical quantile grid at those uniforms
+   (`interpolate_quantiles`, flat beyond the 5th/95th).
+
+`Σ` is fitted in `fit_copula` from the normal scores of training residuals,
+shrunk 0.3 toward an AR(1) target, and repaired to the nearest PSD matrix by
+eigenvalue clipping (`nearest_psd`) so the Cholesky cannot fail on a
+near-singular estimate.
+
+### Checks
+
+**Marginal fidelity** — `test_sampled_marginals_match_the_calibrated_quantiles`
+draws paths and compares their empirical quantiles to the calibrated grid.
+
+This test initially failed at 17.7% of interval width, which looked like a bug
+and was not: it was Monte Carlo noise in the quantile estimate. Measured error
+fell 17.7% → 4.7% → 2.5% at n = 5k / 20k / 80k draws, i.e. the 1/√n signature
+of estimation error, not bias. The tolerance is now
+`max(0.05 × width, 3 × MC_SE)` with the standard error estimated from
+between-batch spread, so the test is tight where it can be and does not fail on
+sampling noise.
+
+`test_sampler_marginals_follow_the_conformal_adjustment` separately asserts
+that changing the conformal offsets moves the sampled marginals — i.e. that
+step 2 above is actually wired in.
+
+**Autocorrelation** — `test_copula_reproduces_the_reference_autocorrelation`
+checks that the lag-1..lag-7 autocorrelation of sampled paths matches the
+reference structure Σ was fitted to. (This test first reported `lag-1 nan`,
+caused by a fixture that initialised step 0 to all zeros — no variance, so no
+correlation. The fixture now seeds from the stationary distribution.)
+
+**Non-crossing** — enforced by the sort in `_predict_grid` and asserted by the
+`DemandQuantiles` validators, so a crossed band cannot leave the contract.
+
+---
+
+## 6. The one neural comparison
+
+### What was run
+
+Exactly one neural model, per the time box: **N-HiTS with MQLoss** at
+q10/q50/q90 (`scripts/train_demand_nhits.py`, neuralforecast 1.7.7), 6.7M
+parameters, `input_size=112`, `max_steps=300`, robust scaling, seed 42. Same
+three folds, same `log1p` target, same known-future covariate list (28 columns:
+calendar, Fourier, holidays, `onpromotion`) and the same withholding of oil
+price and lagged sales from the future. One run, no sweep. PatchTST was not
+tried.
+
+**Both models score exactly 5,600 rows per fold** — 200 series x 28 complete
+days, no gaps in any fold — so 16,800 identical `(series, day)` pairs in total.
+This was verified rather than assumed.
+
+### N-HiTS won
+
+| Metric (mean +/- sd, n_folds = 3) | LightGBM quantile | N-HiTS |
+|---|---|---|
+| RMSLE | 0.2527 +/- 0.1020 | **0.1972 +/- 0.0053** |
+| MAE | 442.53 | **422.43** |
+| Relative MAE vs best naive | 0.8784 +/- 0.1579 | **0.8382 +/- 0.0340** |
+| q50 pinball | 221.26 +/- 39.29 | **211.22 +/- 8.65** |
+| mean pinball (q10/q50/q90) | 153.45 | **140.48** |
+| 80% coverage, uncalibrated | 0.6562 | **0.7031** |
+| Training time, 3 folds | 8.5 min | ~15 min |
+
+**This is the opposite of the expected outcome.** The brief anticipated that
+LightGBM would win, on the reasonable precedent that GBDTs beat every neural
+entry on M5. It did not. N-HiTS is better on every accuracy metric here, and it
+**hits the relative-MAE <= 0.85 target (0.8382) that the LightGBM model missed
+(0.8784)**.
+
+### Where the margin actually comes from
+
+The means hide the shape of the result, which matters more than the means:
+
+| Fold | LightGBM RMSLE | N-HiTS RMSLE | LightGBM relMAE | N-HiTS relMAE |
+|---|---|---|---|---|
+| 0 | **0.1858** | 0.1990 | **0.7484** | 0.8088 |
+| 1 | 0.3701 | **0.1912** | 1.0542 | **0.8754** |
+| 2 | 0.2023 | **0.2014** | 0.8327 | **0.8305** |
+
+LightGBM **wins fold 0**, **ties fold 2**, and **collapses on fold 1**. The
+whole aggregate margin is one fold. On fold 1 LightGBM's relative MAE is
+**1.0542 — worse than the lag-7 seasonal naive** — and its point booster's
+RMSLE jumps to 0.4993 against ~0.19 on the other two folds.
+
+So the finding is not "N-HiTS is a better forecaster here". It is **"N-HiTS is
+more robust here"**: fold spread 0.0053 RMSLE against LightGBM's 0.1020, a
+19-fold difference, and 0.034 relMAE against 0.158. N-HiTS does not break where
+the LightGBM pipeline breaks. A 1-win / 1-loss / 1-tie record across three folds
+is not grounds for claiming one model class is better at this problem.
+
+What is going wrong on fold 1 was not diagnosed, and that is the honest gap in
+this section. One asymmetry is a cheap candidate and was deliberately not
+tested: **LightGBM trains on 40 weekly subsampled origins per fold**, a cost
+control forced by the 28x row expansion of direct multi-horizon, while
+N-HiTS's windowing sampler sees *every* available window. If fold 1's origin
+happens to sit badly against that weekly grid, LightGBM is training on a worse
+sample of the recent past than N-HiTS is. That is a property of the feature
+pipeline's budget, not of gradient boosting, and testing it means re-running
+LightGBM at a denser origin grid. It is the first thing to try next and it is
+out of this session's time box.
+
+### Why LightGBM remains the production model
+
+Accuracy is not the only axis, and the integration gap is large:
+
+- The **conformal calibration** and the **Gaussian copula path sampler** are
+  both built on `_predict_grid`'s 7-quantile output. N-HiTS produces 3
+  quantiles and has neither. Uncalibrated, its coverage is 0.703 against the
+  production model's calibrated **0.777**, which is the number the twin
+  actually needs.
+- The twin consumes **correlated sample paths**, not bands. Nothing in the
+  N-HiTS run produces them.
+- 7 booster `.txt` files that load in milliseconds, against a 6.7M-parameter
+  checkpoint and a Lightning dependency that already broke once in this
+  environment (a tensorflow/tensorboard pair that disagreed with itself).
+
+So: **N-HiTS beat LightGBM on accuracy and robustness, and LightGBM ships**,
+because it is the model that is wired to the calibration and the sampler. That
+is a deliberate engineering trade and it is recorded here as one, not as a
+finding that LightGBM was better.
+
+**Neural experimentation stops here**, per the time box. The next step is not a
+bigger network; it is diagnosing LightGBM's fold 1, because if the origin
+subsampling is the cause then the ~0.04 relMAE gap is a pipeline-budget
+artefact rather than a model-class result, and the whole comparison above would
+need restating.
+
+---
+
+## 7. Not comparable to the Kaggle leaderboard
+
+**The RMSLE above must not be read against the Favorita competition
+leaderboard.** They are different numbers that happen to share a name:
+
+- This evaluates **200 series**, chosen as the highest-volume store×family
+  pairs; the competition scores **all 1,782**. High-volume series are the
+  easier ones — denser, less intermittent, stronger weekly structure.
+- This uses **3 rolling-origin folds inside the training period** ending
+  2017-08-15; the competition scores a **single fixed 16-day window** on a
+  held-out future the entrants never saw.
+- The competition horizon is **16 days**; this is **28**.
+- The competition uses a **weighted** NWRMSLE with per-series weights; this is
+  unweighted.
+
+Any of those four differences alone would break comparability. The number is
+meaningful only against the baselines in §1, which were computed under
+identical conditions.
+
+---
+
+## 8. Known limitations
+
+The five that a reviewer should weigh first, each with its number.
+
+1. **The relative-MAE target was missed: 0.8784 against a ≤ 0.85 target.** Not
+   marginally, and not within noise in a way that rescues it — the fold sd is
+   0.1579, which is wider than the 0.028 shortfall, so the miss cannot be
+   called significant *or* dismissed as noise. It is reported as a miss. The
+   model that did hit it (N-HiTS, 0.8382) is not the one that ships.
+
+2. **On fold 1 the LightGBM model is worse than the lag-7 seasonal naive:
+   relative MAE 1.0542.** One of three folds, where a one-line "same weekday
+   last week" rule beats the production model outright. Its point booster's
+   RMSLE on that fold is 0.4993 against ~0.19 on the other two. The cause was
+   not diagnosed. Until it is, nobody should describe this model as reliably
+   better than the trivial baseline — on a third of the evidence it is not.
+
+3. **Post-conformal coverage is not uniform across the horizon: d8–14 sits at
+   0.716, outside the [0.76, 0.84] target band.** The overall 0.777 passes and
+   d1–7 (0.830) and d15–28 (0.780) are inside it, but the aggregate hides a
+   middle bucket still over-confident by about four points. Per fold it is
+   worse than the average suggests:
+
+   | Bucket | fold 1 | fold 2 | mean |
+   |---|---|---|---|
+   | d1–7 | 0.830 | 0.830 | 0.830 |
+   | d8–14 | **0.649** | 0.783 | **0.716** |
+   | d15–28 | 0.821 | **0.739** | 0.780 |
+
+   Three of the six bucket×fold cells fall outside [0.76, 0.84]. So the
+   coverage target was met *on average over buckets and folds* and not
+   *anywhere near uniformly*, and an inventory policy acting on a two-week-out
+   interval is reading the weakest part of the calibration — on fold 1, an 80%
+   interval that actually covered 65% of outcomes.
+
+4. **The conformal adjustment is evaluated on 2 folds, not 3.** Offsets are
+   fitted on fold 0 and can therefore only be scored out-of-sample on folds 1
+   and 2 — about 56 validation days, 11,200 rows. So the headline 0.777 rests
+   on two numbers. The offsets themselves come from a single 28-day calibration
+   window, which is thin for estimating 28 separate per-step quantities.
+
+5. **The origin-density asymmetry is untested, and it is the first
+   follow-up.** LightGBM trains on **40 weekly subsampled origins per fold** (a
+   cost control forced by the 28× row expansion of direct multi-horizon) while
+   N-HiTS's windowing sampler sees **every available window**. If fold 1's
+   origin sits badly against that weekly grid, LightGBM is training on a worse
+   sample of the recent past than N-HiTS is — which would make the ~0.04
+   relative-MAE gap in §6 a pipeline-budget artefact rather than a model-class
+   result, and would require restating that whole comparison. The test is to
+   re-run `train_demand.py` at a denser origin grid and see whether fold 1
+   recovers. **Not run here**, and deliberately out of this session's time box.
+
+### Further caveats
+
+- **The shipped model is not the most accurate one tested.** N-HiTS beat it on
+  RMSLE, MAE, relative MAE and pinball, and hit the relative-MAE target it
+  missed. LightGBM ships for integration reasons (§6), which is a defensible
+  trade but is a trade. The honest summary of Model B's accuracy is that the
+  better of the two models was not the one deployed.
+- **The margin over seasonal naive is thin even where it is positive.** MASE vs
+  lag-7 of 0.9953 means the learned model is worth about half a percent over
+  "same weekday last week" at this horizon on this subset. A reviewer should
+  treat the value of Model B as "produces a calibrated distribution and
+  correlated paths", not "forecasts much better than a trivial rule".
+- **Coverage needed conformal to reach nominal at all.** The raw boosters are
+  over-confident (0.656 vs 0.800). The fix is sound and held out, but it is a
+  correction applied after the fact rather than a model that was calibrated to
+  begin with.
+- **Conformal offsets are stationary.** They are fitted once and applied
+  unchanged to every future origin. If volatility shifts — a promotion regime
+  change, a new store — the intervals will be wrong in the direction of the
+  shift until refitted.
+- **`onpromotion` is assumed known.** If promotions are in fact decided inside
+  the forecast horizon, this model has been given information it would not have.
+  The assumption is deliberate and becomes a twin lever, but it is an
+  assumption.
+- **The copula is a single global Σ.** One correlation structure is shared
+  across all 200 series. Series with genuinely different persistence get the
+  average one. A per-cluster Σ is the obvious next step and was not done.
+- **Gaussian dependence has no tail dependence.** A Gaussian copula drives
+  joint extremes to independence in the tails: simultaneous spikes across many
+  days will be under-sampled relative to reality. For inventory stress-testing,
+  this biases toward optimism — which is the wrong direction for a safety-stock
+  decision, and is the most important caveat in this list.
+- **200 of 1,782 series.** Nothing here speaks to the intermittent long tail,
+  where a zero-inflated model would likely be needed instead.
+- **3 folds, ~84 validation days total.** Every ± in this card rests on three
+  numbers.
+
+---
+
+## 9. Reproduce
+
+```bash
+python scripts/train_demand.py --top-n 200 --folds 3
+python scripts/train_demand_nhits.py --top-n 200 --max-steps 300
+python scripts/make_demand_figures.py
+pytest tests/test_demand.py -v
+```
+
+Figures: `reports/figures/b_demand_fan_chart.png`,
+`b_demand_coverage_calibration.png`, `b_demand_pinball_by_model.png`,
+`b_demand_sampled_paths.png`.
