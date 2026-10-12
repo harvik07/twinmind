@@ -1,0 +1,86 @@
+{
+  "health_warnings": {
+    "offline": {
+      "threshold": 0.95,
+      "horizon_h_cycles": 30,
+      "pool_engines": 52,
+      "engines_warned": 52,
+      "recall": 1.0,
+      "precision_warning_before_failure": 1.0,
+      "mean_lead_cycles": 7.923076923076923,
+      "median_lead_cycles": 7.0,
+      "min_lead_cycles": 2.0,
+      "mean_lead_hours": 11.092307692307692,
+      "mean_scheduling_delay_hours": 8.0,
+      "actionable_warnings": 42,
+      "actionable_precision": 0.8076923076923077
+    },
+    "in_simulation": {
+      "runs": 40,
+      "warnings_raised": 142,
+      "unplanned_failures": 46,
+      "unwarned_failures": 0,
+      "warning_share_of_events": 0.7553191489361702
+    },
+    "tolerance": 0.15,
+    "agrees": true
+  },
+  "weibull": {
+    "shape": 5.176852437682461,
+    "scale": 223.30480424527516,
+    "empirical_mean": 205.30769230769232,
+    "weibull_mean": 205.28727480338557,
+    "ks_statistic": 0.14247692307692317,
+    "ks_pvalue": 0.21978790923153735,
+    "tolerance_ks": 0.2,
+    "passes": true,
+    "quantiles": {
+      "q10": {
+        "empirical": 151.3,
+        "weibull": 145.6181492232723
+      },
+      "q25": {
+        "empirical": 167.0,
+        "weibull": 175.28193382745357
+      },
+      "q50": {
+        "empirical": 194.0,
+        "weibull": 207.71198228684227
+      },
+      "q75": {
+        "empirical": 236.75,
+        "weibull": 237.15245364557794
+      },
+      "q90": {
+        "empirical": 265.7,
+        "weibull": 262.04596509459356
+      }
+    }
+  },
+  "demand": {
+    "series_id": "1_GROCERY I",
+    "demand_scale": 0.43847218688809303,
+    "n_realised_days": 28,
+    "simulated_mean": 974.3768595103887,
+    "realised_mean": 1027.7944657866503,
+    "simulated_sd": 200.07972604855658,
+    "realised_sd": 283.4110277853063,
+    "simulated_lag1_raw": -0.09890935839131193,
+    "simulated_lag1_residual": 0.09828277332004114,
+    "realised_lag1_raw": 0.14443350815024344,
+    "realised_lag1_residual": 0.3513524411193391,
+    "across_sample_step_dependence": 0.2953001922363503,
+    "copula_lag1_target": 0.32957070808231415,
+    "share_inside_80_band": 0.42857142857142855,
+    "tolerances": {
+      "mean_rel": 0.25,
+      "sd_rel": 0.5,
+      "band_lower": 0.6,
+      "band_upper": 0.95
+    },
+    "copula_reproduced": true,
+    "mean_passes": true,
+    "sd_passes": true,
+    "band_passes": false
+  }
+}
