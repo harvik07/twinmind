@@ -360,8 +360,13 @@ def fit_quantile_models(
     params: LGBMParams | None = None,
     target: str = "y",
     seed: int = 42,
+    objective: str = "quantile",
 ) -> tuple[dict[float, Any], FeatureSpec]:
-    """Fit one booster per quantile level on ``log1p(target)``."""
+    """Fit one booster per quantile level on ``log1p(target)``.
+
+    ``objective="l2"`` fits a squared-error point model instead, which is what
+    the point baseline uses.
+    """
     import lightgbm as lgb
 
     settings = params or LGBMParams()
@@ -371,9 +376,17 @@ def fit_quantile_models(
 
     boosters: dict[float, Any] = {}
     for level in quantiles:
-        model = lgb.LGBMRegressor(
-            objective="quantile", alpha=level, random_state=seed, **asdict(settings)
-        )
+        if objective == "l2":
+            # A genuine point forecast: squared error, estimating the conditional
+            # MEAN. Fitting alpha=0.5 instead would be the quantile model's own
+            # median booster under another name, so the "baseline" would differ
+            # from the model it is meant to benchmark only by the monotonicity
+            # sort -- a comparison of a model against itself.
+            model = lgb.LGBMRegressor(objective="regression", random_state=seed, **asdict(settings))
+        else:
+            model = lgb.LGBMRegressor(
+                objective="quantile", alpha=level, random_state=seed, **asdict(settings)
+            )
         model.fit(x, y)
         boosters[level] = model
     logger.info(

@@ -1,6 +1,6 @@
 # Results
 
-Generated 2026-10-12T10:29:06+00:00 from `reports/results/runs.jsonl`: 62 of 85 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
+Generated 2026-10-12T11:13:21+00:00 from `reports/results/runs.jsonl`: 63 of 93 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
 
 Every cell is **mean +/- std across seeds**; `n` is the number of independent training runs behind it. C-MAPSS rows use the last-window-per-unit protocol (one prediction per test engine).
 
@@ -26,7 +26,7 @@ Every cell is **mean +/- std across seeds**; `n` is the number of independent tr
 
 | model | n | config | rmse | mae | nasa_score | fail_pr_auc | mean_rul_std | n_units | n_windows_seen |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| a1_cnn_bilstm | 3 | 132cce1d | 15.23 +/- 0.40 | 11.19 +/- 0.52 | 1029.03 +/- 97.97 | 0.9905 +/- 0.0036 | 5.1091 +/- 0.2126 | 259.00 +/- 0.00 | 259.00 +/- 0.00 |
+| a1_cnn_bilstm | 3 | aa3e569a | 13.78 +/- 0.14 | 9.9629 +/- 0.1933 | 908.88 +/- 16.65 | 0.9967 +/- 0.0020 | 4.0382 +/- 0.0918 | 259.00 +/- 0.00 | 259.00 +/- 0.00 |
 | a1_ensemble | 1 | 76bdd25f | 14.89 +/- 0.00 | 10.98 +/- 0.00 | 944.93 +/- 0.00 | -- | -- | 259.00 +/- 0.00 | 259.00 +/- 0.00 |
 | lstm | 3 | ca6c3945 | 14.96 +/- 0.46 | 10.72 +/- 0.15 | 1431.76 +/- 617.34 | -- | -- | 259.00 +/- 0.00 | 259.00 +/- 0.00 |
 | random_forest | 3 | 863291fe | 14.36 +/- 0.16 | 10.88 +/- 0.13 | 838.77 +/- 23.92 | -- | -- | 259.00 +/- 0.00 | 259.00 +/- 0.00 |
@@ -51,6 +51,12 @@ Every cell is **mean +/- std across seeds**; `n` is the number of independent tr
 | lstm | 3 | ca6c3945 | 14.88 +/- 0.26 | 10.66 +/- 0.16 | 1113.26 +/- 152.70 | -- | -- | 248.00 +/- 0.00 | 248.00 +/- 0.00 |
 | random_forest | 3 | 863291fe | 15.68 +/- 0.08 | 11.55 +/- 0.12 | 1219.95 +/- 20.64 | -- | -- | 248.00 +/- 0.00 | 248.00 +/- 0.00 |
 | ridge | 3 | f1b403f3 | 18.51 +/- 0.08 | 14.39 +/- 0.08 | 1713.06 +/- 52.86 | -- | -- | 248.00 +/- 0.00 | 248.00 +/- 0.00 |
+
+## favorita / top200
+
+| model | n | config | mae | coverage_80 | coverage_d15_28 | coverage_d1_7 | coverage_d8_14 | duration_s | mase_lag364 | mase_lag364_excluded | mase_lag7 | mase_lag7_excluded | naive_lag364_mae | naive_lag7_mae | pinball_mean | pinball_q10 | pinball_q50 | pinball_q90 | point_median_pinball | point_rmsle | relative_mae | rmsle |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| demand_lgbm_quantile | 1 | 975b9095 | 442.53 +/- 0.00 | 0.6562 +/- 0.0000 | 0.6473 +/- 0.0000 | 0.7000 +/- 0.0000 | 0.6305 +/- 0.0000 | 170.93 +/- 0.00 | 0.5238 +/- 0.0000 | 0.0000 +/- 0.0000 | 0.9953 +/- 0.0000 | 0.0000 +/- 0.0000 | 848.43 +/- 0.00 | 504.05 +/- 0.00 | 153.45 +/- 0.00 | 90.97 +/- 0.00 | 221.26 +/- 0.00 | 148.12 +/- 0.00 | 229.23 +/- 0.00 | 0.2950 +/- 0.0000 | 0.8784 +/- 0.0000 | 0.2527 +/- 0.0000 |
 
 ## favorita / top8
 

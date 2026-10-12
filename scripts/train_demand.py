@@ -156,7 +156,7 @@ def main() -> int:  # noqa: PLR0915 - a linear experiment script reads better wh
 
         started = time.perf_counter()
         boosters, spec = fit_quantile_models(rows, SAMPLER_QUANTILES, seed=args.seed)
-        point_booster, _ = fit_quantile_models(rows, (0.5,), seed=args.seed)
+        point_booster, _ = fit_quantile_models(rows, (0.5,), seed=args.seed, objective="l2")
         last_spec = spec
 
         snapshot = DemandData(features)
