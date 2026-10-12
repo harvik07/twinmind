@@ -128,6 +128,11 @@ The live table is `reports/results/summary.md`, regenerated from
 
 ### Targets: FD001 missed
 
+This table is the **first** attempt, kept as the record of where the model
+started. All four lines were later revisited; see "All four subsets, at the
+production preset" below, where FD001 RMSE reaches 12.76 ± 0.16, FD001 NASA
+reaches 265.6 ± 11.7 (target met), and FD004 is measured at 15.00 ± 0.17.
+
 | Target | Required | Achieved | |
 | --- | --- | --- | --- |
 | FD001 RMSE | ≤ 13 | 15.44 ± 1.11 (ensemble 14.70) | **MISS** by 2.4 |
@@ -321,12 +326,49 @@ FD002-FD004 were trained locally at the `hct` preset, three independent seeds
 each, same last-window-per-unit protocol. The Kaggle GPU path could not run
 them; see "Why these were trained on CPU" below.
 
-| subset | A1 (hct) | random forest | ridge | LSTM(64) | engines (train) |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| FD001 | 12.76 ± 0.16 | **12.72 ± 0.16** | 15.08 | 14.95 | 100 |
-| FD002 | **13.78 ± 0.17** | 14.36 ± 0.16 | 16.36 | 14.96 | 260 |
-| FD003 | 13.62 ± 0.31 | **13.32 ± 0.49** | 15.53 | 13.83 | 100 |
-| FD004 | **15.00 ± 0.17** | 15.68 ± 0.08 | 18.51 | 14.88 | 249 |
+| subset | A1 RMSE (hct) | A1 NASA score | NASA (3-seed ens.) | random forest | ridge | LSTM(64) | engines (train) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| FD001 | 12.76 ± 0.16 | 265.6 ± 11.7 | **258.0** | **12.72 ± 0.16** | 15.08 | 14.95 | 100 |
+| FD002 | **13.78 ± 0.17** | 908.9 ± 20.4 | 879.9 | 14.36 ± 0.16 | 16.36 | 14.96 | 260 |
+| FD003 | 13.62 ± 0.31 | 644.4 ± 132.7 | 620.3 | **13.32 ± 0.49** | 15.53 | 13.83 | 100 |
+| FD004 | **15.00 ± 0.17** | 1109.4 ± 54.5 | 1070.2 | 15.68 ± 0.08 | 18.51 | 14.88 | 249 |
+
+**FD001 NASA is 265.6 ± 11.7, and 258.0 for the three-seed ensemble — below
+300.** That target, missed at the time of the first write-up (587 ± 281), is
+now met at the production preset. The score is the official asymmetric one:
+with `d = y_pred - y_true`, `exp(-d/13) - 1` where `d < 0` and
+`exp(d/10) - 1` where `d >= 0`, so late predictions are punished harder than
+early ones.
+
+The NASA scores scale far more steeply across subsets than RMSE does
+(265 → 1109, a 4.2× spread, against 12.76 → 15.00, a 1.18× spread). That is the
+exponential in the score doing its job: a handful of badly-late predictions on
+the hard multi-regime subsets dominates the total in a way that squared error
+smooths over. FD003's large seed spread (± 132.7 on a 644 mean) comes from the
+same mechanism — one seed producing a few more late predictions moves the score
+much more than it moves the RMSE (± 0.31).
+
+### Checkpoint provenance
+
+These numbers were regenerated after the checkpoint keying was made
+**structural**. Checkpoint paths now carry the preset and an 8-character hash of
+the architecture config (`_architecture_tag`: conv/lstm/norm/trend/detach/
+dropout/window), so `a1_FD001_hct_seed42.pt` cannot be overwritten by a run at a
+different preset. The previous scheme keyed on subset and seed alone, under
+which `run_hypotheses.py` passed `checkpoint_dir=None` (so the HCt FD001
+checkpoint was never written) and FD002's HCt checkpoint was silently
+overwritten by a stray baseline cohort.
+
+All 3 seeds × 4 subsets were regenerated and every one reloads and reproduces
+its recorded RMSE to within 0.05:
+
+```
+subset      RMSE mean+/-sd  recorded   ok?       NASA mean+/-sd  ensemble
+FD001     12.757 +/- 0.164     12.76   YES      265.6 +/-   11.7    258.0
+FD002     13.783 +/- 0.173     13.78   YES      908.9 +/-   20.4    879.9
+FD003     13.620 +/- 0.384     13.62   YES      644.4 +/-  132.7    620.3
+FD004     15.001 +/- 0.174     15.00   YES     1109.4 +/-   54.5   1070.2
+```
 
 **The FD001 result does not generalise, and that is the useful finding.** The
 sequence model loses on the two 100-engine subsets and wins on the two large

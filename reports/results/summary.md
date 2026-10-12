@@ -1,6 +1,6 @@
 # Results
 
-Generated 2026-10-12T11:13:21+00:00 from `reports/results/runs.jsonl`: 63 of 93 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
+Generated 2026-10-12T11:46:59+00:00 from `reports/results/runs.jsonl`: 63 of 99 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
 
 Every cell is **mean +/- std across seeds**; `n` is the number of independent training runs behind it. C-MAPSS rows use the last-window-per-unit protocol (one prediction per test engine).
 
