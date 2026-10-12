@@ -304,7 +304,11 @@ def write_summary(path: Path | None = None, runs: Path | None = None) -> Path:
     """Render the summary table to ``reports/results/summary.md``."""
     target = path or results_dir() / SUMMARY_FILENAME
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(build_summary(read_runs(runs)), encoding="utf-8", newline="\n")
+    # rstrip + a single "\n" guarantees exactly one trailing newline. Without it
+    # build_summary's trailing blank line makes the end-of-file-fixer pre-commit
+    # hook rewrite this file on every run and dirty an otherwise clean tree.
+    body = build_summary(read_runs(runs)).rstrip("\n") + "\n"
+    target.write_text(body, encoding="utf-8", newline="\n")
     logger.info("wrote %s", target)
     return target
 

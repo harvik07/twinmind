@@ -1,6 +1,6 @@
 # Results
 
-Generated 2026-10-12T11:46:59+00:00 from `reports/results/runs.jsonl`: 63 of 99 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
+Generated 2026-10-12T13:58:39+00:00 from `reports/results/runs.jsonl`: 64 of 100 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
 
 Every cell is **mean +/- std across seeds**; `n` is the number of independent training runs behind it. C-MAPSS rows use the last-window-per-unit protocol (one prediction per test engine).
 
@@ -57,6 +57,7 @@ Every cell is **mean +/- std across seeds**; `n` is the number of independent tr
 | model | n | config | mae | coverage_80 | coverage_d15_28 | coverage_d1_7 | coverage_d8_14 | duration_s | mase_lag364 | mase_lag364_excluded | mase_lag7 | mase_lag7_excluded | naive_lag364_mae | naive_lag7_mae | pinball_mean | pinball_q10 | pinball_q50 | pinball_q90 | point_median_pinball | point_rmsle | relative_mae | rmsle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | demand_lgbm_quantile | 1 | 975b9095 | 442.53 +/- 0.00 | 0.6562 +/- 0.0000 | 0.6473 +/- 0.0000 | 0.7000 +/- 0.0000 | 0.6305 +/- 0.0000 | 170.93 +/- 0.00 | 0.5238 +/- 0.0000 | 0.0000 +/- 0.0000 | 0.9953 +/- 0.0000 | 0.0000 +/- 0.0000 | 848.43 +/- 0.00 | 504.05 +/- 0.00 | 153.45 +/- 0.00 | 90.97 +/- 0.00 | 221.26 +/- 0.00 | 148.12 +/- 0.00 | 229.23 +/- 0.00 | 0.2950 +/- 0.0000 | 0.8784 +/- 0.0000 | 0.2527 +/- 0.0000 |
+| demand_nhits | 1 | ad83ff52 | 422.43 +/- 0.00 | 0.7031 +/- 0.0000 | 0.6921 +/- 0.0000 | 0.6945 +/- 0.0000 | 0.7336 +/- 0.0000 | 2364.00 +/- 0.00 | -- | -- | -- | -- | -- | -- | 140.48 +/- 0.00 | 88.84 +/- 0.00 | 211.22 +/- 0.00 | 121.38 +/- 0.00 | -- | -- | -- | 0.1972 +/- 0.0000 |
 
 ## favorita / top8
 

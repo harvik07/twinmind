@@ -26,11 +26,17 @@ sd across folds (n_folds = 3).
 | Seasonal naive, lag 364 | — | — | — |
 | LightGBM point (L2) | 0.2950 ± 0.1770 | — | 229.23 ± 47.33 |
 | **LightGBM quantile (production)** | **0.2527 ± 0.1020** | **0.8784 ± 0.1579** | **221.26 ± 39.29** |
-| N-HiTS (MQLoss) | see §6 | see §6 | see §6 |
+| N-HiTS (MQLoss) | **0.1972 ± 0.0053** | **0.8382 ± 0.0340** | **211.22 ± 8.65** |
 
-**The LightGBM quantile model is the production model.** It beats the L2 point
-booster on both RMSLE (0.2527 vs 0.2950, a 14.3% reduction) and on q50 pinball
-(221.26 vs 229.23, 3.5% better).
+**The LightGBM quantile model is the production model, but it is not the most
+accurate model here — N-HiTS is.** N-HiTS wins on every accuracy metric and on
+fold-to-fold stability; LightGBM ships because it is the model wired to the
+conformal calibration and the copula path sampler that the twin consumes. The
+full comparison, including the fact that the aggregate margin comes from a
+single fold, is §6. Read that before quoting any number in this table.
+
+Against the L2 point booster, the quantile model wins on both RMSLE (0.2527 vs
+0.2950, a 14.3% reduction) and q50 pinball (221.26 vs 229.23, 3.5% better).
 
 That second comparison is worth a sentence, because the first version of it was
 meaningless. The "point" baseline was originally a LightGBM fitted at
@@ -68,8 +74,10 @@ of the two naives, which is the strict version of the comparison.
 | 80% coverage in [0.76, 0.84] | **HIT** (post-conformal) | 0.7765 |
 | Quantile beats point on q50 pinball | **HIT** | 221.26 vs 229.23 |
 
-Two of three. The relative-MAE miss is not marginal enough to explain away:
-0.878 against a 0.85 target, with a fold sd of 0.158. It is reported as a miss.
+Two of three, for the production model. The relative-MAE miss is not marginal
+enough to explain away: 0.878 against a 0.85 target, with a fold sd of 0.158.
+It is reported as a miss — and it is a miss that **N-HiTS does not have**
+(0.8382, §6), which is part of why that section matters.
 
 ---
 
@@ -264,7 +272,95 @@ correlation. The fixture now seeds from the stationary distribution.)
 
 ## 6. The one neural comparison
 
-<!-- NHITS_RESULTS -->
+### What was run
+
+Exactly one neural model, per the time box: **N-HiTS with MQLoss** at
+q10/q50/q90 (`scripts/train_demand_nhits.py`, neuralforecast 1.7.7), 6.7M
+parameters, `input_size=112`, `max_steps=300`, robust scaling, seed 42. Same
+three folds, same `log1p` target, same known-future covariate list (28 columns:
+calendar, Fourier, holidays, `onpromotion`) and the same withholding of oil
+price and lagged sales from the future. One run, no sweep. PatchTST was not
+tried.
+
+**Both models score exactly 5,600 rows per fold** — 200 series x 28 complete
+days, no gaps in any fold — so 16,800 identical `(series, day)` pairs in total.
+This was verified rather than assumed.
+
+### N-HiTS won
+
+| Metric (mean +/- sd, n_folds = 3) | LightGBM quantile | N-HiTS |
+|---|---|---|
+| RMSLE | 0.2527 +/- 0.1020 | **0.1972 +/- 0.0053** |
+| MAE | 442.53 | **422.43** |
+| Relative MAE vs best naive | 0.8784 +/- 0.1579 | **0.8382 +/- 0.0340** |
+| q50 pinball | 221.26 +/- 39.29 | **211.22 +/- 8.65** |
+| mean pinball (q10/q50/q90) | 153.45 | **140.48** |
+| 80% coverage, uncalibrated | 0.6562 | **0.7031** |
+| Training time, 3 folds | 8.5 min | ~15 min |
+
+**This is the opposite of the expected outcome.** The brief anticipated that
+LightGBM would win, on the reasonable precedent that GBDTs beat every neural
+entry on M5. It did not. N-HiTS is better on every accuracy metric here, and it
+**hits the relative-MAE <= 0.85 target (0.8382) that the LightGBM model missed
+(0.8784)**.
+
+### Where the margin actually comes from
+
+The means hide the shape of the result, which matters more than the means:
+
+| Fold | LightGBM RMSLE | N-HiTS RMSLE | LightGBM relMAE | N-HiTS relMAE |
+|---|---|---|---|---|
+| 0 | **0.1858** | 0.1990 | **0.7484** | 0.8088 |
+| 1 | 0.3701 | **0.1912** | 1.0542 | **0.8754** |
+| 2 | 0.2023 | **0.2014** | 0.8327 | **0.8305** |
+
+LightGBM **wins fold 0**, **ties fold 2**, and **collapses on fold 1**. The
+whole aggregate margin is one fold. On fold 1 LightGBM's relative MAE is
+**1.0542 — worse than the lag-7 seasonal naive** — and its point booster's
+RMSLE jumps to 0.4993 against ~0.19 on the other two folds.
+
+So the finding is not "N-HiTS is a better forecaster here". It is **"N-HiTS is
+more robust here"**: fold spread 0.0053 RMSLE against LightGBM's 0.1020, a
+19-fold difference, and 0.034 relMAE against 0.158. N-HiTS does not break where
+the LightGBM pipeline breaks. A 1-win / 1-loss / 1-tie record across three folds
+is not grounds for claiming one model class is better at this problem.
+
+What is going wrong on fold 1 was not diagnosed, and that is the honest gap in
+this section. One asymmetry is a cheap candidate and was deliberately not
+tested: **LightGBM trains on 40 weekly subsampled origins per fold**, a cost
+control forced by the 28x row expansion of direct multi-horizon, while
+N-HiTS's windowing sampler sees *every* available window. If fold 1's origin
+happens to sit badly against that weekly grid, LightGBM is training on a worse
+sample of the recent past than N-HiTS is. That is a property of the feature
+pipeline's budget, not of gradient boosting, and testing it means re-running
+LightGBM at a denser origin grid. It is the first thing to try next and it is
+out of this session's time box.
+
+### Why LightGBM remains the production model
+
+Accuracy is not the only axis, and the integration gap is large:
+
+- The **conformal calibration** and the **Gaussian copula path sampler** are
+  both built on `_predict_grid`'s 7-quantile output. N-HiTS produces 3
+  quantiles and has neither. Uncalibrated, its coverage is 0.703 against the
+  production model's calibrated **0.777**, which is the number the twin
+  actually needs.
+- The twin consumes **correlated sample paths**, not bands. Nothing in the
+  N-HiTS run produces them.
+- 7 booster `.txt` files that load in milliseconds, against a 6.7M-parameter
+  checkpoint and a Lightning dependency that already broke once in this
+  environment (a tensorflow/tensorboard pair that disagreed with itself).
+
+So: **N-HiTS beat LightGBM on accuracy and robustness, and LightGBM ships**,
+because it is the model that is wired to the calibration and the sampler. That
+is a deliberate engineering trade and it is recorded here as one, not as a
+finding that LightGBM was better.
+
+**Neural experimentation stops here**, per the time box. The next step is not a
+bigger network; it is diagnosing LightGBM's fold 1, because if the origin
+subsampling is the cause then the ~0.04 relMAE gap is a pipeline-budget
+artefact rather than a model-class result, and the whole comparison above would
+need restating.
 
 ---
 
@@ -291,6 +387,16 @@ identical conditions.
 
 ## 8. Limitations
 
+- **The shipped model is not the most accurate one tested.** N-HiTS beat it on
+  RMSLE, MAE, relative MAE and pinball, and hit the relative-MAE target it
+  missed. LightGBM ships for integration reasons (§6), which is a defensible
+  trade but is a trade. The honest summary of Model B's accuracy is that the
+  better of the two models was not the one deployed.
+- **LightGBM has one bad fold out of three and the cause is unknown.** On fold
+  1 it is worse than the lag-7 seasonal naive (relMAE 1.0542). The leading
+  suspect — 40 weekly subsampled training origins against N-HiTS's full
+  window sampler — was not tested. Until it is, the gap between the two models
+  cannot be attributed to the model class.
 - **The margin over seasonal naive is thin.** MASE vs lag-7 of 0.9953 means the
   learned model is worth about half a percent over "same weekday last week" at
   this horizon on this subset. The relative-MAE target was missed. A reviewer
