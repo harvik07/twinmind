@@ -18,7 +18,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import torch
 
@@ -41,6 +41,26 @@ from twinmind.utils.seed import set_seed
 logger = get_logger("train_health")
 
 SUBSETS = ["FD001", "FD002", "FD003", "FD004"]
+
+#: Named configurations. "baseline" is v0.3-health, kept so earlier numbers stay
+#: reproducible; "hct" is the configuration the remediation sweep selected --
+#: a smaller trunk, no conv normalisation, full augmentation and the trend
+#: branch. On FD001 it scores 12.76 +/- 0.16 against the baseline's
+#: 15.44 +/- 1.11, with 115,106 parameters rather than 738,626.
+PRESETS: dict[str, dict[str, dict[str, Any]]] = {
+    "baseline": {"arch": {}, "train": {}},
+    "hct": {
+        "arch": {
+            "conv1_channels": 32,
+            "conv2_channels": 64,
+            "lstm_hidden": 64,
+            "lstm_layers": 1,
+            "conv_norm": "none",
+            "trend_branch": True,
+        },
+        "train": {"noise_sigma": 0.03, "mask_prob": 0.1, "jitter": 0.05},
+    },
+}
 
 
 def resolve_device(requested: str) -> str:
@@ -80,6 +100,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--output-dir", default=None, help="Checkpoint directory.")
     parser.add_argument("--threads", type=int, default=None, help="torch CPU threads.")
+    parser.add_argument(
+        "--preset",
+        choices=sorted(PRESETS),
+        default="baseline",
+        help="Named architecture/augmentation configuration. "
+        "'hct' is the one the remediation sweep selected.",
+    )
     return parser
 
 
@@ -92,6 +119,7 @@ def main() -> int:
     config = cast(DataConfig, load_config(args.config))
     device = resolve_device(args.device)
     learning_rate = args.lr if args.lr is not None else TrainConfig().learning_rate
+    preset = PRESETS[args.preset]
     subsets = SUBSETS if args.subset == "all" else [args.subset]
     seeds = [args.seed + i for i in range(args.seeds)]
     output_dir = Path(args.output_dir) if args.output_dir else models_dir() / "a1"
@@ -103,6 +131,7 @@ def main() -> int:
         patience=args.patience,
         mc_passes=args.mc_passes,
         lambda_candidates=(0.1, 0.5, 1.0) if args.tune_lambda else (args.lambda_fail,),
+        **preset["train"],
     )
 
     logger.info(
@@ -139,6 +168,7 @@ def main() -> int:
                 train_config=settings,
                 device=device,
                 checkpoint_dir=output_dir,
+                arch_overrides=preset["arch"] or None,
             )
 
             log_run(
@@ -157,6 +187,7 @@ def main() -> int:
                             "batch": args.batch_size,
                             "lr": learning_rate,
                             "point_estimate": "deterministic",
+                            "preset": args.preset,
                             "window": config.cmapss.window_length,
                         }
                     ),
@@ -211,6 +242,7 @@ def main() -> int:
                             "lr": learning_rate,
                             "dropout": args.dropout,
                             "point_estimate": "deterministic",
+                            "preset": args.preset,
                         }
                     ),
                     duration_s=0.0,

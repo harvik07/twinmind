@@ -315,6 +315,61 @@ more than temporal modelling here. Whether that reverses on FD002/FD004, which
 have 260 and 249 training engines across six operating regimes, is the open
 question, and is what the GPU runs are for.
 
+## All four subsets, at the production preset
+
+FD002-FD004 were trained locally at the `hct` preset, three independent seeds
+each, same last-window-per-unit protocol. The Kaggle GPU path could not run
+them; see "Why these were trained on CPU" below.
+
+| subset | A1 (hct) | random forest | ridge | LSTM(64) | engines (train) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| FD001 | 12.76 ± 0.16 | **12.72 ± 0.16** | 15.08 | 14.95 | 100 |
+| FD002 | **13.78 ± 0.17** | 14.36 ± 0.16 | 16.36 | 14.96 | 260 |
+| FD003 | 13.62 ± 0.31 | **13.32 ± 0.49** | 15.53 | 13.83 | 100 |
+| FD004 | **15.00 ± 0.17** | 15.68 ± 0.08 | 18.51 | 14.88 | 249 |
+
+**The FD001 result does not generalise, and that is the useful finding.** The
+sequence model loses on the two 100-engine subsets and wins on the two large
+multi-regime ones:
+
+- FD002 (260 engines, six operating regimes): A1 **13.78** against the forest's
+  14.36 — a 0.58 win, more than three standard deviations.
+- FD004 (249 engines, six regimes and two fault modes, the hardest subset):
+  A1 **15.00** against 15.68 — a 0.68 win.
+- FD001 and FD003 (100 engines each, one regime): forest ahead or level.
+
+This is exactly the prediction made when the FD001 gap was first diagnosed, and
+it held. At 100 engines a 115k-parameter sequence model has too little data to
+beat six hand-cut summary statistics and a tree ensemble. At 250+ engines across
+six regimes, where the relationship between raw sensor level and degradation
+depends on which regime the engine is in, temporal modelling starts to pay and
+the forest's regime-blind summary statistics stop being enough.
+
+Targets: **FD004 ≤ 22 was the stated target and 15.00 clears it comfortably.**
+FD002 and FD003 had no stated target; both come in under 14.
+
+A caveat on the FD002 row in `reports/results/summary.md`: that file shows
+15.23 for FD002, not 13.78, because a stray baseline-preset run overlapped the
+production one and, being newer, won the "latest configuration" filter. Both
+cohorts are real and both are in `runs.jsonl` — `132cce1d` is the 738k baseline
+preset at 15.23 ± 0.49, `aa3e569a` is the production `hct` preset at 13.78 ±
+0.17. The summary now carries a `config` column so the two cannot be confused.
+
+### Why these were trained on CPU
+
+The Kaggle GPU kernel is written, pushed and reaches the training step, but this
+account's kernels run with **no accelerator and no network**: DNS resolution
+fails for PyPI and for the NASA archive alike, while `kernels_pull` confirms
+Kaggle stored `enable_gpu: true` and `enable_internet: true` exactly as sent.
+Accepting the metadata and ignoring it is what Kaggle does for an account that
+has not completed phone verification — both the accelerator and notebook
+internet are gated behind it.
+
+Verifying the phone at kaggle.com/settings and re-running
+`scripts/launch_kaggle_training.py` unchanged should be sufficient. Until then
+local CPU is the faster path anyway: 5–17 minutes per seed at the `hct` preset,
+against a Kaggle CPU that would be slower still.
+
 ## Known failure modes
 
 - **Late bias at high RUL.** The predicted-vs-true scatter shows most error above

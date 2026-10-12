@@ -273,12 +273,17 @@ def build_summary(records: list[dict[str, Any]]) -> str:
         metric_names = _metric_order(
             name for runs in by_model.values() for run in runs for name in run.get("metrics", {})
         )
-        header = ["model", "n", *metric_names]
+        header = ["model", "n", "config", *metric_names]
         lines.append("| " + " | ".join(header) + " |")
         lines.append("| " + " | ".join("---" for _ in header) + " |")
 
         for model, runs in sorted(by_model.items()):
-            row = [model, str(len(runs))]
+            # Show which configuration the row describes. Without it a reader
+            # cannot tell that two subsets were trained under different presets,
+            # which is exactly what happened when a stray baseline FD002 run
+            # overlapped the production one and, being newer, won the filter.
+            configs = sorted({str(run.get("config_hash", ""))[:8] for run in runs})
+            row = [model, str(len(runs)), "/".join(configs) or "--"]
             for name in metric_names:
                 values = [
                     float(run["metrics"][name]) for run in runs if name in run.get("metrics", {})

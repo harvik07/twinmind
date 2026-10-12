@@ -10,23 +10,40 @@ leaves this machine.
     python scripts/launch_kaggle_training.py             # package and push
     python scripts/launch_kaggle_training.py --status     # poll the run
 
-CREDENTIALS -- and a scope limit worth knowing about. A ``KGAT_`` access token
-uploads the dataset and pushes the kernel, but its scope stops short of the rest:
+STATUS: this account's kernels get neither GPU nor internet, so the run cannot
+complete on Kaggle today. The cause is not the code and not the credentials.
 
-* ``kernels_list`` returns 401 and ``dataset_list_files`` returns 403, so
-  ``--status`` queries ``kernels_status`` on the known slug rather than
-  enumerating.
-* More importantly, a kernel pushed under an access token **runs with neither
-  the requested GPU nor the attached private dataset**, even though
-  ``kernel-metadata.json`` carries ``enable_gpu: true`` and the correct
-  ``dataset_sources``. The kernel then fails at
-  ``/kaggle/input/twinmind-src`` not existing, with ``nvidia-smi`` absent.
+What the logs show, after three rounds of fixes got the kernel to the point of
+actually running:
 
-A legacy API token carries the missing scope. Create one at
-kaggle.com/settings/account -> "Create New Token", which downloads kaggle.json,
-then either put its username/key into .env as KAGGLE_USERNAME / KAGGLE_KEY or
-drop the file at ~/.kaggle/kaggle.json, and re-run this script. Nothing else
-needs to change.
+    accelerator: NONE (nvidia-smi absent)
+    Failed to resolve 'phm-datasets.s3.amazonaws.com' ([Errno -3] Temporary
+    failure in name resolution)
+    ERROR: Could not find a version that satisfies the requirement numpy~=1.26
+
+DNS fails for PyPI and for the NASA archive alike, and there is no accelerator
+-- while ``kernels_pull`` confirms Kaggle stored ``enable_gpu: true`` and
+``enable_internet: true`` exactly as pushed. Accepting the metadata and then
+ignoring it is what Kaggle does for an **unverified account**: both the
+accelerator and notebook internet require phone verification, at
+kaggle.com/settings -> Phone Verification. Verify, then re-run this script
+unchanged.
+
+An earlier version of this docstring blamed the KGAT_ access token's scope.
+That was wrong, and the evidence against it is direct: swapping to a legacy API
+key with full scope changed nothing about the failure. The token's scope *is*
+narrower -- kernels_list 401s and dataset_list_files 403s under it -- but that
+was never what broke the run.
+
+CREDENTIALS. Either credential works for pushing. A legacy API key additionally
+allows kernels_list and dataset_list_files; --status uses kernels_status on the
+known slug so it works under both.
+
+Without phone verification, train locally instead -- the GPU was the only reason
+to use Kaggle, and FD002-FD004 at the production preset run in about 15 minutes
+per seed on CPU:
+
+    python scripts/train_health.py --subset FD002 --seeds 3 --preset hct
 """
 
 from __future__ import annotations
@@ -63,9 +80,33 @@ import sys
 import time
 from pathlib import Path
 
-SRC = Path("/kaggle/input/twinmind-src")
+INPUT = Path("/kaggle/input")
 WORK = Path("/kaggle/working/twinmind")
 OUT = Path("/kaggle/working/out")
+
+# Do not assume the mount name. Kaggle derives it from the dataset slug, and a
+# wrong guess fails with a bare FileNotFoundError that says nothing useful.
+# Find the directory that actually contains the package and say what was there.
+print("tree under /kaggle/input:", flush=True)
+for path in sorted(INPUT.rglob("*"))[:40] if INPUT.exists() else []:
+    if path.is_dir():
+        print("   dir ", path.relative_to(INPUT), flush=True)
+
+# Kaggle does not always mount a dataset at /kaggle/input/<slug>; this account
+# gets /kaggle/input/datasets/<owner>/<slug>. Search for the marker files rather
+# than guessing the depth.
+candidates = [
+    d
+    for d in ([INPUT, *INPUT.rglob("*")] if INPUT.exists() else [])
+    if d.is_dir() and (d / "src").is_dir() and (d / "pyproject.toml").is_file()
+]
+if not candidates:
+    raise SystemExit(
+        "no attached dataset contains src/ and pyproject.toml. Attach the "
+        "twinmind-src dataset to this kernel and re-run."
+    )
+SRC = min(candidates, key=lambda d: len(d.parts))
+print("using source:", SRC, flush=True)
 
 # nvidia-smi is absent entirely when no accelerator is attached, so this has to
 # be guarded: an unguarded probe raises FileNotFoundError and kills the run
@@ -84,16 +125,27 @@ if WORK.exists():
 shutil.copytree(SRC, WORK)
 os.chdir(WORK)
 
-pip = [sys.executable, "-m", "pip", "install", "-q"]
-subprocess.run([*pip, "-r", "requirements.txt"], check=False)
-subprocess.run([*pip, "-e", "."], check=True)
+# No `pip install -e .`: it needs to fetch build dependencies from PyPI, which
+# fails on this image, and an editable install buys nothing here. Putting src/
+# on the path is equivalent and has no network dependency. requirements.txt is
+# attempted but tolerated -- Kaggle already ships torch, numpy, pandas and
+# scikit-learn, which is everything the training path actually imports.
+subprocess.run(
+    [sys.executable, "-m", "pip", "install", "-q", "-r", "requirements.txt"], check=False
+)
+src_path = str(WORK / "src")
+sys.path.insert(0, src_path)
+env = {{**os.environ, "PYTHONPATH": src_path + os.pathsep + os.environ.get("PYTHONPATH", "")}}
 
 import torch
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("torch", torch.__version__, "| device", device, flush=True)
 
-subprocess.run([sys.executable, "scripts/download_data.py", "--dataset", "cmapss"], check=True)
+subprocess.run(
+    [sys.executable, "scripts/download_data.py", "--dataset", "cmapss"],
+    check=True, env=env,
+)
 
 for subset in {subsets!r}:
     started = time.time()
@@ -101,7 +153,7 @@ for subset in {subsets!r}:
     rc = subprocess.run(
         [sys.executable, "-u", "scripts/train_health.py",
          "--subset", subset, "--seeds", "3", "--device", device],
-        check=False,
+        check=False, env=env,
     ).returncode
     print(subset, "rc", rc, f"{{time.time() - started:.0f}}s", flush=True)
 
