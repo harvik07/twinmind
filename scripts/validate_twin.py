@@ -29,6 +29,7 @@ import sys
 from typing import Any
 
 import numpy as np
+import pandas as pd
 from scipy import stats
 
 from twinmind.eval.registry import results_dir
@@ -75,6 +76,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Validate the digital twin.")
     parser.add_argument("--all", action="store_true", help="Run every section.")
     parser.add_argument("--components", action="store_true")
+    parser.add_argument("--band-coverage", action="store_true")
+    parser.add_argument("--band-series", type=int, default=50)
     parser.add_argument("--landscape", action="store_true")
     parser.add_argument("--sensitivity", action="store_true")
     parser.add_argument("--scenarios", action="store_true")
@@ -377,14 +380,12 @@ def validate_demand(resources: TwinResources) -> dict[str, Any]:
         float(np.mean(np.diag(copula.correlation, 1))) if copula is not None else float("nan")
     )
     realised_residual = realised_scaled - median_path[: realised_scaled.size]
-    q10 = np.quantile(paths, 0.10, axis=0)
-    q90 = np.quantile(paths, 0.90, axis=0)
-    inside = float(
-        np.mean(
-            (realised_scaled >= q10[: realised_scaled.size])
-            & (realised_scaled <= q90[: realised_scaled.size])
-        )
-    )
+    # Band coverage is NOT computed here. Doing it from this origin compares
+    # paths covering origin+1..origin+28 against realised days that sit a month
+    # earlier, which is what the first version of this function did -- and 28
+    # days is exactly four weeks, so the weekly phase lined up and the answer
+    # looked plausible rather than obviously wrong. It lives in
+    # demand_band_coverage(), at a date-aligned origin and over many series.
 
     result = {
         "series_id": resources.series_id,
@@ -400,7 +401,7 @@ def validate_demand(resources: TwinResources) -> dict[str, Any]:
         "realised_lag1_residual": lag1(realised_residual),
         "across_sample_step_dependence": step_dependence,
         "copula_lag1_target": copula_target,
-        "share_inside_80_band": inside,
+        "share_inside_80_band": None,  # moved to demand_band_coverage()
         "tolerances": {"mean_rel": 0.25, "sd_rel": 0.50, "band_lower": 0.60, "band_upper": 0.95},
     }
     result["copula_reproduced"] = bool(
@@ -414,7 +415,7 @@ def validate_demand(resources: TwinResources) -> dict[str, Any]:
         abs(result["simulated_sd"] - result["realised_sd"])
         <= 0.50 * max(result["realised_sd"], 1e-9)
     )
-    result["band_passes"] = bool(0.60 <= inside <= 0.95)
+    result["band_passes"] = None  # see demand_band_coverage()
     logger.info(
         "demand: mean %.1f vs %.1f (%s), sd %.1f vs %.1f (%s)",
         result["simulated_mean"],
@@ -432,11 +433,126 @@ def validate_demand(resources: TwinResources) -> dict[str, Any]:
         copula_target,
         "reproduced" if result["copula_reproduced"] else "NOT REPRODUCED",
     )
+    logger.info("  band coverage is reported by demand_band_coverage(), not here")
+    return result
+
+
+def demand_band_coverage(
+    resources: TwinResources, n_series: int = 50, n_samples: int = 2000
+) -> dict[str, Any]:
+    """Band coverage over many series at a DATE-ALIGNED origin.
+
+    This replaces the single-series check in ``validate_demand``, which had two
+    defects worse than the small sample it was criticised for.
+
+    **The dates did not line up.** It drew paths from the twin's origin
+    (2017-08-15, covering 2017-08-16..09-12) and compared them against the
+    held-out fold's realised days (2017-07-19..08-15). Those are different days
+    a month apart. The weekly phase happened to match -- 28 days is exactly four
+    weeks -- so the number looked plausible rather than obviously broken.
+
+    **And it was in-sample.** ``models/demand/config.json`` records a training
+    window of 2013-01-01 to 2017-08-15, which is the whole dataset, so every day
+    it was scored against was a day it had trained on. The saved production
+    model cannot be scored out-of-sample at any origin inside the data, and the
+    twin's own origin (2017-08-15) forecasts past the end of the data where
+    there is nothing to score against at all.
+
+    So this measures at the last fold boundary with the dates aligned, and
+    reports the result as the **optimistic, in-sample** bound it is. The
+    genuinely out-of-sample numbers are the per-fold ones from training
+    (``reports/results/demand_folds.json``), quoted alongside.
+    """
+    from twinmind.data.features import build_demand_features, make_rolling_origin_splits
+    from twinmind.data.loaders import load_favorita
+    from twinmind.twin.demand_proc import DemandSampler
+    from twinmind.utils.config import load_config
+
+    data_config = load_config("data")
+    frame = build_demand_features(load_favorita(), data_config.favorita, top_n=200)
+    folds = make_rolling_origin_splits(frame, n_splits=3, horizon=HORIZON)
+    train_index, validation_index = folds[-1]
+    train, validation = frame.iloc[train_index], frame.iloc[validation_index]
+    origin = pd.Timestamp(train["ds"].max())
+
+    model = resources.demand_model
+    series = sorted(validation["unique_id"].unique())[:n_series]
     logger.info(
-        "  %.1f%% of %d realised days inside the simulated 80%% band (%s)",
-        100 * inside,
-        result["n_realised_days"],
-        "PASS" if result["band_passes"] else "FAIL",
+        "band coverage: %d series, origin %s, scoring %s..%s",
+        len(series),
+        origin.date(),
+        (origin + pd.Timedelta(days=1)).date(),
+        (origin + pd.Timedelta(days=HORIZON)).date(),
+    )
+
+    inside: list[bool] = []
+    steps: list[int] = []
+    per_series: list[float] = []
+    for series_id in series:
+        realised = (
+            validation[validation["unique_id"] == series_id].sort_values("ds").set_index("ds")["y"]
+        )
+        try:
+            sampler = DemandSampler.from_model(model, series_id, origin, HORIZON)
+        except (KeyError, ValueError):
+            continue
+        paths = sampler.sample(n_samples, seed=0)
+        low = np.quantile(paths, 0.10, axis=0)
+        high = np.quantile(paths, 0.90, axis=0)
+
+        hits = []
+        for step in range(1, HORIZON + 1):
+            day = origin + pd.Timedelta(days=step)
+            if day not in realised.index:
+                continue
+            value = float(realised.loc[day])
+            hit = bool(low[step - 1] <= value <= high[step - 1])
+            inside.append(hit)
+            steps.append(step)
+            hits.append(hit)
+        if hits:
+            per_series.append(float(np.mean(hits)))
+
+    hit_array = np.asarray(inside, dtype="float64")
+    step_array = np.asarray(steps, dtype="int64")
+    buckets = {
+        "d1_7": (step_array >= 1) & (step_array <= 7),
+        "d8_14": (step_array >= 8) & (step_array <= 14),
+        "d15_28": (step_array >= 15) & (step_array <= 28),
+    }
+    result: dict[str, Any] = {
+        "n_series": len(per_series),
+        "n_observations": int(hit_array.size),
+        "origin": str(origin.date()),
+        "scored_window": [
+            str((origin + pd.Timedelta(days=1)).date()),
+            str((origin + pd.Timedelta(days=HORIZON)).date()),
+        ],
+        "training_window_from_config": ["2013-01-01", "2017-08-15"],
+        "in_sample": True,
+        "coverage_overall": float(hit_array.mean()) if hit_array.size else float("nan"),
+        "per_series_sd": float(np.std(per_series, ddof=1)) if len(per_series) > 1 else 0.0,
+        "per_series_min": float(np.min(per_series)) if per_series else float("nan"),
+        "per_series_max": float(np.max(per_series)) if per_series else float("nan"),
+    }
+    for name, mask in buckets.items():
+        result[f"coverage_{name}"] = float(hit_array[mask].mean()) if mask.any() else float("nan")
+        result[f"n_{name}"] = int(mask.sum())
+
+    logger.info(
+        "  overall %.3f over %d observations (%d series); d1-7 %.3f  d8-14 %.3f  d15-28 %.3f",
+        result["coverage_overall"],
+        result["n_observations"],
+        result["n_series"],
+        result["coverage_d1_7"],
+        result["coverage_d8_14"],
+        result["coverage_d15_28"],
+    )
+    logger.info(
+        "  per-series spread: sd %.3f, min %.3f, max %.3f -- IN-SAMPLE (see docstring)",
+        result["per_series_sd"],
+        result["per_series_min"],
+        result["per_series_max"],
     )
     return result
 
@@ -812,7 +928,7 @@ def main() -> int:
     """Entry point."""
     args = build_parser().parse_args()
     run_all = args.all or not any(
-        (args.components, args.landscape, args.sensitivity, args.scenarios)
+        (args.components, args.landscape, args.sensitivity, args.scenarios, args.band_coverage)
     )
 
     resources = build_resources()
@@ -823,6 +939,10 @@ def main() -> int:
         payload["health_warnings"] = validate_health_warnings(resources)
         payload["weibull"] = validate_weibull(resources)
         payload["demand"] = validate_demand(resources)
+
+    if run_all or args.band_coverage:
+        logger.info("=== demand band coverage, many series, aligned dates ===")
+        payload["demand_band_coverage"] = demand_band_coverage(resources, args.band_series)
 
     if run_all or args.scenarios:
         logger.info("=== five named scenarios, both hazard modes ===")

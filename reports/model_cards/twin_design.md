@@ -346,10 +346,9 @@ against them by two-sample KS.
 **Pass.** A shape of 5.18 is strongly increasing-hazard, which is what
 run-to-failure turbofan data should look like.
 
-### 6.3 Demand process — **mixed, and the failure is the informative one**
+### 6.3 Demand process — **corrected; the first version measured the wrong thing**
 
-Simulated paths against the **held-out last Favorita fold** (28 days, the
-production series), all on the twin's scale.
+Simulated paths against the **held-out last Favorita fold**, on the twin's scale.
 
 | Quantity | Simulated | Realised | Tolerance | Result |
 |---|---:|---:|---|---|
@@ -357,31 +356,56 @@ production series), all on the twin's scale.
 | SD | 200.1 | 283.4 | ±50% | **pass** |
 | Residual lag-1 autocorrelation | 0.098 | 0.351 | — | **under-persistent** |
 | Across-sample step dependence | **0.295** | copula target 0.330 | ±0.10 | **reproduced** |
-| Share of realised days inside the simulated 80% band | **42.9%** | nominal 80% | [0.60, 0.95] | **FAIL** |
 
-Two findings, reported as they came out.
+**Band coverage, 50 series × 28 days = 1400 observations**, at a
+date-aligned origin (2017-07-18, scoring 2017-07-19–2017-08-15):
 
-**The copula works; a naive statistic said it did not.** The first version of
-this check computed a raw lag-1 autocorrelation of each 28-day path and got
-**−0.12** against a realised **+0.14**, which reads as "the copula does not
-reproduce serial dependence". It does — the across-sample step-to-step
-dependence is **0.295 against a fitted target of 0.330**. The forecast carries a
-strong weekly cycle (per-step means swing from 1,625 to 2,569, comparable to the
-within-step SD), so a raw lag-1 is dominated by the calendar saw-tooth and the
-sharp weekly drop drags it negative. The residual lag-1, after removing each
-step's own median, is the like-for-like figure. On that basis the paths are
-genuinely **less persistent than reality** (0.098 vs 0.351), which is a real
-shortfall, just a much smaller one than the naive number suggested.
+| Bucket | Coverage | n |
+|---|---:|---:|
+| d1–7 | **0.811** | 350 |
+| d8–14 | **0.746** | 350 |
+| d15–28 | **0.769** | 700 |
+| **overall** | **0.774** | 1400 |
 
-**The 80% band covers 42.9% of realised days.** This is the undercoverage the
-demand model card already flagged — post-conformal coverage averaging 0.716 at
-d8–14, with one fold at 0.65 — now measured directly inside the twin and **worse
-here**. Realised SD is 283 against the simulated 200: the paths are about 30%
-too narrow.
+Per-series spread: sd 0.109, range 0.464–0.929.
 
-The sample is small (28 days, one series), so 42.9% should not be read as a
-precise figure. The *direction* is consistent with everything else known about
-Model B, and it is why `demand_spread_multiplier` exists (§9.3).
+#### What the first version got wrong
+
+An earlier version of this check reported **42.9% of realised days inside the
+80% band** and that number was propagated into the limitations, the commit
+messages and the pull request. **It was wrong**, for two reasons, and the second
+is the kind of error that produces a confident false finding:
+
+1. **The dates did not line up.** It drew paths from the twin's origin
+   (2017-08-15, covering 2017-08-16 – 09-12) and compared them against the
+   held-out fold's realised days (2017-07-19 – 08-15). Those are different days
+   a month apart. The weekly phase happened to match — 28 days is exactly four
+   weeks — so the result looked plausible instead of obviously broken.
+2. **One series, 28 observations.** Far too few to read, as the spec's
+   carry-over task said.
+
+Aligned and measured over 1400 observations, coverage is **0.774** against a
+nominal 0.80 — mildly under, not catastrophically so. It also lands within 0.004
+of Model B's own out-of-sample post-conformal figure of 0.777, and reproduces
+the same shape: **d8–14 is the weak bucket** here (0.746) exactly as it is in
+the demand model card (0.716). Two independent measurements of the same
+underlying defect agreeing is the reason to believe this one.
+
+#### This measurement is in-sample, and cannot not be
+
+`models/demand/config.json` records a training window of **2013-01-01 to
+2017-08-15** — the entire dataset. Every day scored above is a day the
+production model trained on, so **0.774 is an optimistic bound**. There is no
+origin inside the data at which the saved artifact can be scored out-of-sample,
+and the twin's own origin (2017-08-15) forecasts past the end of the data, where
+there is nothing to score against at all.
+
+The genuinely out-of-sample numbers exist and are quoted from training
+(`reports/results/demand_folds.json`): **0.656 raw and 0.777 post-conformal**
+across 200 series and 3 rolling folds, with d8–14 at 0.716. The in-sample figure
+here being no better than the out-of-sample one is weak evidence that the
+optimism is small — a quantile model with 7 boosters and a conformal correction
+has limited capacity to memorise a particular day.
 
 **Not claimed:** validation of throughput, service level or cost. No real data
 exists for them.
@@ -579,9 +603,9 @@ everywhere else.
 its own median, inside the twin, after `sample_paths` and never inside the
 frozen `DemandModel` Protocol. It exists because Model B's post-conformal
 coverage is uneven — d8–14 averages **0.716** against a [0.76, 0.84] target, and
-on fold 1 an 80% interval covered **65%** of outcomes — and because §6.3
-measured only **42.9%** of realised days inside the simulated band. The paths are
-too narrow; the question is what that does to the answers.
+on fold 1 an 80% interval covered **65%** of outcomes — which §6.3 confirms
+inside the twin at **0.746** for d8–14 against 0.774 overall. The paths are
+mildly too narrow at mid-horizon; the question is what that does to the answers.
 
 Perturbed over {0.8, 1.0, 1.2, 1.4} at the baseline, 30 replications each:
 
@@ -692,9 +716,12 @@ Reported as asked, with what was done instead.
 - **This is not validated against a real factory, and cannot be.** Throughput,
   service level, OEE and cost have no measured counterpart. Only the health and
   demand components are validated, and only against the data they came from.
-- **The twin understates stockout risk.** Model B's bands are too narrow — 42.9%
-  of realised days fell inside the simulated 80% band — so stockout probability
-  and on-time delivery are optimistic. See §9.3 for how much.
+- **The twin mildly understates stockout risk at mid-horizon.** Band coverage is
+  0.774 overall against a nominal 0.80, with d8–14 at 0.746 — outside the
+  [0.76, 0.84] target band and matching Model B's known defect. The effect on
+  stockout probability is small and sign-dependent; see §9.3. An earlier version
+  of this card reported 42.9% coverage from a date-misaligned single-series
+  measurement; that figure was wrong and is corrected in §6.3.
 - **Demand paths are under-persistent.** Residual lag-1 of 0.098 against a
   realised 0.351. Real demand clusters more than the simulation does, which
   again biases stockout risk downward, because clustered shortfalls are what
