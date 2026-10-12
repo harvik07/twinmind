@@ -169,6 +169,7 @@ def main() -> int:
                 device=device,
                 checkpoint_dir=output_dir,
                 arch_overrides=preset["arch"] or None,
+                checkpoint_tag=args.preset,
             )
 
             log_run(

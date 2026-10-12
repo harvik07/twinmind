@@ -142,15 +142,41 @@ class DemandData:
         )
         return frame.loc[mask]
 
-    def truncate(self, origin: pd.Timestamp) -> DemandData:
-        """A new snapshot with every row after ``origin`` removed.
+    def truncate(self, origin: pd.Timestamp, hard: bool = False) -> DemandData:
+        """A snapshot holding only what is actually knowable at ``origin``.
 
-        The contract test uses this: a forecast made at ``origin`` must be
-        identical whether or not the future exists in the snapshot. Any
-        difference is leakage.
+        By default this **blanks the target and the not-known-future covariates**
+        for every row after the origin, and keeps the known-future ones.
+
+        That distinction is the whole point, and it is easy to get wrong in the
+        other direction. Standing at the origin, a real deployment does know next
+        month's calendar, its holiday table and its own planned promotions -- so
+        deleting those would be removing information the system genuinely has,
+        and a forecast that changed as a result would be telling us nothing about
+        leakage. What it does *not* know is what was sold, or what oil did. Those
+        are what get blanked, and a forecast that moves when they are blanked is
+        reading the future.
+
+        ``hard=True`` drops the future rows entirely. The model then falls back to
+        deriving the calendar arithmetically and assuming no promotions, so its
+        answer legitimately differs; that mode exists for callers who really have
+        no covariate table, not for the leakage test.
         """
-        kept = self.frame[self.frame[self.date_column] <= pd.Timestamp(origin)]
-        return DemandData(kept, self.target, self.date_column, self.id_column)
+        frame = self.frame
+        origin = pd.Timestamp(origin)
+        if hard:
+            kept = frame[frame[self.date_column] <= origin]
+            return DemandData(kept, self.target, self.date_column, self.id_column)
+
+        from twinmind.models.demand_features import KNOWN_FUTURE, STATIC
+
+        knowable = {*KNOWN_FUTURE, *STATIC, self.id_column, self.date_column}
+        blinded = frame.copy()
+        future_rows = blinded[self.date_column] > origin
+        for column in blinded.columns:
+            if column not in knowable:
+                blinded.loc[future_rows, column] = np.nan
+        return DemandData(blinded, self.target, self.date_column, self.id_column)
 
 
 @runtime_checkable

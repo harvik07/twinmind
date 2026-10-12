@@ -1,6 +1,6 @@
 # Results
 
-Generated 2026-10-12T10:27:14+00:00 from `reports/results/runs.jsonl`: 61 of 83 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
+Generated 2026-10-12T10:29:06+00:00 from `reports/results/runs.jsonl`: 62 of 85 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
 
 Every cell is **mean +/- std across seeds**; `n` is the number of independent training runs behind it. C-MAPSS rows use the last-window-per-unit protocol (one prediction per test engine).
 
@@ -15,8 +15,8 @@ Every cell is **mean +/- std across seeds**; `n` is the number of independent tr
 
 | model | n | config | rmse | mae | nasa_score | fail_pr_auc | mean_p_fail | mean_rul_std | n_units | n_windows_seen |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| a1_cnn_bilstm | 2 | aa3e569a | 12.67 +/- 0.04 | 9.3376 +/- 0.0372 | 258.91 +/- 1.00 | 0.9797 +/- 0.0003 | -- | 4.4971 +/- 0.1288 | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
-| a1_ensemble | 1 | 76bdd25f | 14.70 +/- 0.00 | 10.86 +/- 0.00 | 432.37 +/- 0.00 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| a1_cnn_bilstm | 3 | aa3e569a | 12.76 +/- 0.13 | 9.3606 +/- 0.0446 | 265.64 +/- 9.56 | 0.9812 +/- 0.0021 | -- | 4.4975 +/- 0.1052 | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
+| a1_ensemble | 1 | 404eca52 | 12.54 +/- 0.00 | 9.1394 +/- 0.0000 | 252.33 +/- 0.00 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
 | forest_health | 3 | 0bff1248 | 12.72 +/- 0.16 | 9.5143 +/- 0.0133 | 245.22 +/- 4.46 | -- | 0.2134 +/- 0.0017 | 16.37 +/- 0.21 | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
 | lstm | 3 | ca6c3945 | 14.95 +/- 0.64 | 11.05 +/- 0.23 | 506.04 +/- 151.74 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |
 | random_forest | 3 | 863291fe | 12.72 +/- 0.16 | 9.5143 +/- 0.0133 | 245.22 +/- 4.46 | -- | -- | -- | 100.00 +/- 0.00 | 100.00 +/- 0.00 |

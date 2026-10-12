@@ -80,7 +80,12 @@ KNOWN_FUTURE: tuple[str, ...] = (
 STATIC: tuple[str, ...] = ("store_nbr", "cluster")
 
 #: Read at the origin only. Their future values are not knowable.
-ORIGIN_ONLY: tuple[str, ...] = ("oil_price",)
+#:
+#: ``transactions`` is listed even though the current featurised frame does not
+#: carry it: it is one of the six Favorita tables and an obvious thing to merge
+#: in later, and store footfall is emphatically not known 28 days ahead.
+#: Classifying it now means adding the column cannot silently make it a leak.
+ORIGIN_ONLY: tuple[str, ...] = ("oil_price", "transactions")
 
 #: Lags of the target, measured backwards from the origin.
 ORIGIN_LAGS: tuple[int, ...] = (1, 7, 14, 28, 364)
