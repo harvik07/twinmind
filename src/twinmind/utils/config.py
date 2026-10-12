@@ -219,6 +219,55 @@ class CostConfig(_Base):
     fixed_overhead_per_day: float = Field(ge=0)
 
 
+class AssumptionEntry(_Base):
+    """One declared assumption: its value, that it *is* assumed, and why.
+
+    The ``assumed`` flag is required and validated to be ``True``. A parameter
+    that is data-backed does not belong in this register, and one that is
+    assumed must not be able to hide by omitting the flag -- that is the whole
+    point of keeping them in one place the sensitivity study can enumerate.
+    """
+
+    value: float
+    assumed: bool
+    reason: str = Field(min_length=20)
+
+    @model_validator(mode="after")
+    def _must_be_assumed(self) -> AssumptionEntry:
+        if not self.assumed:
+            raise ValueError(
+                "entries in the assumptions register must have assumed: true; "
+                "move data-backed parameters out of the register"
+            )
+        return self
+
+
+class FlowConfig(_Base):
+    """Lot-based material flow."""
+
+    lot_size: int = Field(gt=0)
+    initial_raw_inventory: float = Field(ge=0)
+    initial_finished_inventory: float = Field(ge=0)
+
+
+class LabourConfig(_Base):
+    """Staffing. Capacity-hours only; individual workers are not modelled."""
+
+    operators_per_shift: int = Field(gt=0)
+
+
+class HealthReplayConfig(_Base):
+    """Which trajectories are replayed, and how warnings are produced."""
+
+    subset: str
+    model_seed: int
+    checkpoint: str
+    cache_path: str
+    hazard_source: Literal["learned", "fixed_mtbf"]
+    warning_threshold: float = Field(gt=0.0, lt=1.0)
+    min_pool_engines: int = Field(gt=0)
+
+
 class TwinConstraints(_Base):
     min_on_time_delivery_rate: float = Field(ge=0.0, le=1.0)
     max_stockout_probability: float = Field(ge=0.0, le=1.0)
@@ -236,6 +285,24 @@ class TwinConfig(_Base):
     scenario_space: list[ScenarioDim] = Field(min_length=1)
     costs: CostConfig
     constraints: TwinConstraints
+    assumptions: dict[str, AssumptionEntry] = Field(default_factory=dict)
+    flow: FlowConfig
+    labour: LabourConfig
+    health_replay: HealthReplayConfig
+
+    def assumption(self, name: str) -> float:
+        """One assumed parameter's value, by register key.
+
+        Deliberately the *only* way the simulator reads these. Going through a
+        lookup that raises on an unknown key means a typo fails loudly, and it
+        guarantees every number the twin treats as assumed is one the
+        sensitivity study can find by enumerating the register.
+        """
+        if name not in self.assumptions:
+            raise KeyError(
+                f"unknown assumption {name!r}; the register holds {sorted(self.assumptions)}"
+            )
+        return self.assumptions[name].value
 
     @model_validator(mode="after")
     def _check_consistency(self) -> TwinConfig:

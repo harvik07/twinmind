@@ -164,21 +164,36 @@ scenario_space:
   - name: reorder_point
     kind: continuous
     min: 0.0
-    max: 5000.0
-    default: 1200.0
-    description: Raw-material inventory level that triggers a replenishment order.
+    max: 9000.0
+    default: 7000.0
+    description: >
+      Raw-material inventory POSITION (on hand + on order) that triggers a
+      replenishment order. Default raised from 1200: at the baseline's ~970
+      units/day the incumbent supplier's 7-day lead means 6,800 units are
+      consumed while an order is in transit, so a 1,200 trigger starves the
+      line for days at a time. Max raised to 9000 so the optimiser can cover a
+      21-day offshore lead if it wants S2.
   - name: order_quantity
     kind: continuous
     min: 100.0
     max: 10000.0
-    default: 2500.0
-    description: Units requested per replenishment order.
+    default: 6000.0
+    description: >
+      Units requested per replenishment order. Default raised from 2500 for a
+      structural reason worth stating: with (s, Q) on inventory POSITION, a Q
+      larger than s means one delivery lifts the position above the trigger, so
+      a second order can never be in flight and supply is capped at Q per lead
+      time -- 357 units/day at Q=2500 with a 7-day lead, against ~970 demanded.
+      Keeping Q below s is what lets orders overlap.
   - name: safety_stock
     kind: continuous
     min: 0.0
     max: 4000.0
-    default: 800.0
-    description: Buffer stock held above the reorder point.
+    default: 1500.0
+    description: >
+      Buffer stock, applied as an offset that RAISES the reorder trigger rather
+      than as an untouchable floor. A floor that can never be consumed is not
+      safety stock, it is a smaller warehouse.
   - name: price_multiplier
     kind: continuous
     min: 0.85
@@ -206,3 +221,181 @@ constraints:
   max_stockout_probability: 0.05
   max_unit_cost: 40.0
   min_oee: 0.55
+
+# ===========================================================================
+# ASSUMPTIONS REGISTER
+#
+# No real factory data exists for this line. Every parameter below is an
+# engineering assumption, not a measurement, and each is flagged
+# `assumed: true` with the reason it was chosen. Section 6 of
+# reports/model_cards/twin_design.md reports how far the headline KPIs and the
+# RANKING of scenarios move when each one is wrong (+-25% one-at-a-time, with
+# common random numbers, 30 reps).
+#
+# Parameters NOT in this register are data-backed: the C-MAPSS degradation
+# trajectories, the A1 health predictions replayed from them, and the Favorita
+# demand paths all come from models trained and validated on real data.
+# ===========================================================================
+assumptions:
+  # --- Ageing: how operating hours map onto C-MAPSS cycles -----------------
+  life_scale_hours_per_cycle:
+    value: 1.40
+    assumed: true
+    reason: >
+      C-MAPSS cycles are flights, not factory hours, so some mapping must be
+      invented. mean_life_operating_days x 16 h / 205.3 mean pool cycles, with
+      mean_life_operating_days = 18, gives 1.40. The spec asked for 40 days,
+      but 40 two-shift days is 640 operating hours and a 28-day window only
+      contains 320 staffed hours (the line works five days in seven), so at 40
+      days NOTHING ever fails and the maintenance levers do nothing at all --
+      measured: 0 failures and 0 PM events across the baseline. 18 days is the
+      value at which failures actually occur inside the horizon. See the
+      "where the spec was wrong" section of the model card.
+  mean_life_operating_days:
+    value: 18.0
+    assumed: true
+    reason: >
+      Target used to derive life_scale_hours_per_cycle. Recorded separately so
+      the sensitivity study can perturb the intent rather than the derived
+      constant.
+  wear_exponent:
+    value: 2.0
+    assumed: true
+    reason: >
+      Ageing rate scales as speed^wear_exponent, so running 20% fast consumes
+      life 44% faster. A quadratic is the conventional first guess for
+      mechanical wear against speed; no data here supports any exponent.
+  # --- Speed, quality and energy ------------------------------------------
+  defect_base_probability:
+    value: 0.012
+    assumed: true
+    reason: Nominal scrap rate at speed 1.0. No quality data exists for this line.
+  defect_speed_exponent:
+    value: 3.0
+    assumed: true
+    reason: >
+      Defect probability scales as base x speed^exponent, so speed buys
+      throughput at an accelerating quality cost. This is the mechanism that
+      stops "maximum speed everywhere" from being free; the landscape check in
+      the card tests whether it is strong enough.
+  energy_speed_exponent:
+    value: 2.0
+    assumed: true
+    reason: Energy per machine-hour scales as speed^2, the usual fan/pump law.
+  # --- Processing variability ----------------------------------------------
+  processing_cv:
+    value: 0.25
+    assumed: true
+    reason: >
+      Lognormal coefficient of variation on lot processing time. Sets how much
+      blocking and starving the finite buffers actually produce; with CV=0 the
+      line would be deterministic and the buffers pointless.
+  # --- Repair durations ----------------------------------------------------
+  planned_repair_multiplier:
+    value: 1.0
+    assumed: true
+    reason: >
+      Planned maintenance takes pm_hours from the machine block. Unplanned
+      repairs use repair_hours_mean/sd. The split exists because an unplanned
+      failure costs diagnosis time a scheduled job does not.
+  unplanned_repair_multiplier:
+    value: 1.0
+    assumed: true
+    reason: Scales repair_hours_mean, so the sensitivity study can perturb it.
+  # --- Demand coupling -----------------------------------------------------
+  demand_scale:
+    value: 1.0
+    assumed: true
+    reason: >
+      Multiplies the Favorita demand path so mean demand is about
+      demand_capacity_ratio of nominal plant capacity at the baseline scenario.
+      Resolved at load time by calibrate_demand_scale; 1.0 means uncalibrated.
+      Favorita units are grocery units, not units of this product, so some
+      rescaling is unavoidable.
+  demand_capacity_ratio:
+    value: 0.85
+    assumed: true
+    reason: >
+      Target mean demand as a fraction of nominal capacity. Below 1.0 so the
+      line is not permanently demand-saturated, which would make every
+      throughput lever worthless.
+  price_elasticity:
+    value: -1.2
+    assumed: true
+    reason: >
+      Demand multiplies by price_multiplier^elasticity. Favorita carries no
+      price column, so no elasticity can be estimated from it. -1.2 is a
+      conventional mildly-elastic grocery value.
+  demand_spread_multiplier:
+    value: 1.0
+    assumed: true
+    reason: >
+      Rescales each sampled demand path's deviation from its own median.
+      Exists because Model B's post-conformal coverage is uneven -- d8-14
+      averages 0.716 against a [0.76, 0.84] target, and on fold 1 an 80%
+      interval covered 65% of outcomes -- so the twin's demand paths are
+      probably too NARROW at mid-horizon and stockout risk is probably
+      UNDERSTATED. Applied inside the twin after sample_paths, never inside the
+      frozen DemandModel Protocol. Perturbed over {0.8, 1.0, 1.2, 1.4}.
+  # --- Supply --------------------------------------------------------------
+  supplier_short_ship_fraction:
+    value: 0.7
+    assumed: true
+    reason: >
+      When a supplier misses its reliability draw it delivers this fraction of
+      the order rather than nothing. A binary all-or-nothing failure would be a
+      harsher assumption with no more support.
+  lead_time_multiplier:
+    value: 1.0
+    assumed: true
+    reason: Scales supplier lead_time_days_mean, for the sensitivity study.
+
+# ---------------------------------------------------------------------------
+# Lot-based flow. One SimPy event per LOT, not per unit: a 28-day run moves
+# roughly 4,500 lots rather than 45,000 units, which is what makes the 0.25
+# s/run budget reachable.
+# ---------------------------------------------------------------------------
+flow:
+  lot_size: 10
+  # Must cover demand over a supplier lead time, or the line starves before the
+  # first delivery arrives and no inventory policy can recover. At the baseline
+  # (about 970 units/day) the incumbent's 7-day lead needs roughly 6,800 units
+  # in the yard on day zero; 8,000 leaves a little slack.
+  initial_raw_inventory: 8000.0
+  initial_finished_inventory: 0.0
+
+labour:
+  operators_per_shift: 5
+
+# ---------------------------------------------------------------------------
+# Health coupling. Failures are REPLAYED from real C-MAPSS run-to-failure
+# trajectories; the health model plays the monitoring system and issues
+# warnings from cached predictions. Sampling failures from the model's own
+# predicted distribution would be circular.
+# ---------------------------------------------------------------------------
+health_replay:
+  subset: FD002
+  model_seed: 42
+  checkpoint: models/a1_hct/a1_FD002_hct_seed42.pt
+  cache_path: models/health_cache
+  # "learned"    = replayed trajectories + cache-driven early warnings
+  # "fixed_mtbf" = lifetimes from a Weibull fitted to the pool, no warnings
+  hazard_source: learned
+  # Chosen, not measured, and chosen for a specific declared reason. The twin's
+  # ageing gives a 30-cycle failure horizon about 42 processing hours of notice,
+  # and early-warning PM is scheduled at the next shift end (at most 16 h away),
+  # so a sensitive threshold catches EVERYTHING and unplanned_failures is
+  # identically zero -- a degenerate KPI and a maintenance lever with nothing to
+  # trade. Measured over 8 seeds with PM intervals at their upper bound:
+  #
+  #   threshold   unplanned failures   PM events   mean warning lead
+  #     0.50            0.00              4.12          56.0 h
+  #     0.80            0.00              3.50          22.9 h
+  #     0.90            0.00              3.12          12.5 h
+  #     0.95            0.62              2.50           6.3 h
+  #     0.99            2.88              0.12           1.8 h
+  #
+  # 0.95 is where the monitor is informative but imperfect. This is the
+  # "fix the structure and say so" step the landscape check calls for.
+  warning_threshold: 0.95
+  min_pool_engines: 40
