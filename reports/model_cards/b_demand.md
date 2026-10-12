@@ -185,8 +185,10 @@ per horizon step `k`, from the conformity scores
 `ceil((n+1)(1−α))/n`. Per-step rather than pooled, because the width needed at
 day 1 and day 28 are not the same quantity.
 
-After calibration: **0.7765** overall (d1–7 0.830, d8–14 0.716, d15–28 0.780).
-Inside the [0.76, 0.84] target band.
+After calibration: **0.7765** overall (d1–7 0.830, d8–14 0.716,
+d15–28 0.780). The overall figure is inside the [0.76, 0.84] target band;
+the d8–14 bucket is not. See limitation 3 in §8 — the target was met on
+average and not uniformly.
 
 ---
 
@@ -385,27 +387,74 @@ identical conditions.
 
 ---
 
-## 8. Limitations
+## 8. Known limitations
+
+The five that a reviewer should weigh first, each with its number.
+
+1. **The relative-MAE target was missed: 0.8784 against a ≤ 0.85 target.** Not
+   marginally, and not within noise in a way that rescues it — the fold sd is
+   0.1579, which is wider than the 0.028 shortfall, so the miss cannot be
+   called significant *or* dismissed as noise. It is reported as a miss. The
+   model that did hit it (N-HiTS, 0.8382) is not the one that ships.
+
+2. **On fold 1 the LightGBM model is worse than the lag-7 seasonal naive:
+   relative MAE 1.0542.** One of three folds, where a one-line "same weekday
+   last week" rule beats the production model outright. Its point booster's
+   RMSLE on that fold is 0.4993 against ~0.19 on the other two. The cause was
+   not diagnosed. Until it is, nobody should describe this model as reliably
+   better than the trivial baseline — on a third of the evidence it is not.
+
+3. **Post-conformal coverage is not uniform across the horizon: d8–14 sits at
+   0.716, outside the [0.76, 0.84] target band.** The overall 0.777 passes and
+   d1–7 (0.830) and d15–28 (0.780) are inside it, but the aggregate hides a
+   middle bucket still over-confident by about four points. Per fold it is
+   worse than the average suggests:
+
+   | Bucket | fold 1 | fold 2 | mean |
+   |---|---|---|---|
+   | d1–7 | 0.830 | 0.830 | 0.830 |
+   | d8–14 | **0.649** | 0.783 | **0.716** |
+   | d15–28 | 0.821 | **0.739** | 0.780 |
+
+   Three of the six bucket×fold cells fall outside [0.76, 0.84]. So the
+   coverage target was met *on average over buckets and folds* and not
+   *anywhere near uniformly*, and an inventory policy acting on a two-week-out
+   interval is reading the weakest part of the calibration — on fold 1, an 80%
+   interval that actually covered 65% of outcomes.
+
+4. **The conformal adjustment is evaluated on 2 folds, not 3.** Offsets are
+   fitted on fold 0 and can therefore only be scored out-of-sample on folds 1
+   and 2 — about 56 validation days, 11,200 rows. So the headline 0.777 rests
+   on two numbers. The offsets themselves come from a single 28-day calibration
+   window, which is thin for estimating 28 separate per-step quantities.
+
+5. **The origin-density asymmetry is untested, and it is the first
+   follow-up.** LightGBM trains on **40 weekly subsampled origins per fold** (a
+   cost control forced by the 28× row expansion of direct multi-horizon) while
+   N-HiTS's windowing sampler sees **every available window**. If fold 1's
+   origin sits badly against that weekly grid, LightGBM is training on a worse
+   sample of the recent past than N-HiTS is — which would make the ~0.04
+   relative-MAE gap in §6 a pipeline-budget artefact rather than a model-class
+   result, and would require restating that whole comparison. The test is to
+   re-run `train_demand.py` at a denser origin grid and see whether fold 1
+   recovers. **Not run here**, and deliberately out of this session's time box.
+
+### Further caveats
 
 - **The shipped model is not the most accurate one tested.** N-HiTS beat it on
   RMSLE, MAE, relative MAE and pinball, and hit the relative-MAE target it
   missed. LightGBM ships for integration reasons (§6), which is a defensible
   trade but is a trade. The honest summary of Model B's accuracy is that the
   better of the two models was not the one deployed.
-- **LightGBM has one bad fold out of three and the cause is unknown.** On fold
-  1 it is worse than the lag-7 seasonal naive (relMAE 1.0542). The leading
-  suspect — 40 weekly subsampled training origins against N-HiTS's full
-  window sampler — was not tested. Until it is, the gap between the two models
-  cannot be attributed to the model class.
-- **The margin over seasonal naive is thin.** MASE vs lag-7 of 0.9953 means the
-  learned model is worth about half a percent over "same weekday last week" at
-  this horizon on this subset. The relative-MAE target was missed. A reviewer
-  should treat the value of Model B as "produces a calibrated distribution and
+- **The margin over seasonal naive is thin even where it is positive.** MASE vs
+  lag-7 of 0.9953 means the learned model is worth about half a percent over
+  "same weekday last week" at this horizon on this subset. A reviewer should
+  treat the value of Model B as "produces a calibrated distribution and
   correlated paths", not "forecasts much better than a trivial rule".
-- **Coverage needed conformal to reach nominal.** The raw boosters are
+- **Coverage needed conformal to reach nominal at all.** The raw boosters are
   over-confident (0.656 vs 0.800). The fix is sound and held out, but it is a
-  correction applied after the fact, and its offsets were fitted on a single
-  fold of 28 days.
+  correction applied after the fact rather than a model that was calibrated to
+  begin with.
 - **Conformal offsets are stationary.** They are fitted once and applied
   unchanged to every future origin. If volatility shifts — a promotion regime
   change, a new store — the intervals will be wrong in the direction of the
