@@ -1,6 +1,6 @@
 # Results
 
-Generated 2026-10-12T13:58:39+00:00 from `reports/results/runs.jsonl`: 64 of 100 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
+Generated 2026-10-12T16:03:28+00:00 from `reports/results/runs.jsonl`: 74 of 110 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
 
 Every cell is **mean +/- std across seeds**; `n` is the number of independent training runs behind it. C-MAPSS rows use the last-window-per-unit protocol (one prediction per test engine).
 
@@ -64,3 +64,38 @@ Every cell is **mean +/- std across seeds**; `n` is the number of independent tr
 | model | n | config | mae | coverage_80 | coverage_d15_28 | coverage_d1_7 | coverage_d8_14 | duration_s | mase_lag364 | mase_lag364_excluded | mase_lag7 | mase_lag7_excluded | naive_lag364_mae | naive_lag7_mae | pinball_mean | pinball_q10 | pinball_q50 | pinball_q90 | point_median_pinball | point_rmsle | relative_mae | rmsle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | demand_lgbm_quantile | 1 | 383a7abe | 1210.39 +/- 0.00 | 0.4330 +/- 0.0000 | 0.4167 +/- 0.0000 | 0.5179 +/- 0.0000 | 0.3810 +/- 0.0000 | 6.1667 +/- 0.0000 | 0.4393 +/- 0.0000 | 0.0000 +/- 0.0000 | 0.7357 +/- 0.0000 | 0.0000 +/- 0.0000 | 2601.67 +/- 0.00 | 1489.50 +/- 0.00 | 450.54 +/- 0.00 | 328.92 +/- 0.00 | 605.20 +/- 0.00 | 417.50 +/- 0.00 | 602.11 +/- 0.00 | 0.1443 +/- 0.0000 | 0.8104 +/- 0.0000 | 0.1466 +/- 0.0000 |
+
+## simulated / baseline
+
+| model | n | config | downtime_hours | oee | on_time_delivery_rate | profit | stockout_probability | unit_cost | units_produced | unplanned_failures |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| twin_fixed_mtbf | 1 | 0e9a0e9c | 13.20 +/- 0.00 | 0.6994 +/- 0.0000 | 0.8145 +/- 0.0000 | 325189.89 +/- 0.00 | 0.2210 +/- 0.0000 | 27.90 +/- 0.00 | 23154.27 +/- 0.00 | 1.5000 +/- 0.0000 |
+| twin_learned | 1 | 1893bd21 | 10.27 +/- 0.00 | 0.7101 +/- 0.0000 | 0.8174 +/- 0.0000 | 332068.59 +/- 0.00 | 0.2111 +/- 0.0000 | 27.53 +/- 0.00 | 23334.10 +/- 0.00 | 0.4000 +/- 0.0000 |
+
+## simulated / high_speed
+
+| model | n | config | downtime_hours | oee | on_time_delivery_rate | profit | stockout_probability | unit_cost | units_produced | unplanned_failures |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| twin_fixed_mtbf | 1 | cf36a8fc | 18.17 +/- 0.00 | 0.6157 +/- 0.0000 | 0.8237 +/- 0.0000 | 314440.67 +/- 0.00 | 0.2062 +/- 0.0000 | 26.90 +/- 0.00 | 24780.13 +/- 0.00 | 3.5667 +/- 0.0000 |
+| twin_learned | 1 | 866f2105 | 14.56 +/- 0.00 | 0.6235 +/- 0.0000 | 0.8243 +/- 0.0000 | 322587.16 +/- 0.00 | 0.2049 +/- 0.0000 | 26.51 +/- 0.00 | 24863.87 +/- 0.00 | 1.8333 +/- 0.0000 |
+
+## simulated / short_pm_intervals
+
+| model | n | config | downtime_hours | oee | on_time_delivery_rate | profit | stockout_probability | unit_cost | units_produced | unplanned_failures |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| twin_fixed_mtbf | 1 | 7c7ffc2e | 33.40 +/- 0.00 | 0.6457 +/- 0.0000 | 0.8011 +/- 0.0000 | 288749.01 +/- 0.00 | 0.2407 +/- 0.0000 | 29.49 +/- 0.00 | 22603.53 +/- 0.00 | 0.0333 +/- 0.0000 |
+| twin_learned | 1 | 9167e003 | 33.13 +/- 0.00 | 0.6437 +/- 0.0000 | 0.7990 +/- 0.0000 | 285677.01 +/- 0.00 | 0.2432 +/- 0.0000 | 29.63 +/- 0.00 | 22516.30 +/- 0.00 | 0.0000 +/- 0.0000 |
+
+## simulated / throughput_+10pct
+
+| model | n | config | downtime_hours | oee | on_time_delivery_rate | profit | stockout_probability | unit_cost | units_produced | unplanned_failures |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| twin_fixed_mtbf | 1 | 5ebb3930 | 12.52 +/- 0.00 | 0.6709 +/- 0.0000 | 0.8233 +/- 0.0000 | 334713.49 +/- 0.00 | 0.2062 +/- 0.0000 | 26.59 +/- 0.00 | 24389.60 +/- 0.00 | 1.4667 +/- 0.0000 |
+| twin_learned | 1 | 8fe44f9f | 9.5349 +/- 0.0000 | 0.6792 +/- 0.0000 | 0.8231 +/- 0.0000 | 337150.74 +/- 0.00 | 0.2037 +/- 0.0000 | 26.35 +/- 0.00 | 24503.70 +/- 0.00 | 0.3667 +/- 0.0000 |
+
+## simulated / throughput_+20pct
+
+| model | n | config | downtime_hours | oee | on_time_delivery_rate | profit | stockout_probability | unit_cost | units_produced | unplanned_failures |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| twin_fixed_mtbf | 1 | fa658532 | 12.16 +/- 0.00 | 0.6485 +/- 0.0000 | 0.8318 +/- 0.0000 | 341342.52 +/- 0.00 | 0.1914 +/- 0.0000 | 25.28 +/- 0.00 | 25689.03 +/- 0.00 | 1.4333 +/- 0.0000 |
+| twin_learned | 1 | a6c2cc6b | 9.1870 +/- 0.0000 | 0.6595 +/- 0.0000 | 0.8334 +/- 0.0000 | 349127.93 +/- 0.00 | 0.1889 +/- 0.0000 | 24.79 +/- 0.00 | 25929.60 +/- 0.00 | 0.4000 +/- 0.0000 |
