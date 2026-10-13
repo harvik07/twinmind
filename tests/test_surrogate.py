@@ -745,3 +745,237 @@ def test_resolver_auto_detects_the_default_cache(
         demand_module.CachedDemandModel, "load", staticmethod(lambda path: FakeModel())
     )
     assert module.resolve_demand_cache(None, workers=10, allow_full_frame=False) == str(default)
+
+
+# --------------------------------------------------------------------------- #
+# Transforms, model behaviour and determinism
+# --------------------------------------------------------------------------- #
+def test_every_transform_round_trips() -> None:
+    """``inverse(forward(y))`` recovers ``y`` for every KPI, on its own support."""
+    from twinmind.models.surrogate_transforms import TRANSFORMS, forward, inverse
+
+    cases = {
+        "log1p": np.array([0.0, 0.5, 10.0, 25_000.0]),
+        "logit": np.array([0.0, 0.2, 0.5, 0.95, 1.0]),
+        "standard": np.array([-620_000.0, 0.0, 493_000.0]),
+    }
+    for kpi, kind in TRANSFORMS.items():
+        values = cases[kind]
+        recovered = inverse(forward(values, kind), kind)
+        # The logit clamps exact 0 and 1 by EPSILON, so they come back close.
+        assert np.allclose(recovered, values, atol=1e-3), kpi
+
+
+def test_inverse_std_uses_the_derivative_not_the_identity() -> None:
+    """A std in log space is not a std in units; the delta method must apply.
+
+    Treating them as equal is the error that leaves point predictions correct
+    while making every calibration number meaningless, so it is pinned here.
+    """
+    from twinmind.models.surrogate_transforms import inverse_std
+
+    mean_in_log = np.array([np.log1p(1000.0)])
+    mapped = inverse_std(np.array([0.1]), mean_in_log, "log1p")
+    # The derivative of expm1 is exp, which at log1p(1000) is 1001.
+    assert mapped[0] == pytest.approx(0.1 * 1001.0, rel=1e-6)
+    assert mapped[0] > 0.1
+
+    # logit 0 maps to p = 0.5, where the sigmoid derivative is 0.25.
+    mapped_logit = inverse_std(np.array([0.1]), np.array([0.0]), "logit")
+    assert mapped_logit[0] == pytest.approx(0.1 * 0.25, rel=1e-6)
+
+
+def test_inverse_predictions_enforce_validity() -> None:
+    """Back-transformed means must land inside every KPI's domain."""
+    from twinmind.models.surrogate_transforms import inverse_predictions
+
+    rng = np.random.default_rng(0)
+    mean = rng.normal(0, 3, size=(64, len(KPI_ORDER)))
+    std = np.abs(rng.normal(0, 1, size=(64, len(KPI_ORDER))))
+    out_mean, out_std = inverse_predictions(mean, std)
+
+    assert np.all(np.isfinite(out_mean)) and np.all(np.isfinite(out_std))
+    assert np.all(out_std >= 0)
+    for index, kpi in enumerate(KPI_ORDER):
+        if kpi in BOUNDED_KPIS:
+            assert out_mean[:, index].min() >= -1e-9
+            assert out_mean[:, index].max() <= 1.0 + 1e-9
+        if kpi in NONNEGATIVE_KPIS:
+            assert out_mean[:, index].min() >= -1e-9
+
+
+def _tiny_ensemble(input_dim: int = 35, members: int = 2):  # type: ignore[no-untyped-def]
+    """A small untrained ensemble, enough to exercise the inference path."""
+    import torch
+
+    from twinmind.models.surrogate_mlp import (
+        HeteroscedasticMLP,
+        SurrogateConfig,
+        SurrogateEnsemble,
+    )
+
+    config = SurrogateConfig(input_dim=input_dim, hidden_dim=32, n_blocks=2, n_members=members)
+    nets = []
+    for index in range(members):
+        torch.manual_seed(index)
+        net = HeteroscedasticMLP(config)
+        net.eval()
+        nets.append(net)
+    n_kpis = len(KPI_ORDER)
+    return SurrogateEnsemble(
+        members=nets,
+        config=config,
+        feature_mean=np.zeros(input_dim),
+        feature_scale=np.ones(input_dim),
+        state_mean=np.zeros(len(STATE_FIELDS)),
+        state_scale=np.ones(len(STATE_FIELDS)),
+        target_mean=np.zeros(n_kpis),
+        target_scale=np.ones(n_kpis),
+    )
+
+
+def test_ensemble_output_is_valid_and_batch_matches_per_item() -> None:
+    """Predicting a batch must equal predicting each row, and stay in domain."""
+    ensemble = _tiny_ensemble()
+    features = np.random.default_rng(1).normal(size=(12, 35))
+
+    batched = ensemble.predict_features(features)
+    assert batched.mean.shape == (12, len(KPI_ORDER))
+    for row in range(12):
+        single = ensemble.predict_features(features[row : row + 1])
+        assert np.allclose(single.mean[0], batched.mean[row], atol=1e-9)
+        assert np.allclose(single.aleatoric_std[0], batched.aleatoric_std[row], atol=1e-9)
+
+
+def test_ensemble_prediction_is_deterministic() -> None:
+    """Dropout must be off at inference, or every call would differ."""
+    ensemble = _tiny_ensemble()
+    features = np.random.default_rng(2).normal(size=(8, 35))
+    first = ensemble.predict_features(features)
+    second = ensemble.predict_features(features)
+    assert np.array_equal(first.mean, second.mean)
+    assert np.array_equal(first.epistemic_std, second.epistemic_std)
+
+
+def test_epistemic_std_is_zero_for_identical_members() -> None:
+    """Epistemic uncertainty IS member disagreement, so clones must agree."""
+    import copy
+
+    ensemble = _tiny_ensemble(members=2)
+    ensemble.members[1] = copy.deepcopy(ensemble.members[0])
+    output = ensemble.predict_features(np.random.default_rng(3).normal(size=(6, 35)))
+    assert np.allclose(output.epistemic_std, 0.0, atol=1e-7)
+
+
+def test_ensemble_satisfies_the_protocol() -> None:
+    from twinmind.models.surrogate import SurrogateModel
+
+    assert isinstance(_tiny_ensemble(), SurrogateModel)
+
+
+def test_ensemble_round_trips_through_disk(tmp_path: Path) -> None:
+    """Saved and reloaded weights must predict identically."""
+    from twinmind.models.surrogate_mlp import SurrogateEnsemble
+
+    ensemble = _tiny_ensemble()
+    features = np.random.default_rng(4).normal(size=(5, 35))
+    before = ensemble.predict_features(features)
+
+    ensemble.save(tmp_path / "surrogate")
+    reloaded = SurrogateEnsemble.load(tmp_path / "surrogate")
+    after = reloaded.predict_features(features)
+    assert np.allclose(before.mean, after.mean, atol=1e-9)
+    assert np.allclose(before.epistemic_std, after.epistemic_std, atol=1e-9)
+
+
+def test_gaussian_nll_penalises_overconfidence() -> None:
+    """A tight std on a wrong mean must cost more than an honest wide one."""
+    import torch
+
+    from twinmind.models.surrogate_mlp import gaussian_nll
+
+    target = torch.zeros(1, 1)
+    wrong_mean = torch.full((1, 1), 2.0)
+    confident = gaussian_nll(wrong_mean, torch.full((1, 1), 0.1), target)
+    honest = gaussian_nll(wrong_mean, torch.full((1, 1), 2.0), target)
+    assert float(confident) > float(honest)
+
+
+# --------------------------------------------------------------------------- #
+# Noise-aware metrics
+# --------------------------------------------------------------------------- #
+def test_noise_ceiling_falls_as_label_noise_rises() -> None:
+    """The whole point: a noisier truth permits a lower maximum R-squared."""
+    from twinmind.eval.surrogate_metrics import noise_ceiling
+
+    truth = np.random.default_rng(5).normal(0, 10, size=500)
+    quiet = noise_ceiling(truth, np.full(500, 1.0), n_reps=30)
+    loud = noise_ceiling(truth, np.full(500, 8.0), n_reps=30)
+    assert 0.0 < loud < quiet < 1.0
+
+
+def test_noise_ceiling_rises_with_more_replications() -> None:
+    from twinmind.eval.surrogate_metrics import noise_ceiling
+
+    truth = np.random.default_rng(6).normal(0, 10, size=500)
+    few = noise_ceiling(truth, np.full(500, 4.0), n_reps=10)
+    many = noise_ceiling(truth, np.full(500, 4.0), n_reps=30)
+    assert many > few
+
+
+def test_a_perfect_predictor_scores_about_its_ceiling() -> None:
+    """A predictor returning the true expectation should land near R2_max.
+
+    This is the check that the ceiling means what the model card says it means.
+    """
+    from twinmind.eval.surrogate_metrics import score_kpi
+
+    rng = np.random.default_rng(7)
+    expectation = rng.normal(0, 10, size=4000)
+    rep_std = np.full(4000, 5.0)
+    observed = expectation + rng.normal(0, 5.0 / np.sqrt(30), size=4000)
+
+    score = score_kpi("profit", expectation, observed, rep_std, n_reps=30)
+    assert score.r2 == pytest.approx(score.r2_max, abs=0.02)
+    assert score.r2_ratio == pytest.approx(1.0, abs=0.02)
+
+
+def test_rank_agreement_reports_a_ceiling_below_one() -> None:
+    """Twin-vs-twin agreement is below 1 because both estimates are noisy."""
+    from twinmind.eval.surrogate_metrics import rank_agreement
+
+    rng = np.random.default_rng(8)
+    truth_mean = rng.normal(0, 10, size=400)
+    first = truth_mean + rng.normal(0, 2, size=400)
+    second = truth_mean + rng.normal(0, 2, size=400)
+    score = rank_agreement(truth_mean, first, second)
+
+    assert 0.8 < score.spearman_ceiling < 1.0
+    assert score.regret >= 0.0
+    assert 0 <= score.top10_overlap <= 10
+
+
+def test_auroc_matches_known_values() -> None:
+    """Perfect, inverted and chance separation."""
+    from twinmind.eval.surrogate_metrics import auroc
+
+    labels = np.array([False, False, True, True])
+    assert auroc(np.array([0.0, 1.0, 2.0, 3.0]), labels) == pytest.approx(1.0)
+    assert auroc(np.array([3.0, 2.0, 1.0, 0.0]), labels) == pytest.approx(0.0)
+    assert auroc(np.array([1.0, 1.0, 1.0, 1.0]), labels) == pytest.approx(0.5)
+
+
+def test_coverage_accounts_for_the_truths_own_noise() -> None:
+    """Widening the label-noise term can only raise coverage, never lower it."""
+    from twinmind.eval.surrogate_metrics import interval_coverage
+
+    rng = np.random.default_rng(9)
+    n = 500
+    truth = rng.normal(size=(n, len(KPI_ORDER)))
+    predicted = truth + rng.normal(0, 0.5, size=truth.shape)
+    model_std = np.full(truth.shape, 0.3)
+
+    tight = interval_coverage(predicted, truth, model_std, np.zeros_like(model_std))
+    wide = interval_coverage(predicted, truth, model_std, np.full(truth.shape, 0.5))
+    for kpi in KPI_ORDER:
+        assert wide[kpi] >= tight[kpi]

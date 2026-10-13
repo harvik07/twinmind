@@ -1,0 +1,252 @@
+[
+  {
+    "n_scenarios": 2048,
+    "blocks": 32,
+    "n_train_rows": 1728,
+    "n_val_rows": 320,
+    "n_features": 35,
+    "members": [
+      {
+        "seed": 42,
+        "best_epoch": 17,
+        "best_val_nll": 0.20551005005836487,
+        "epochs_run": 33,
+        "duration_s": 5.568639200000689,
+        "n_rows": 1728
+      },
+      {
+        "seed": 1042,
+        "best_epoch": 11,
+        "best_val_nll": 0.43824729323387146,
+        "epochs_run": 27,
+        "duration_s": 2.168870000001334,
+        "n_rows": 1088
+      },
+      {
+        "seed": 2042,
+        "best_epoch": 13,
+        "best_val_nll": 0.3355857729911804,
+        "epochs_run": 29,
+        "duration_s": 2.4632502000004024,
+        "n_rows": 1280
+      },
+      {
+        "seed": 3042,
+        "best_epoch": 13,
+        "best_val_nll": 0.43424779176712036,
+        "epochs_run": 29,
+        "duration_s": 2.268687300000238,
+        "n_rows": 1088
+      },
+      {
+        "seed": 4042,
+        "best_epoch": 13,
+        "best_val_nll": 0.4216315746307373,
+        "epochs_run": 29,
+        "duration_s": 1.8562480000000505,
+        "n_rows": 1024
+      }
+    ],
+    "path": "C:\\Users\\Admin\\Desktop\\TwinMind\\models\\surrogate_lc_2048"
+  },
+  {
+    "n_scenarios": 4096,
+    "blocks": 64,
+    "n_train_rows": 3456,
+    "n_val_rows": 640,
+    "n_features": 35,
+    "members": [
+      {
+        "seed": 42,
+        "best_epoch": 18,
+        "best_val_nll": -0.01136809028685093,
+        "epochs_run": 34,
+        "duration_s": 7.243335600000137,
+        "n_rows": 3456
+      },
+      {
+        "seed": 1042,
+        "best_epoch": 14,
+        "best_val_nll": 0.11780142784118652,
+        "epochs_run": 30,
+        "duration_s": 4.297939000000042,
+        "n_rows": 2112
+      },
+      {
+        "seed": 2042,
+        "best_epoch": 11,
+        "best_val_nll": 0.14590951800346375,
+        "epochs_run": 27,
+        "duration_s": 4.102544800000032,
+        "n_rows": 2496
+      },
+      {
+        "seed": 3042,
+        "best_epoch": 10,
+        "best_val_nll": 0.3628416061401367,
+        "epochs_run": 26,
+        "duration_s": 3.0189023000002635,
+        "n_rows": 1856
+      },
+      {
+        "seed": 4042,
+        "best_epoch": 16,
+        "best_val_nll": 0.2172214537858963,
+        "epochs_run": 32,
+        "duration_s": 4.5088596000005055,
+        "n_rows": 2112
+      }
+    ],
+    "path": "C:\\Users\\Admin\\Desktop\\TwinMind\\models\\surrogate_lc_4096"
+  },
+  {
+    "n_scenarios": 8192,
+    "blocks": 128,
+    "n_train_rows": 6976,
+    "n_val_rows": 1216,
+    "n_features": 35,
+    "members": [
+      {
+        "seed": 42,
+        "best_epoch": 16,
+        "best_val_nll": -0.18101586401462555,
+        "epochs_run": 32,
+        "duration_s": 13.95454670000072,
+        "n_rows": 6976
+      },
+      {
+        "seed": 1042,
+        "best_epoch": 17,
+        "best_val_nll": -0.1118609756231308,
+        "epochs_run": 33,
+        "duration_s": 9.174184299999979,
+        "n_rows": 4416
+      },
+      {
+        "seed": 2042,
+        "best_epoch": 16,
+        "best_val_nll": -0.08342143148183823,
+        "epochs_run": 32,
+        "duration_s": 8.777681499999744,
+        "n_rows": 4544
+      },
+      {
+        "seed": 3042,
+        "best_epoch": 14,
+        "best_val_nll": -0.0485796183347702,
+        "epochs_run": 30,
+        "duration_s": 7.307994700000563,
+        "n_rows": 3776
+      },
+      {
+        "seed": 4042,
+        "best_epoch": 13,
+        "best_val_nll": -0.088558129966259,
+        "epochs_run": 29,
+        "duration_s": 7.884378100001413,
+        "n_rows": 4416
+      }
+    ],
+    "path": "C:\\Users\\Admin\\Desktop\\TwinMind\\models\\surrogate_lc_8192"
+  },
+  {
+    "n_scenarios": 16384,
+    "blocks": 256,
+    "n_train_rows": 13952,
+    "n_val_rows": 2432,
+    "n_features": 35,
+    "members": [
+      {
+        "seed": 42,
+        "best_epoch": 21,
+        "best_val_nll": -0.3388669490814209,
+        "epochs_run": 37,
+        "duration_s": 31.311385499999233,
+        "n_rows": 13952
+      },
+      {
+        "seed": 1042,
+        "best_epoch": 21,
+        "best_val_nll": -0.26757359504699707,
+        "epochs_run": 37,
+        "duration_s": 26.269007499999134,
+        "n_rows": 9088
+      },
+      {
+        "seed": 2042,
+        "best_epoch": 16,
+        "best_val_nll": -0.24981223046779633,
+        "epochs_run": 32,
+        "duration_s": 5398.623838799998,
+        "n_rows": 8448
+      },
+      {
+        "seed": 3042,
+        "best_epoch": 14,
+        "best_val_nll": -0.23329730331897736,
+        "epochs_run": 30,
+        "duration_s": 22.47706939999989,
+        "n_rows": 8384
+      },
+      {
+        "seed": 4042,
+        "best_epoch": 13,
+        "best_val_nll": -0.23653613030910492,
+        "epochs_run": 29,
+        "duration_s": 19.930383700000675,
+        "n_rows": 9216
+      }
+    ],
+    "path": "C:\\Users\\Admin\\Desktop\\TwinMind\\models\\surrogate_lc_16384"
+  },
+  {
+    "n_scenarios": 32768,
+    "blocks": 512,
+    "n_train_rows": 27840,
+    "n_val_rows": 4928,
+    "n_features": 35,
+    "members": [
+      {
+        "seed": 42,
+        "best_epoch": 31,
+        "best_val_nll": -0.47745805978775024,
+        "epochs_run": 47,
+        "duration_s": 91.5125263000009,
+        "n_rows": 27840
+      },
+      {
+        "seed": 1042,
+        "best_epoch": 27,
+        "best_val_nll": -0.39363881945610046,
+        "epochs_run": 43,
+        "duration_s": 54.7119735999986,
+        "n_rows": 17664
+      },
+      {
+        "seed": 2042,
+        "best_epoch": 24,
+        "best_val_nll": -0.404135525226593,
+        "epochs_run": 40,
+        "duration_s": 57.56088279999858,
+        "n_rows": 17600
+      },
+      {
+        "seed": 3042,
+        "best_epoch": 19,
+        "best_val_nll": -0.3890002369880676,
+        "epochs_run": 35,
+        "duration_s": 44.7285568999996,
+        "n_rows": 16448
+      },
+      {
+        "seed": 4042,
+        "best_epoch": 24,
+        "best_val_nll": -0.4438158869743347,
+        "epochs_run": 40,
+        "duration_s": 54.73254679999991,
+        "n_rows": 17728
+      }
+    ],
+    "path": "C:\\Users\\Admin\\Desktop\\TwinMind\\models\\surrogate_lc_32768"
+  }
+]

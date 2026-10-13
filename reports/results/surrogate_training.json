@@ -1,0 +1,192 @@
+{
+  "rollout_manifest": {
+    "git_sha": "0179e84",
+    "created": "2026-10-13T09:25:10.508752+00:00",
+    "twin_config_hash": "d38e63f94f8f0524",
+    "health_checkpoint_hash": "fef1bfb1ac7669f3",
+    "health_cache_hash": "05364f76226897c7",
+    "demand_config_hash": "ebe045d8fcb8216e",
+    "demand_scale": 0.43847218688809303,
+    "series_id": "1_GROCERY I",
+    "assumptions": {
+      "life_scale_hours_per_cycle": 1.4,
+      "mean_life_operating_days": 18.0,
+      "wear_exponent": 2.0,
+      "defect_base_probability": 0.012,
+      "defect_speed_exponent": 3.0,
+      "energy_speed_exponent": 2.0,
+      "processing_cv": 0.25,
+      "planned_repair_multiplier": 1.0,
+      "unplanned_repair_multiplier": 1.0,
+      "demand_scale": 1.0,
+      "demand_capacity_ratio": 0.85,
+      "price_elasticity": -1.2,
+      "demand_spread_multiplier": 1.0,
+      "supplier_short_ship_fraction": 0.7,
+      "lead_time_multiplier": 1.0
+    },
+    "hazard_source": "learned",
+    "warning_threshold": 0.95,
+    "lot_size": 10,
+    "scenario_dims": [
+      "throughput_multiplier",
+      "shift_count",
+      "overtime_hours",
+      "pm_interval_M1",
+      "pm_interval_M2",
+      "pm_interval_M3",
+      "pm_interval_M4",
+      "pm_interval_M5",
+      "speed_setpoint_M1",
+      "speed_setpoint_M2",
+      "speed_setpoint_M3",
+      "speed_setpoint_M4",
+      "speed_setpoint_M5",
+      "supplier_choice",
+      "reorder_point",
+      "order_quantity",
+      "safety_stock",
+      "price_multiplier"
+    ],
+    "kpi_order": [
+      "units_produced",
+      "oee",
+      "unit_cost",
+      "profit",
+      "stockout_probability",
+      "downtime_hours",
+      "unplanned_failures",
+      "on_time_delivery_rate"
+    ],
+    "state_fields": [
+      "rul_mean_M1",
+      "rul_std_M1",
+      "rul_mean_M2",
+      "rul_std_M2",
+      "rul_mean_M3",
+      "rul_std_M3",
+      "rul_mean_M4",
+      "rul_std_M4",
+      "rul_mean_M5",
+      "rul_std_M5",
+      "raw_inventory",
+      "finished_inventory",
+      "demand_q10_mean",
+      "demand_q50_mean",
+      "demand_q90_mean"
+    ],
+    "n_reps": 10,
+    "scenarios_per_context": 64,
+    "scramble_seed": 12345,
+    "seed_root": 20250101,
+    "train_origin_window": [
+      "2016-01-01",
+      "2017-06-20"
+    ],
+    "split": "train"
+  },
+  "n_rows": 32768,
+  "training": {
+    "n_train_rows": 27840,
+    "n_val_rows": 4928,
+    "n_features": 35,
+    "members": [
+      {
+        "seed": 42,
+        "best_epoch": 31,
+        "best_val_nll": -0.47745805978775024,
+        "epochs_run": 47,
+        "duration_s": 81.14528059999975,
+        "n_rows": 27840
+      },
+      {
+        "seed": 1042,
+        "best_epoch": 27,
+        "best_val_nll": -0.39363881945610046,
+        "epochs_run": 43,
+        "duration_s": 44.51543750000019,
+        "n_rows": 17664
+      },
+      {
+        "seed": 2042,
+        "best_epoch": 24,
+        "best_val_nll": -0.404135525226593,
+        "epochs_run": 40,
+        "duration_s": 41.815425500000856,
+        "n_rows": 17600
+      },
+      {
+        "seed": 3042,
+        "best_epoch": 19,
+        "best_val_nll": -0.3890002369880676,
+        "epochs_run": 35,
+        "duration_s": 34.12985459999982,
+        "n_rows": 16448
+      },
+      {
+        "seed": 4042,
+        "best_epoch": 24,
+        "best_val_nll": -0.4438158869743347,
+        "epochs_run": 40,
+        "duration_s": 42.238213099999484,
+        "n_rows": 17728
+      }
+    ],
+    "total_duration_s": 244.31187900000077
+  },
+  "baselines": {
+    "ridge": {
+      "val_rmse_standardised": 0.5168374872620837,
+      "val_r2": {
+        "units_produced": 0.8416289312267318,
+        "oee": 0.8729617061073753,
+        "unit_cost": 0.7940985492269284,
+        "profit": 0.6980272269556815,
+        "stockout_probability": 0.6867103288959069,
+        "downtime_hours": 0.71241218209708,
+        "unplanned_failures": 0.5537241055026556,
+        "on_time_delivery_rate": 0.6971605951689874
+      }
+    },
+    "lightgbm": {
+      "val_rmse_standardised": 0.27798888607452515,
+      "val_r2": {
+        "units_produced": 0.9828899467600003,
+        "oee": 0.9824337281145502,
+        "unit_cost": 0.960764480537494,
+        "profit": 0.9629534464629492,
+        "stockout_probability": 0.9418637451321644,
+        "downtime_hours": 0.8976872043085093,
+        "unplanned_failures": 0.7023200560105396,
+        "on_time_delivery_rate": 0.9498550330579772
+      }
+    },
+    "single_mlp": {
+      "val_rmse_standardised": 0.2745479298955755,
+      "val_r2": {
+        "units_produced": 0.9809232646445499,
+        "oee": 0.9848204711610606,
+        "unit_cost": 0.9610219597649822,
+        "profit": 0.9746876565802322,
+        "stockout_probability": 0.9447506688381491,
+        "downtime_hours": 0.8885568527772794,
+        "unplanned_failures": 0.7099745103667056,
+        "on_time_delivery_rate": 0.9519141926065552
+      },
+      "best_val_nll": -0.47745805978775024
+    },
+    "ensemble": {
+      "val_rmse_standardised": 0.27017692099966295,
+      "val_r2": {
+        "units_produced": 0.9813648930029778,
+        "oee": 0.9855229185478944,
+        "unit_cost": 0.9614210171778526,
+        "profit": 0.9754466787908024,
+        "stockout_probability": 0.9487165517147838,
+        "downtime_hours": 0.8885776680954977,
+        "unplanned_failures": 0.7212012024017029,
+        "on_time_delivery_rate": 0.9538124254206656
+      }
+    }
+  }
+}
