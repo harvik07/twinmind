@@ -42,7 +42,11 @@ asserts the two entry points return bit-identical arrays.
 
 from __future__ import annotations
 
+import weakref
+from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -54,10 +58,23 @@ from twinmind.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-#: Cached per process, keyed by (id(model), series_id, origin, horizon). Built
-#: lazily and never mutated, so it is safe under multiprocessing "spawn": each
-#: worker imports this module fresh and fills its own.
-_SAMPLER_MEMO: dict[tuple[int, str, pd.Timestamp, int], DemandSampler] = {}
+#: Samplers, cached per process and keyed on the MODEL OBJECT via a weak
+#: reference, then on (series_id, origin, horizon) within it.
+#:
+#: This was keyed on ``id(model)`` and that was a real bug, not a style point.
+#: ``id()`` is a memory address and CPython reuses addresses: once a model is
+#: garbage-collected, a newly allocated one can land at the same address and
+#: inherit the dead model's cached samplers. The symptom is a twin that silently
+#: forecasts with the wrong demand model -- caught by a test that passed alone
+#: and failed when earlier tests had allocated and freed a stub model first.
+#:
+#: A WeakKeyDictionary cannot have that collision, because the key holds the
+#: live object: an address cannot be reused while its entry exists, and the
+#: entry disappears when the model does. It is still safe under "spawn" --
+#: each worker imports this module fresh and fills its own.
+_SAMPLER_MEMO: weakref.WeakKeyDictionary[
+    Any, dict[tuple[str, pd.Timestamp, int], DemandSampler]
+] = weakref.WeakKeyDictionary()
 
 
 @dataclass(frozen=True)
@@ -138,12 +155,21 @@ class DemandSampler:
 def get_sampler(
     model: DemandModel, series_id: str, origin: pd.Timestamp, horizon: int
 ) -> DemandSampler:
-    """A memoised :class:`DemandSampler`, built at most once per process."""
-    key = (id(model), str(series_id), pd.Timestamp(origin), int(horizon))
-    cached = _SAMPLER_MEMO.get(key)
+    """A memoised :class:`DemandSampler`, built at most once per model per origin.
+
+    A model that cannot be weak-referenced simply is not memoised, which costs
+    time and never correctness.
+    """
+    key = (str(series_id), pd.Timestamp(origin), int(horizon))
+    try:
+        per_model = _SAMPLER_MEMO.setdefault(model, {})
+    except TypeError:
+        return DemandSampler.from_model(model, series_id, origin, horizon)
+
+    cached = per_model.get(key)
     if cached is None:
         cached = DemandSampler.from_model(model, series_id, origin, horizon)
-        _SAMPLER_MEMO[key] = cached
+        per_model[key] = cached
     return cached
 
 
@@ -218,3 +244,137 @@ def calibrate_demand_scale(
         nominal_capacity_per_day,
     )
     return scale
+
+
+@dataclass(frozen=True)
+class CachedDemandModel:
+    """The demand forecast as precomputed grids, with no Favorita frame behind it.
+
+    WHY THIS EXISTS: a measured memory wall, not a guess.
+
+    Each rollout worker was holding 1.33 GB, of which **0.71 GB was the
+    featurised Favorita frame** (336,800 x 47) and another 0.15 GB the LightGBM
+    boosters. On a 7.3 GB machine that caps the pool at about 4 workers, and an
+    11-worker pool died outright. But the twin never touches that frame at run
+    time: it asks the sampler for one calibrated quantile grid per
+    ``(series, origin)``, and the grid cannot change, because the forecast does
+    not depend on the scenario or the seed.
+
+    So the grids are computed once, offline, and stored. A worker then carries
+    about 0.47 GB instead of 1.33 GB, which is what makes a larger pool
+    possible. The sampling code is untouched -- this object exposes the same two
+    private methods ``DemandSampler.from_model`` already uses, so there is still
+    exactly one sampling implementation and the equivalence is tested.
+    """
+
+    levels: NDArray[np.float64]
+    grids: dict[tuple[str, pd.Timestamp], NDArray[np.float64]]
+    correlation: NDArray[np.float64]
+    series_ids: tuple[str, ...]
+
+    def _predict_grid(
+        self, series_id: str, origin: pd.Timestamp, horizon: int
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """The stored calibrated quantile grid, sliced to ``horizon``."""
+        key = (str(series_id), pd.Timestamp(origin))
+        grid = self.grids.get(key)
+        if grid is None:
+            raise KeyError(
+                f"no cached demand grid for {key}. The cache is built for a fixed set "
+                "of origins; rebuild it with scripts/build_demand_cache.py if the "
+                "rollout design's origins changed."
+            )
+        if horizon > grid.shape[0]:
+            raise ValueError(f"cached grid covers {grid.shape[0]} steps, {horizon} requested")
+        return self.levels, grid[:horizon]
+
+    def _correlation_for(self, horizon: int) -> NDArray[np.float64]:
+        """The copula correlation, sliced to ``horizon``."""
+        if horizon > self.correlation.shape[0]:
+            raise ValueError(
+                f"cached copula covers {self.correlation.shape[0]} steps, {horizon} requested"
+            )
+        return self.correlation[:horizon, :horizon]
+
+    def quantiles(self, series_id: str, origin: pd.Timestamp, horizon: int) -> Any:
+        """Headline q10/q50/q90, so this still satisfies ``DemandModel``."""
+        from twinmind.models.demand import DemandQuantiles
+
+        levels, values = self._predict_grid(series_id, origin, horizon)
+        picked = {q: values[:, int(np.argmin(np.abs(levels - q)))] for q in (0.1, 0.5, 0.9)}
+        return DemandQuantiles(
+            horizon=horizon,
+            q10=picked[0.1].tolist(),
+            q50=picked[0.5].tolist(),
+            q90=picked[0.9].tolist(),
+        )
+
+    def sample_paths(
+        self,
+        series_id: str,
+        origin: pd.Timestamp,
+        horizon: int,
+        n_samples: int,
+        seed: int,
+    ) -> NDArray[np.float64]:
+        """Delegates to the one sampler, so there is no second implementation."""
+        return get_sampler(self, series_id, origin, horizon).sample(n_samples, seed)
+
+    def save(self, path: Path) -> Path:
+        """Write the cache as a single compressed ``.npz``."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        keys = sorted(self.grids)
+        np.savez_compressed(
+            path,
+            levels=self.levels,
+            correlation=self.correlation,
+            series=np.array([k[0] for k in keys]),
+            origins=np.array([str(k[1].date()) for k in keys]),
+            grids=np.stack([self.grids[k] for k in keys]),
+        )
+        logger.info("wrote demand grid cache %s (%d grids)", path, len(keys))
+        return path
+
+    @classmethod
+    def load(cls, path: Path) -> CachedDemandModel:
+        """Read a cache written by :meth:`save`."""
+        with np.load(Path(path), allow_pickle=False) as payload:
+            series = [str(s) for s in payload["series"]]
+            origins = [pd.Timestamp(str(o)) for o in payload["origins"]]
+            grids = payload["grids"].astype("float64")
+            return cls(
+                levels=payload["levels"].astype("float64"),
+                grids={
+                    (s, o): grids[i] for i, (s, o) in enumerate(zip(series, origins, strict=True))
+                },
+                correlation=payload["correlation"].astype("float64"),
+                series_ids=tuple(sorted(set(series))),
+            )
+
+    @classmethod
+    def build(
+        cls,
+        model: DemandModel,
+        series_id: str,
+        origins: Sequence[pd.Timestamp],
+        horizon: int,
+    ) -> CachedDemandModel:
+        """Precompute the grid for every origin the rollout design will use."""
+        grid_fn = getattr(model, "_predict_grid", None)
+        if not callable(grid_fn):
+            raise TypeError("model does not expose a quantile grid to cache")
+        levels = None
+        grids: dict[tuple[str, pd.Timestamp], NDArray[np.float64]] = {}
+        for origin in origins:
+            stamp = pd.Timestamp(origin)
+            levels, values = grid_fn(series_id, stamp, horizon)
+            grids[(str(series_id), stamp)] = np.asarray(values, dtype="float64")
+        if levels is None:
+            raise ValueError("no origins supplied")
+        return cls(
+            levels=np.asarray(levels, dtype="float64"),
+            grids=grids,
+            correlation=model._correlation_for(horizon),  # type: ignore[attr-defined]
+            series_ids=(str(series_id),),
+        )

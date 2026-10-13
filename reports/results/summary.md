@@ -1,6 +1,6 @@
 # Results
 
-Generated 2026-10-12T16:03:28+00:00 from `reports/results/runs.jsonl`: 74 of 110 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
+Generated 2026-10-13T13:38:42+00:00 from `reports/results/runs.jsonl`: 78 of 114 runs, keeping only the newest configuration per model so superseded runs are never averaged in.
 
 Every cell is **mean +/- std across seeds**; `n` is the number of independent training runs behind it. C-MAPSS rows use the last-window-per-unit protocol (one prediction per test engine).
 
@@ -64,6 +64,20 @@ Every cell is **mean +/- std across seeds**; `n` is the number of independent tr
 | model | n | config | mae | coverage_80 | coverage_d15_28 | coverage_d1_7 | coverage_d8_14 | duration_s | mase_lag364 | mase_lag364_excluded | mase_lag7 | mase_lag7_excluded | naive_lag364_mae | naive_lag7_mae | pinball_mean | pinball_q10 | pinball_q50 | pinball_q90 | point_median_pinball | point_rmsle | relative_mae | rmsle |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | demand_lgbm_quantile | 1 | 383a7abe | 1210.39 +/- 0.00 | 0.4330 +/- 0.0000 | 0.4167 +/- 0.0000 | 0.5179 +/- 0.0000 | 0.3810 +/- 0.0000 | 6.1667 +/- 0.0000 | 0.4393 +/- 0.0000 | 0.0000 +/- 0.0000 | 0.7357 +/- 0.0000 | 0.0000 +/- 0.0000 | 2601.67 +/- 0.00 | 1489.50 +/- 0.00 | 450.54 +/- 0.00 | 328.92 +/- 0.00 | 605.20 +/- 0.00 | 417.50 +/- 0.00 | 602.11 +/- 0.00 | 0.1443 +/- 0.0000 | 0.8104 +/- 0.0000 | 0.1466 +/- 0.0000 |
+
+## rollouts / T1+T2+OOD
+
+| model | n | config | downtime_hours_r2 | downtime_hours_r2_ratio | oee_r2 | oee_r2_ratio | on_time_delivery_rate_r2 | on_time_delivery_rate_r2_ratio | ood_separation_auroc | profit_r2 | profit_r2_ratio | speedup_vs_twin | stockout_probability_r2 | stockout_probability_r2_ratio | t2_regret | t2_spearman | t2_spearman_ceiling | t2_top10 | unit_cost_r2 | unit_cost_r2_ratio | units_produced_r2 | units_produced_r2_ratio | unplanned_failures_r2 | unplanned_failures_r2_ratio |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| surrogate_ensemble | 1 | 66a479f1 | 0.9070 +/- 0.0000 | 0.9102 +/- 0.0000 | 0.9905 +/- 0.0000 | 0.9919 +/- 0.0000 | 0.9903 +/- 0.0000 | 0.9919 +/- 0.0000 | 0.5457 +/- 0.0000 | 0.9816 +/- 0.0000 | 0.9855 +/- 0.0000 | 59015.16 +/- 0.00 | 0.9900 +/- 0.0000 | 0.9916 +/- 0.0000 | 0.0000 +/- 0.0000 | 0.9917 +/- 0.0000 | 0.9960 +/- 0.0000 | 8.0000 +/- 0.0000 | 0.9436 +/- 0.0000 | 0.9710 +/- 0.0000 | 0.9919 +/- 0.0000 | 0.9929 +/- 0.0000 | 0.7331 +/- 0.0000 | 0.7447 +/- 0.0000 |
+
+## rollouts / val
+
+| model | n | config | downtime_hours_r2 | oee_r2 | on_time_delivery_rate_r2 | profit_r2 | stockout_probability_r2 | unit_cost_r2 | units_produced_r2 | unplanned_failures_r2 | val_rmse_standardised |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| surrogate_lightgbm | 1 | bf9c7ee0 | 0.8977 +/- 0.0000 | 0.9824 +/- 0.0000 | 0.9499 +/- 0.0000 | 0.9630 +/- 0.0000 | 0.9419 +/- 0.0000 | 0.9608 +/- 0.0000 | 0.9829 +/- 0.0000 | 0.7023 +/- 0.0000 | 0.2780 +/- 0.0000 |
+| surrogate_ridge | 1 | ea0d546d | 0.7124 +/- 0.0000 | 0.8730 +/- 0.0000 | 0.6972 +/- 0.0000 | 0.6980 +/- 0.0000 | 0.6867 +/- 0.0000 | 0.7941 +/- 0.0000 | 0.8416 +/- 0.0000 | 0.5537 +/- 0.0000 | 0.5168 +/- 0.0000 |
+| surrogate_single_mlp | 1 | ef22cf42 | 0.8886 +/- 0.0000 | 0.9848 +/- 0.0000 | 0.9519 +/- 0.0000 | 0.9747 +/- 0.0000 | 0.9448 +/- 0.0000 | 0.9610 +/- 0.0000 | 0.9809 +/- 0.0000 | 0.7100 +/- 0.0000 | 0.2745 +/- 0.0000 |
 
 ## simulated / baseline
 

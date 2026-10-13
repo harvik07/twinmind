@@ -71,7 +71,7 @@
     "realised_lag1_residual": 0.3513524411193391,
     "across_sample_step_dependence": 0.2953001922363503,
     "copula_lag1_target": 0.32957070808231415,
-    "share_inside_80_band": 0.42857142857142855,
+    "share_inside_80_band": null,
     "tolerances": {
       "mean_rel": 0.25,
       "sd_rel": 0.5,
@@ -81,7 +81,7 @@
     "copula_reproduced": true,
     "mean_passes": true,
     "sd_passes": true,
-    "band_passes": false
+    "band_passes": null
   },
   "scenarios": {
     "reps": 30,
@@ -1008,5 +1008,29 @@
       "material": false
     },
     "unstable_parameters": []
+  },
+  "demand_band_coverage": {
+    "n_series": 50,
+    "n_observations": 1400,
+    "origin": "2017-07-18",
+    "scored_window": [
+      "2017-07-19",
+      "2017-08-15"
+    ],
+    "training_window_from_config": [
+      "2013-01-01",
+      "2017-08-15"
+    ],
+    "in_sample": true,
+    "coverage_overall": 0.7735714285714286,
+    "per_series_sd": 0.10861716468008341,
+    "per_series_min": 0.4642857142857143,
+    "per_series_max": 0.9285714285714286,
+    "coverage_d1_7": 0.8114285714285714,
+    "n_d1_7": 350,
+    "coverage_d8_14": 0.7457142857142857,
+    "n_d8_14": 350,
+    "coverage_d15_28": 0.7685714285714286,
+    "n_d15_28": 700
   }
 }
