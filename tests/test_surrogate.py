@@ -95,9 +95,17 @@ def synthetic_shard(
     split: str = "train",
     seed_root: int = 1,
     n_reps: int = 10,
+    scramble: int = 0,
 ) -> Path:
-    """Write one tiny rollout shard with the real column layout."""
-    rng = np.random.default_rng(block + 1)
+    """Write one tiny rollout shard with the real column layout.
+
+    ``scramble`` stands in for the real splits' different Sobol scramble seeds:
+    train and test draw from separate sequences, so the same block number names
+    different points. Without it a train and a test block would generate
+    identical scenarios and a disjointness test would fail for a reason that
+    does not exist in the real data.
+    """
+    rng = np.random.default_rng((scramble, block + 1))
     bounds = scenario_bounds()
     rows = []
     for position in range(n_scenarios):
@@ -437,29 +445,86 @@ def test_state_statistics_come_from_the_given_rows_only(tmp_path: Path) -> None:
     assert np.allclose(subset_mean, data.state_matrix()[train_index].mean(axis=0))
 
 
-def test_train_and_test_scenario_ids_and_seeds_are_disjoint(tmp_path: Path) -> None:
-    """Ids, contexts AND seeds must all be disjoint, not just the files."""
+def test_train_and_test_scenario_points_and_contexts_are_disjoint(tmp_path: Path) -> None:
+    """Disjointness is a property of the POINTS, not of the index labels.
+
+    An earlier version of this test asserted ``scenario_index`` sets were
+    disjoint, and it passed only because the fixture below used an offset. In
+    the real data they overlap completely: ``scenario_index`` is a position in
+    each split's **own** Sobol sequence, so training uses 0..32767 and T1 uses
+    0..999. The two sequences carry different scramble seeds, so the same
+    integer names a different point in the 18-D space, and the real splits share
+    **zero** scenario vectors and **zero** contexts.
+
+    Asserting on labels rather than on the thing the labels name is how a test
+    passes while saying nothing, so this checks the vectors.
+    """
     train_dir, test_dir = tmp_path / "train", tmp_path / "test_t1"
     for block in range(3):
         synthetic_shard(train_dir, block=block, n_scenarios=8, index_offset=8 * block, seed_root=1)
     for block in range(2):
+        # Deliberately the SAME index range as training, as the real splits
+        # have, so this test cannot pass on the labels alone.
         synthetic_shard(
             test_dir,
-            block=100 + block,
+            block=block,
             n_scenarios=8,
-            index_offset=5000 + 8 * block,
+            index_offset=8 * block,
             split="test",
             seed_root=9,
+            scramble=7,
         )
     train = load_rollouts(train_dir)
     test = load_rollouts(test_dir, allow_test=True)
 
-    assert not set(train.scenario_indices.tolist()) & set(test.scenario_indices.tolist())
-    assert not set(train.context_blocks.tolist()) & set(test.context_blocks.tolist())
-    train_seeds = {s for row in train.seeds() for s in row}
-    test_seeds = {s for row in test.seeds() for s in row}
-    assert train_seeds and test_seeds
-    assert not (train_seeds & test_seeds)
+    def points(data: object) -> set[tuple[float, ...]]:
+        return {tuple(np.round(row, 9)) for row in data.scenario_matrix()}  # type: ignore[attr-defined]
+
+    assert points(train) and points(test)
+    assert not (points(train) & points(test))
+
+    def contexts(data: object) -> set[tuple[object, ...]]:
+        frame = data.frame  # type: ignore[attr-defined]
+        columns = [c for c in frame.columns if c.startswith("state_")]
+        return {
+            (origin, *np.round(row, 9))
+            for origin, row in zip(frame["origin"], frame[columns].to_numpy(), strict=True)
+        }
+
+    assert not (contexts(train) & contexts(test))
+
+
+def test_replication_seeds_collide_only_at_the_birthday_rate(tmp_path: Path) -> None:
+    """Seeds are 32-bit, so a few collisions are expected and are not leakage.
+
+    The real splits share 2 seed VALUES between 327,680 training draws and
+    30,000 test draws, against a birthday expectation of
+    ``327680 * 30000 / 2**32 = 2.29``, and 11 collisions within training against
+    an expectation of 12.5. None of them shares a ``(scenario, context)``, so no
+    test replication reproduces a training one; a shared seed at a different
+    scenario is simply a different run.
+
+    What would be real leakage is the same seed at the same scenario and
+    context, which is what this asserts cannot happen across splits.
+    """
+    train_dir, test_dir = tmp_path / "train", tmp_path / "test_t1"
+    synthetic_shard(train_dir, block=0, n_scenarios=8, seed_root=1)
+    synthetic_shard(test_dir, block=0, n_scenarios=8, split="test", seed_root=9, scramble=7)
+    train = load_rollouts(train_dir)
+    test = load_rollouts(test_dir, allow_test=True)
+
+    train_rows = {
+        (tuple(np.round(point, 9)), seed)
+        for point, seeds in zip(train.scenario_matrix(), train.seeds(), strict=True)
+        for seed in seeds
+    }
+    test_rows = {
+        (tuple(np.round(point, 9)), seed)
+        for point, seeds in zip(test.scenario_matrix(), test.seeds(), strict=True)
+        for seed in seeds
+    }
+    assert train_rows and test_rows
+    assert not (train_rows & test_rows)
 
 
 # --------------------------------------------------------------------------- #
