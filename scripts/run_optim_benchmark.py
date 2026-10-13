@@ -520,6 +520,10 @@ def main() -> int:
     )
     if not tasks:
         logger.info("nothing to do; every cell is present")
+        if args.smoke:
+            # Still print the projection: a resumed smoke run is exactly when
+            # someone wants to know how long the real one will take.
+            _estimate_full_run(out, workers, len(args.seeds))
         return 0
 
     started = time.perf_counter()
@@ -566,27 +570,7 @@ def main() -> int:
             workers,
         )
     if args.smoke:
-        per_cell = elapsed / max(done, 1)
-        full_cells = 12 * len(METHODS) * len(args.seeds)
-        # Smoke budgets are ~1/500 of the full ones, so per-cell time scales
-        # roughly with budget. This is an order-of-magnitude estimate and is
-        # labelled as one.
-        logger.info("=== duration estimate for the full run ===")
-        logger.info("  smoke: %.1f s/cell over %d cells at ~1/500 budget", per_cell, done)
-        for factor in (100, 200, 400):
-            hours = full_cells * per_cell * factor / 3600.0 / workers
-            logger.info(
-                "  if full cells cost %dx the smoke cells: %.1f h on %d workers",
-                factor,
-                hours,
-                workers,
-            )
-        logger.info(
-            "  (%d cells = 12 held-out goals x %d methods x %d seeds)",
-            full_cells,
-            len(METHODS),
-            len(args.seeds),
-        )
+        _estimate_full_run(out, workers, len(args.seeds))
 
     summary = {"cells": done, "elapsed_s": elapsed, "out": str(out), "manifest": manifest}
     write_atomic(
@@ -595,6 +579,69 @@ def main() -> int:
         / ("optim_benchmark_smoke.json" if args.smoke else "optim_benchmark_run.json"),
     )
     return 0
+
+
+def _estimate_full_run(out: Path, workers: int, n_seeds: int) -> None:
+    """Project the full run from the configured budgets, not from smoke wall time.
+
+    Scaling the smoke wall time by a guessed factor spans 7.5 to 30 hours, which
+    is too wide to plan around. The full run is dominated by TWIN runs, and the
+    number of those is known exactly from the budgets rather than guessed, so
+    the projection is built from them and a measured throughput.
+    """
+    n_cells = n_seeds * 12  # 12 held-out goals
+    # Twin runs per cell, from the configured budgets.
+    per_cell_twin = {
+        "sf_random": 20 * 10 + 30,
+        "sf_tpe": 20 * 10 + 30,
+        "sf_cmaes": 20 * 10 + 30,
+        "surrogate_only": 30,
+        "twin_tpe": 300 * 5 + 30,
+        "twin_cmaes": 300 * 5 + 30,
+        "best_known": 100 * 30,
+    }
+    per_cell_surrogate = {
+        "sf_random": 50_000,
+        "sf_tpe": 3_000,
+        "sf_cmaes": 20_000,
+        "surrogate_only": 20_000,
+        "twin_tpe": 0,
+        "twin_cmaes": 0,
+        "best_known": 500_000,
+    }
+    total_twin = sum(v * n_cells for v in per_cell_twin.values())
+    total_surrogate = sum(v * n_cells for v in per_cell_surrogate.values())
+
+    # Measured on this machine: 27.5 twin runs/s on 6 workers with the grid
+    # cache (reports/data_cards/rollouts.md section 4).
+    twin_hours = total_twin / 27.5 / 3600.0
+    # The surrogate's batched rate is 0.079 ms/scenario, but TPE and CMA-ES
+    # evaluate in small batches where per-call overhead dominates, so the range
+    # spans both.
+    best_case = total_surrogate * 0.079e-3 / workers / 3600.0
+    worst_case = total_surrogate * 2.0e-3 / workers / 3600.0
+
+    logger.info("=== duration estimate for the full run ===")
+    logger.info(
+        "  %d cells (12 held-out goals x %d methods x %d seeds)",
+        n_cells * len(per_cell_twin),
+        len(per_cell_twin),
+        n_seeds,
+    )
+    logger.info("  %s twin runs -> %.1f h at a measured 27.5 runs/s", f"{total_twin:,}", twin_hours)
+    logger.info(
+        "  %s surrogate evals -> %.1f to %.1f h depending on batch size",
+        f"{total_surrogate:,}",
+        best_case,
+        worst_case,
+    )
+    logger.info(
+        "  TOTAL: %.1f to %.1f hours on %d workers (twin-dominated)",
+        twin_hours + best_case,
+        twin_hours + worst_case,
+        workers,
+    )
+    del out
 
 
 def _hms(seconds: float) -> str:

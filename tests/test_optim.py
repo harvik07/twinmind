@@ -745,3 +745,41 @@ def test_surrogate_only_skips_verification(monkeypatch: pytest.MonkeyPatch) -> N
     # Only the 4 final replications touched the twin, not a shortlist of 20.
     assert resources.calls == 4
     assert plans[0].surrogate_twin_gap["profit"] > 0
+
+
+def test_benchmark_smoke_runs_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The --smoke path must construct and run a cell with fakes.
+
+    Not a subprocess test: the real smoke needs the trained surrogate and the
+    health cache, which the non-data suite does not have. This exercises the
+    cell-construction and dispatch logic with the same fakes used above, which
+    is the part that breaks when a method name or a budget key is mistyped.
+    """
+    module = _benchmark_module()
+    _patch_twin(monkeypatch)
+
+    goal = next(g for g in load_goals(split="dev") if not g.spec.infeasible_by_design)
+    for method in ("sf_random", "surrogate_only", "twin_tpe", "best_known"):
+        cell = module.Cell(goal=goal.name, method=method, seed=1)
+        result = module.run_cell(
+            cell,
+            goal,
+            context=None,
+            surrogate=FakeSurrogate(bias=10_000.0),
+            resources=FakeTwinResources(),
+            novelty=None,
+            smoke=True,
+        )
+        assert result["method"] == method
+        assert result["goal"] == goal.name
+        assert result["plans"], method
+        # Every cell must round-trip through JSON, since that is how it is stored.
+        restored = json.loads(json.dumps(result, default=str))
+        assert restored["method"] == method
+
+
+def test_every_method_has_a_budget() -> None:
+    """A mistyped method name would otherwise fail only hours into the run."""
+    module = _benchmark_module()
+    assert set(module.METHODS) == set(module.BUDGETS)
+    assert all(v > 0 for v in module.BUDGETS.values())
