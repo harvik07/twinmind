@@ -170,6 +170,29 @@ origins into **805 KB**, and a worker then holds **0.15 GB instead of 1.33 GB**,
 a 9× reduction. A test asserts the cached and full models give **bit-identical**
 twin output.
 
+### The cache is not optional, and the code now enforces that
+
+The first test-splits run died with a numpy `_ArrayMemoryError` in a worker,
+despite `--demand-cache` being passed and the cache file being present and
+readable. The cause was not the cache: `demand_cache` was an **optional keyword**
+on `generate()`, the training call site passed it and **all three test-split
+call sites did not**, so every test-splits worker rebuilt the full frame.
+
+Four changes make that failure unexpressible rather than merely fixed:
+
+- Shared settings (workers, replications, cache) are one **required** argument,
+  so a call site cannot pass some and forget others.
+- **One task-building function** serves both the training and test-splits paths.
+- A cache that is asked for and cannot be read **raises**, naming the file.
+  There is no fallback to the full frame.
+- More than one worker with no cache is **refused** unless `--allow-full-frame`
+  is passed, and the default cache path is **auto-detected** when present.
+
+Each worker now reports its resident memory with every shard, so the footprint
+is visible in the first shard rather than inferred from a crash in the fiftieth.
+Verified on a 10-worker test-splits smoke run: **0.15 GB mean and peak per
+worker, ~1.5 GB across the pool.**
+
 ### Projected wall-clock
 
 | Job | Runs | Projected |

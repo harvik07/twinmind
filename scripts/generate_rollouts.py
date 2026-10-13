@@ -48,6 +48,7 @@ import signal
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -190,26 +191,107 @@ def project(
 # --------------------------------------------------------------------------- #
 # Workers
 # --------------------------------------------------------------------------- #
+#: Default location of the precomputed demand grids, auto-detected when present.
+DEFAULT_DEMAND_CACHE = ROLLOUT_DIR / "demand_grids.npz"
+
+#: Measured on this machine. See reports/data_cards/rollouts.md section 4.
+FULL_FRAME_GB_PER_WORKER = 1.33
+CACHED_GB_PER_WORKER = 0.15
+
+
 def _worker_resources(demand_cache: str | None = None) -> Any:
     """Build (once per process) the twin resources a worker needs.
 
     With ``demand_cache`` the worker loads precomputed quantile grids instead of
     the featurised Favorita frame and the LightGBM boosters. Measured: 1.33 GB
-    per worker becomes about 0.47 GB, which on a 7.3 GB machine is the
-    difference between a four-worker pool and a larger one. An eleven-worker
-    pool without it died outright.
+    per worker becomes 0.15 GB, which on a 7.3 GB machine is the difference
+    between a four-worker pool and a ten-worker one.
+
+    A cache that was asked for and cannot be read **raises**. Falling back here
+    would quietly reinstate the 1.33 GB path the cache exists to avoid, and the
+    only symptom would be the pool dying of memory exhaustion several minutes
+    later with a numpy allocation error -- which is exactly how the first
+    test-splits run failed.
     """
     cached = _WORKER_STATE.get("resources")
     if cached is None:
         if demand_cache:
             from twinmind.twin.demand_proc import CachedDemandModel
 
-            model = CachedDemandModel.load(Path(demand_cache))
+            try:
+                model = CachedDemandModel.load(Path(demand_cache))
+            except Exception as error:  # noqa: BLE001 - re-raised with context
+                raise RuntimeError(
+                    f"could not load the demand grid cache at {demand_cache!r}: {error}. "
+                    "Rebuild it with: python scripts/build_demand_cache.py . "
+                    "Refusing to fall back to the full Favorita frame, which costs "
+                    f"{FULL_FRAME_GB_PER_WORKER:.2f} GB per worker."
+                ) from error
             cached = build_resources(demand_model=model, series_id=model.series_ids[0])
         else:
             cached = build_resources()
         _WORKER_STATE["resources"] = cached
     return cached
+
+
+def resolve_demand_cache(requested: str | None, workers: int, allow_full_frame: bool) -> str | None:
+    """Decide what cache the workers will use, and refuse unsafe combinations.
+
+    Three guards, each for a failure that actually happened:
+
+    * A cache **asked for but unreadable** stops the job here, before a pool is
+      started, naming the file.
+    * **Many workers with no cache** is refused outright. An eleven-worker pool
+      on the full frame died with a numpy allocation error after several
+      minutes; failing in the first second with an explanation is better.
+    * The **default path is auto-detected** when it exists, so forgetting the
+      flag costs nothing.
+    """
+    from twinmind.twin.demand_proc import CachedDemandModel
+
+    path = requested
+    if path is None and DEFAULT_DEMAND_CACHE.exists():
+        path = str(DEFAULT_DEMAND_CACHE)
+        logger.info("auto-detected demand grid cache at %s", path)
+
+    if path is not None:
+        resolved = Path(path)
+        if not resolved.exists():
+            raise SystemExit(
+                f"no demand grid cache at {resolved}. "
+                "Build it first: python scripts/build_demand_cache.py"
+            )
+        try:
+            model = CachedDemandModel.load(resolved)
+        except Exception as error:  # noqa: BLE001 - re-raised as a clear exit
+            raise SystemExit(
+                f"the demand grid cache at {resolved} could not be read: {error}. "
+                "Rebuild it: python scripts/build_demand_cache.py"
+            ) from error
+        logger.info(
+            "demand grid cache: %d grids, series %s (~%.2f GB/worker)",
+            len(model.grids),
+            ", ".join(model.series_ids),
+            CACHED_GB_PER_WORKER,
+        )
+        return str(resolved)
+
+    if workers > 1 and not allow_full_frame:
+        raise SystemExit(
+            f"refusing to start {workers} workers without a demand grid cache. "
+            f"Each would rebuild the featurised Favorita frame and hold about "
+            f"{FULL_FRAME_GB_PER_WORKER:.2f} GB, against "
+            f"{CACHED_GB_PER_WORKER:.2f} GB with the cache; {workers} workers need "
+            f"roughly {workers * FULL_FRAME_GB_PER_WORKER:.1f} GB and will die of "
+            "memory exhaustion partway through. "
+            "Either build the cache (python scripts/build_demand_cache.py) "
+            "or pass --allow-full-frame if you really mean it."
+        )
+    logger.warning(
+        "running without a demand grid cache: ~%.2f GB per worker",
+        FULL_FRAME_GB_PER_WORKER,
+    )
+    return None
 
 
 def _init_worker() -> None:
@@ -275,7 +357,24 @@ def run_block(task: dict[str, Any]) -> dict[str, Any]:
         "block": block,
         "rows": rows,
         "duration_s": time.perf_counter() - started,
+        "worker_rss_gb": _worker_rss_gb(),
     }
+
+
+def _worker_rss_gb() -> float:
+    """This worker's resident memory, so the pool's footprint is observable.
+
+    Reported per shard because the failure this guards against -- every worker
+    silently rebuilding the 0.71 GB Favorita frame -- is invisible until the
+    machine runs out of memory. A number in the log makes it obvious in the
+    first shard instead of the fiftieth.
+    """
+    try:
+        import psutil
+
+        return float(psutil.Process(os.getpid()).memory_info().rss / 1e9)
+    except Exception:  # noqa: BLE001 - diagnostics must never break the run
+        return float("nan")
 
 
 def _context_for(task: dict[str, Any], resources: Any) -> TwinContext:
@@ -297,18 +396,71 @@ def _context_for(task: dict[str, Any], resources: Any) -> TwinContext:
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
+@dataclass(frozen=True)
+class RunSettings:
+    """Everything every split shares: workers, replications and the demand cache.
+
+    This exists because of a real bug, not for tidiness. ``demand_cache`` used
+    to be an optional keyword on ``generate``, and the three test-split call
+    sites simply did not pass it -- so every test-split worker silently rebuilt
+    the 0.71 GB Favorita frame and the pool died of memory exhaustion, while the
+    training path, which did pass it, worked fine.
+
+    Bundling the shared settings into one **required** argument makes that
+    divergence impossible to express: a call site either passes the settings, in
+    which case it passes the cache, or it fails with a TypeError.
+    """
+
+    workers: int
+    n_reps: int
+    demand_cache: str | None
+
+
+def build_tasks(
+    directory: Path,
+    design: SobolDesign,
+    n_blocks: int,
+    scenarios_per_context: int,
+    seed_root: int,
+    settings: RunSettings,
+    test: bool,
+    context_seed_offset: int,
+) -> list[dict[str, Any]]:
+    """The outstanding blocks as worker tasks. The ONLY place a task is built.
+
+    Both the training path and the test-splits path come through here, so the
+    cache cannot reach one and not the other.
+    """
+    tasks: list[dict[str, Any]] = []
+    for block in range(n_blocks):
+        if valid_shard(shard_path(directory, block), scenarios_per_context):
+            continue
+        tasks.append(
+            {
+                "block": block,
+                "design": design,
+                "index_offset": block * scenarios_per_context,
+                "scenarios_per_context": scenarios_per_context,
+                "n_reps": settings.n_reps,
+                "seed_root": seed_root,
+                "origin": str(origin_for_block(block, n_blocks, test=test).date()),
+                "context_seed": context_seed_offset + block,
+                "demand_cache": settings.demand_cache,
+            }
+        )
+    return tasks
+
+
 def generate(
     directory: Path,
     design: SobolDesign,
     n_blocks: int,
     scenarios_per_context: int,
-    n_reps: int,
     seed_root: int,
-    workers: int,
     manifest: dict[str, Any],
+    settings: RunSettings,
     test: bool = False,
     context_seed_offset: int = 0,
-    demand_cache: str | None = None,
 ) -> dict[str, Any]:
     """Run every outstanding block, in parallel, writing one shard each.
 
@@ -334,25 +486,16 @@ def generate(
             json.dumps(manifest, indent=2, default=str) + "\n", encoding="utf-8", newline="\n"
         )
 
-    tasks = []
-    for block in range(n_blocks):
-        path = shard_path(directory, block)
-        if valid_shard(path, scenarios_per_context):
-            continue
-        tasks.append(
-            {
-                "block": block,
-                "design": design,
-                "index_offset": block * scenarios_per_context,
-                "scenarios_per_context": scenarios_per_context,
-                "n_reps": n_reps,
-                "seed_root": seed_root,
-                "origin": str(origin_for_block(block, n_blocks, test=test).date()),
-                "context_seed": context_seed_offset + block,
-                "demand_cache": demand_cache,
-            }
-        )
-
+    tasks = build_tasks(
+        directory,
+        design,
+        n_blocks,
+        scenarios_per_context,
+        seed_root,
+        settings,
+        test,
+        context_seed_offset,
+    )
     done = n_blocks - len(tasks)
     if done:
         logger.info("resuming: %d of %d blocks already complete", done, n_blocks)
@@ -361,24 +504,29 @@ def generate(
         return {"blocks": n_blocks, "written": 0, "skipped": done}
 
     logger.info(
-        "%d blocks x %d scenarios x %d reps = %d twin runs on %d workers",
+        "%d blocks x %d scenarios x %d reps = %d twin runs on %d workers (%s)",
         len(tasks),
         scenarios_per_context,
-        n_reps,
-        len(tasks) * scenarios_per_context * n_reps,
-        workers,
+        settings.n_reps,
+        len(tasks) * scenarios_per_context * settings.n_reps,
+        settings.workers,
+        "grid cache" if settings.demand_cache else "FULL FRAME, ~1.33 GB/worker",
     )
 
     started = time.perf_counter()
     written = 0
     durations: list[float] = []
+    worker_rss: list[float] = []
     context = mp.get_context("spawn")
-    pool = context.Pool(workers, initializer=_init_worker)
+    pool = context.Pool(settings.workers, initializer=_init_worker)
     try:
         for result in pool.imap_unordered(run_block, tasks):
             write_shard(result["rows"], shard_path(directory, result["block"]))
             written += 1
             durations.append(result["duration_s"])
+            rss = result.get("worker_rss_gb")
+            if rss == rss and rss is not None:  # not NaN
+                worker_rss.append(float(rss))
             _report_progress(written, len(tasks), durations, started)
     except KeyboardInterrupt:  # pragma: no cover - interactive only
         logger.warning("interrupted; %d shards written and valid, rerun to resume", written)
@@ -396,12 +544,27 @@ def generate(
         elapsed / 60.0,
         elapsed / max(written, 1),
     )
+    if worker_rss:
+        peak = max(worker_rss)
+        logger.info(
+            "worker memory: %.2f GB mean, %.2f GB peak per worker; "
+            "~%.1f GB total across %d workers (%s)",
+            float(np.mean(worker_rss)),
+            peak,
+            peak * settings.workers,
+            settings.workers,
+            "as expected with the grid cache"
+            if peak < 0.5
+            else "HIGH -- is the grid cache reaching the workers?",
+        )
     return {
         "blocks": n_blocks,
         "written": written,
         "skipped": done,
         "elapsed_s": elapsed,
         "mean_shard_s": float(np.mean(durations)) if durations else 0.0,
+        "worker_rss_gb_mean": float(np.mean(worker_rss)) if worker_rss else float("nan"),
+        "worker_rss_gb_peak": float(max(worker_rss)) if worker_rss else float("nan"),
     }
 
 
@@ -469,9 +632,17 @@ def typical_context_seed(resources: Any, candidates: int = 64) -> int:
 
 
 def generate_test_splits(
-    resources: Any, args: argparse.Namespace, bounds: list[tuple[float, float]]
+    resources: Any,
+    args: argparse.Namespace,
+    bounds: list[tuple[float, float]],
+    settings: RunSettings,
 ) -> dict[str, Any]:
-    """T1, T2 and OOD, all with later origins and disjoint seeds."""
+    """T1, T2 and OOD, all with later origins and disjoint seeds.
+
+    ``settings`` is required and carries the demand cache to every split. It
+    used to be an optional keyword that each call site passed individually, and
+    all three of the ones below forgot it.
+    """
     manifest = build_manifest(resources, args)
     manifest.update(
         {
@@ -483,9 +654,13 @@ def generate_test_splits(
         }
     )
     summary: dict[str, Any] = {}
+    # A smoke run writes to its own directories. Sharing them with the real
+    # splits would either clash with a stored manifest (different n_reps) or,
+    # worse, leave 2-rep shards sitting where 30-rep ones belong.
+    prefix = "smoke_" if getattr(args, "smoke", False) else ""
 
     # T1: i.i.d. accuracy over many contexts.
-    t1_dir = ROLLOUT_DIR / "test_t1"
+    t1_dir = ROLLOUT_DIR / f"{prefix}test_t1"
     t1_design = SobolDesign.build(args.t1_contexts * args.t1_scenarios, TEST_SCRAMBLE, bounds)
     t1_manifest = {**manifest, "scenarios_per_context": args.t1_scenarios, "split_name": "T1"}
     summary["T1"] = generate(
@@ -493,10 +668,9 @@ def generate_test_splits(
         t1_design,
         args.t1_contexts,
         args.t1_scenarios,
-        args.test_reps,
         TEST_SEED_ROOT,
-        args.workers,
         t1_manifest,
+        settings,
         test=True,
         context_seed_offset=10_000,
     )
@@ -506,7 +680,7 @@ def generate_test_splits(
     chosen_seed = typical_context_seed(resources)
     t2_design = SobolDesign.build(args.t2_scenarios, TEST_SCRAMBLE + 1, bounds)
     for replicate_id, root in enumerate((TEST_SEED_ROOT + 500, TEST_SEED_ROOT + 900)):
-        t2_dir = ROLLOUT_DIR / f"test_t2_estimate{replicate_id + 1}"
+        t2_dir = ROLLOUT_DIR / f"{prefix}test_t2_estimate{replicate_id + 1}"
         t2_manifest = {
             **manifest,
             "scenarios_per_context": args.t2_scenarios,
@@ -519,16 +693,15 @@ def generate_test_splits(
             t2_design,
             1,
             args.t2_scenarios,
-            args.test_reps,
             root,
-            args.workers,
             t2_manifest,
+            settings,
             test=True,
             context_seed_offset=chosen_seed,
         )
 
     # OOD: at least 3 dimensions at a bound.
-    ood_dir = ROLLOUT_DIR / "test_ood"
+    ood_dir = ROLLOUT_DIR / f"{prefix}test_ood"
     design = ood_design(args.ood_scenarios, TEST_SCRAMBLE + 2, bounds)
     per_block = min(args.t1_scenarios, args.ood_scenarios)
     n_blocks = max(args.ood_scenarios // per_block, 1)
@@ -538,10 +711,9 @@ def generate_test_splits(
         design,
         n_blocks,
         per_block,
-        args.test_reps,
         TEST_SEED_ROOT + 1300,
-        args.workers,
         ood_manifest,
+        settings,
         test=True,
         context_seed_offset=20_000,
     )
@@ -574,6 +746,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ood-scenarios", type=int, default=300)
     parser.add_argument("--force-new-manifest", action="store_true")
     parser.add_argument(
+        "--allow-full-frame",
+        action="store_true",
+        help="Permit a multi-worker run with no demand cache (~1.33 GB/worker).",
+    )
+    parser.add_argument(
         "--demand-cache",
         default=None,
         help="Precomputed demand grids (build with scripts/build_demand_cache.py). "
@@ -588,6 +765,7 @@ def main() -> int:
     if args.workers <= 0:
         args.workers = max((os.cpu_count() or 2) - 1, 1)
 
+    demand_cache = resolve_demand_cache(args.demand_cache, args.workers, args.allow_full_frame)
     resources = build_resources()
     bounds = scenario_bounds_list(resources)
 
@@ -621,8 +799,18 @@ def main() -> int:
     else:
         directory = Path(args.out) if args.out else ROLLOUT_DIR / "train"
 
+    if args.smoke and args.test_splits:
+        # A smoke run of the TEST SPLITS, so the whole path -- including each
+        # worker's memory profile -- can be exercised in about a minute rather
+        # than the 42 it would take to discover a problem the slow way.
+        args.t1_contexts, args.t1_scenarios = 2, 2
+        args.t2_scenarios, args.ood_scenarios, args.test_reps = 2, 2, 2
+
     if args.test_splits:
-        summary = generate_test_splits(resources, args, bounds)
+        settings = RunSettings(
+            workers=args.workers, n_reps=args.test_reps, demand_cache=demand_cache
+        )
+        summary = generate_test_splits(resources, args, bounds, settings)
         logger.info("test splits: %s", json.dumps({k: v["blocks"] for k, v in summary.items()}))
         return 0
 
@@ -635,6 +823,7 @@ def main() -> int:
     design = SobolDesign.build(args.contexts * args.scenarios_per_context, TRAIN_SCRAMBLE, bounds)
     manifest = build_manifest(resources, args)
     manifest["split"] = "train"
+    settings = RunSettings(workers=args.workers, n_reps=args.n_reps, demand_cache=demand_cache)
     projection = project(
         measurement, args.contexts * args.scenarios_per_context, args.n_reps, args.workers
     )
@@ -649,11 +838,9 @@ def main() -> int:
         design,
         args.contexts,
         args.scenarios_per_context,
-        args.n_reps,
         TRAIN_SEED_ROOT,
-        args.workers,
         manifest,
-        demand_cache=args.demand_cache,
+        settings,
     )
     return 0
 

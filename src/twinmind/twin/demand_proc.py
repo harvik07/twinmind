@@ -42,6 +42,7 @@ asserts the two entry points return bit-identical arrays.
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,10 +58,23 @@ from twinmind.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-#: Cached per process, keyed by (id(model), series_id, origin, horizon). Built
-#: lazily and never mutated, so it is safe under multiprocessing "spawn": each
-#: worker imports this module fresh and fills its own.
-_SAMPLER_MEMO: dict[tuple[int, str, pd.Timestamp, int], DemandSampler] = {}
+#: Samplers, cached per process and keyed on the MODEL OBJECT via a weak
+#: reference, then on (series_id, origin, horizon) within it.
+#:
+#: This was keyed on ``id(model)`` and that was a real bug, not a style point.
+#: ``id()`` is a memory address and CPython reuses addresses: once a model is
+#: garbage-collected, a newly allocated one can land at the same address and
+#: inherit the dead model's cached samplers. The symptom is a twin that silently
+#: forecasts with the wrong demand model -- caught by a test that passed alone
+#: and failed when earlier tests had allocated and freed a stub model first.
+#:
+#: A WeakKeyDictionary cannot have that collision, because the key holds the
+#: live object: an address cannot be reused while its entry exists, and the
+#: entry disappears when the model does. It is still safe under "spawn" --
+#: each worker imports this module fresh and fills its own.
+_SAMPLER_MEMO: weakref.WeakKeyDictionary[
+    Any, dict[tuple[str, pd.Timestamp, int], DemandSampler]
+] = weakref.WeakKeyDictionary()
 
 
 @dataclass(frozen=True)
@@ -141,12 +155,21 @@ class DemandSampler:
 def get_sampler(
     model: DemandModel, series_id: str, origin: pd.Timestamp, horizon: int
 ) -> DemandSampler:
-    """A memoised :class:`DemandSampler`, built at most once per process."""
-    key = (id(model), str(series_id), pd.Timestamp(origin), int(horizon))
-    cached = _SAMPLER_MEMO.get(key)
+    """A memoised :class:`DemandSampler`, built at most once per model per origin.
+
+    A model that cannot be weak-referenced simply is not memoised, which costs
+    time and never correctness.
+    """
+    key = (str(series_id), pd.Timestamp(origin), int(horizon))
+    try:
+        per_model = _SAMPLER_MEMO.setdefault(model, {})
+    except TypeError:
+        return DemandSampler.from_model(model, series_id, origin, horizon)
+
+    cached = per_model.get(key)
     if cached is None:
         cached = DemandSampler.from_model(model, series_id, origin, horizon)
-        _SAMPLER_MEMO[key] = cached
+        per_model[key] = cached
     return cached
 
 

@@ -889,3 +889,51 @@ def test_real_twin_run_meets_the_performance_budget() -> None:
         durations.append(time.perf_counter() - started)
     mean = float(np.mean(durations))
     assert mean < 0.25, f"mean run time {1000 * mean:.0f} ms exceeds the 250 ms budget"
+
+
+def test_sampler_memo_entry_dies_with_its_model() -> None:
+    """The property that makes address reuse harmless, tested directly.
+
+    The memo was keyed on ``id(model)``. ``id()`` is a memory address and
+    CPython reuses addresses, so once a model was garbage-collected a newly
+    allocated one could land at the same address and silently inherit the dead
+    model's cached quantile grids -- a twin forecasting with the wrong demand
+    model, with no error anywhere. It surfaced as a test that passed alone and
+    failed once earlier tests had allocated and freed a stub model first.
+
+    Rather than trying to coax the allocator into reusing an address, which is
+    not reproducible, this asserts the invariant that makes reuse impossible:
+    a model's cache entry is held weakly and disappears with the model, so no
+    later object can find it.
+    """
+    import gc
+
+    from twinmind.twin.demand_proc import _SAMPLER_MEMO, get_sampler
+
+    origin = pd.Timestamp("2017-08-15")
+    model = StubDemandModel(level=900.0)
+    get_sampler(model, "stub", origin, HORIZON)
+    assert model in _SAMPLER_MEMO
+
+    del model
+    gc.collect()
+    # Nothing left for a future object at the same address to inherit.
+    assert all(isinstance(v, dict) for v in _SAMPLER_MEMO.values())
+    assert not any(isinstance(k, StubDemandModel) and k.level == 900.0 for k in _SAMPLER_MEMO)
+
+
+def test_two_live_models_do_not_share_a_sampler() -> None:
+    """Distinct models at the same (series, origin, horizon) must stay distinct."""
+    from twinmind.twin.demand_proc import get_sampler
+
+    origin = pd.Timestamp("2017-08-15")
+    high, low = StubDemandModel(level=900.0), StubDemandModel(level=1.0)
+    high_sampler = get_sampler(high, "stub", origin, HORIZON)
+    low_sampler = get_sampler(low, "stub", origin, HORIZON)
+
+    assert high_sampler is not low_sampler
+    assert float(np.median(high_sampler.sample(64, seed=0))) > 100.0
+    assert float(np.median(low_sampler.sample(64, seed=0))) < 100.0
+    # And the memo still returns the right one for each.
+    assert get_sampler(high, "stub", origin, HORIZON) is high_sampler
+    assert get_sampler(low, "stub", origin, HORIZON) is low_sampler

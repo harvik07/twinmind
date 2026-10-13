@@ -504,3 +504,179 @@ def test_ood_design_puts_at_least_three_dimensions_at_a_bound() -> None:
     assert isinstance(design, SobolDesign)
     at_bound = ((design.points <= 1e-12) | (design.points >= 1 - 1e-12)).sum(axis=1)
     assert at_bound.min() >= 3
+
+
+# --------------------------------------------------------------------------- #
+# The demand grid cache must reach every worker
+# --------------------------------------------------------------------------- #
+#
+# These exist because of a shipped bug. `demand_cache` was an optional keyword
+# on `generate`, the training call site passed it and the three test-split call
+# sites did not, so every test-splits worker silently rebuilt the 0.71 GB
+# Favorita frame and a 10-worker pool died of memory exhaustion. Nothing caught
+# it because no test exercised the test-splits worker path.
+
+
+def _rollout_script():  # type: ignore[no-untyped-def]
+    """Load scripts/generate_rollouts.py as a module.
+
+    The orchestration lives in a script rather than the package, so the only way
+    to test it is to import it by path. Worth doing: the bug these tests cover
+    was in the call sites, not in the library.
+    """
+    import importlib.util
+    import sys
+
+    from twinmind.utils.paths import PROJECT_ROOT
+
+    path = PROJECT_ROOT / "scripts" / "generate_rollouts.py"
+    spec = importlib.util.spec_from_file_location("generate_rollouts_under_test", path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_generate_requires_settings_so_a_call_site_cannot_forget_the_cache() -> None:
+    """``settings`` has no default: forgetting it is a TypeError, not a silent None."""
+    import inspect
+
+    module = _rollout_script()
+    parameters = inspect.signature(module.generate).parameters
+    assert "settings" in parameters
+    assert parameters["settings"].default is inspect.Parameter.empty
+    # And the old footgun is gone.
+    assert "demand_cache" not in parameters
+
+
+def test_every_task_carries_the_cache_on_both_code_paths(tmp_path: Path) -> None:
+    """Training and test-splits tasks are built by the SAME function.
+
+    This is the assertion that would have caught the bug: it checks the
+    test-splits shape, not just the training one.
+    """
+    module = _rollout_script()
+    bounds = [scenario_bounds()[d] for d in SCENARIO_DIMS]
+    design = module.SobolDesign.build(16, scramble_seed=1, bounds=bounds)
+    settings = module.RunSettings(workers=4, n_reps=3, demand_cache="cache.npz")
+
+    training = module.build_tasks(tmp_path / "train", design, 2, 8, 1, settings, False, 0)
+    test_split = module.build_tasks(tmp_path / "t1", design, 2, 8, 99, settings, True, 10_000)
+
+    assert training and test_split
+    for task in [*training, *test_split]:
+        assert task["demand_cache"] == "cache.npz"
+        assert task["n_reps"] == 3
+
+
+def test_worker_takes_the_cache_path_and_never_builds_the_full_frame(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A worker given a cache must not touch Favorita at all.
+
+    ``load_favorita`` and ``build_demand_features`` are monkeypatched to raise,
+    so taking the full-frame branch fails loudly instead of merely being slow
+    and memory-hungry.
+    """
+    import twinmind.data.features as features_module
+    import twinmind.data.loaders as loaders_module
+
+    module = _rollout_script()
+
+    def explode(*args: object, **kwargs: object) -> object:
+        raise AssertionError("the worker rebuilt the Favorita frame despite a cache")
+
+    monkeypatch.setattr(loaders_module, "load_favorita", explode)
+    monkeypatch.setattr(features_module, "build_demand_features", explode)
+
+    captured: dict[str, object] = {}
+
+    class FakeModel:
+        series_ids = ("stub",)
+        grids = {"a": 1}
+
+    def fake_load(path: Path) -> FakeModel:
+        captured["loaded"] = str(path)
+        return FakeModel()
+
+    def fake_build_resources(**kwargs: object) -> str:
+        captured.update(kwargs)
+        return "resources"
+
+    import twinmind.twin.demand_proc as demand_module
+
+    monkeypatch.setattr(demand_module.CachedDemandModel, "load", staticmethod(fake_load))
+    monkeypatch.setattr(module, "build_resources", fake_build_resources)
+    monkeypatch.setattr(module, "_WORKER_STATE", {})
+
+    cache = tmp_path / "demand_grids.npz"
+    cache.write_bytes(b"")
+    assert module._worker_resources(str(cache)) == "resources"
+    assert captured["loaded"] == str(cache)
+    assert captured["series_id"] == "stub"
+    assert isinstance(captured["demand_model"], FakeModel)
+
+
+def test_worker_raises_rather_than_falling_back_on_an_unreadable_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Silent fallback is what turned a typo into a memory-exhaustion crash."""
+    module = _rollout_script()
+    monkeypatch.setattr(module, "_WORKER_STATE", {})
+
+    broken = tmp_path / "broken.npz"
+    broken.write_bytes(b"not an npz")
+    with pytest.raises(RuntimeError, match="could not load the demand grid cache"):
+        module._worker_resources(str(broken))
+
+
+def test_resolver_refuses_a_multi_worker_run_with_no_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Fail in the first second with a reason, not after minutes with an OOM."""
+    module = _rollout_script()
+    monkeypatch.setattr(module, "DEFAULT_DEMAND_CACHE", tmp_path / "absent.npz")
+
+    with pytest.raises(SystemExit, match="refusing to start 10 workers"):
+        module.resolve_demand_cache(None, workers=10, allow_full_frame=False)
+
+    # Explicitly opted in, and single-worker runs, are allowed.
+    assert module.resolve_demand_cache(None, 10, allow_full_frame=True) is None
+    assert module.resolve_demand_cache(None, 1, allow_full_frame=False) is None
+
+
+def test_resolver_rejects_a_named_cache_that_does_not_exist(tmp_path: Path) -> None:
+    module = _rollout_script()
+    with pytest.raises(SystemExit, match="no demand grid cache at"):
+        module.resolve_demand_cache(str(tmp_path / "missing.npz"), 4, False)
+
+
+def test_resolver_rejects_a_named_cache_that_cannot_be_read(tmp_path: Path) -> None:
+    module = _rollout_script()
+    broken = tmp_path / "broken.npz"
+    broken.write_bytes(b"not an npz")
+    with pytest.raises(SystemExit, match="could not be read"):
+        module.resolve_demand_cache(str(broken), 4, False)
+
+
+def test_resolver_auto_detects_the_default_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Forgetting the flag must cost nothing when the file is sitting there."""
+    module = _rollout_script()
+
+    class FakeModel:
+        series_ids = ("stub",)
+        grids = {"a": 1}
+
+    default = tmp_path / "demand_grids.npz"
+    default.write_bytes(b"")
+    monkeypatch.setattr(module, "DEFAULT_DEMAND_CACHE", default)
+
+    import twinmind.twin.demand_proc as demand_module
+
+    monkeypatch.setattr(
+        demand_module.CachedDemandModel, "load", staticmethod(lambda path: FakeModel())
+    )
+    assert module.resolve_demand_cache(None, workers=10, allow_full_frame=False) == str(default)
