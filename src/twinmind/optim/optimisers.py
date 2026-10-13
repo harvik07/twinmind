@@ -147,18 +147,39 @@ def random_search(
 
     Sobol rather than uniform random: it covers the space far more evenly at the
     same budget, which matters most at the small budgets the twin-only arms use.
+
+    THE SOBOL DRAW HAPPENS EXACTLY ONCE, and that is load-bearing rather than
+    stylistic. An earlier version created one sampler and called
+    ``random_base2`` once per evaluation batch, which scipy refuses:
+
+        ValueError: The balance properties of Sobol' points require n to be a
+        power of 2. 4096 points have been previously generated, then:
+        n=4096+2**11=6144.
+
+    The refusal is correct. Sobol's low-discrepancy guarantee holds for prefixes
+    of ``2**m`` from the *start* of the sequence; resuming with a second block
+    of a different size breaks the balance, so scipy will not do it silently.
+    Drawing one block of ``2**ceil(log2(budget))`` and keeping the first
+    ``budget`` points preserves the property, because a prefix of a balanced
+    block is exactly what the design wants.
+
+    Evaluation is still chunked by ``batch_size`` — that is about not handing
+    the surrogate a 500,000-row call, and is independent of how the points were
+    drawn.
+
+    This only bit above ``batch_size`` (2,048), so the smoke run, whose largest
+    budget was 1,000, passed while the production run died in seconds.
     """
     free = free_dimensions(spec)
     sampler = stats.qmc.Sobol(d=len(free), scramble=True, seed=seed)
+    m = max(int(math.ceil(math.log2(max(budget, 2)))), 1)
+    points = sampler.random_base2(m=m)[:budget]
+
     best: list[Candidate] = []
-    drawn = 0
-    while drawn < budget:
-        take = min(batch_size, budget - drawn)
-        m = max(int(math.ceil(math.log2(max(take, 2)))), 1)
-        points = sampler.random_base2(m=m)[:take]
-        scenarios = [build_scenario(spec, free, row) for row in points]
+    for start in range(0, len(points), batch_size):
+        block = points[start : start + batch_size]
+        scenarios = [build_scenario(spec, free, row) for row in block]
         best.extend(_score_batch(spec, scenarios, evaluator, margins))
-        drawn += take
         best.sort(key=rank_key)
         best = best[:200]
     return best

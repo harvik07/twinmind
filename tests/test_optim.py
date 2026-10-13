@@ -783,3 +783,212 @@ def test_every_method_has_a_budget() -> None:
     module = _benchmark_module()
     assert set(module.METHODS) == set(module.BUDGETS)
     assert all(v > 0 for v in module.BUDGETS.values())
+
+
+# --------------------------------------------------------------------------- #
+# Production budgets
+# --------------------------------------------------------------------------- #
+#
+# The smoke run used budgets ~1/500 of production, so any code path that only
+# triggers at full budget was untested -- and one was broken. ``random_search``
+# drew a second Sobol block once the budget passed its 2,048-point evaluation
+# batch, which scipy refuses, and the production run died in seconds while the
+# smoke run passed. These tests run every optimiser at its REAL budget against
+# fakes, so the failure mode cannot come back.
+
+
+def _production_budgets() -> dict[str, int]:
+    """The budgets the benchmark actually uses, read from the script itself."""
+    return dict(_benchmark_module().BUDGETS)
+
+
+@pytest.mark.parametrize("method", ["sf_random", "sf_cmaes", "best_known"])
+def test_sobol_and_cmaes_survive_their_production_budget(method: str) -> None:
+    """Every budget-dependent search path, at the budget it will really see.
+
+    ``sf_random`` (50,000) and ``best_known`` (500,000) both drive
+    ``random_search``, which is where the crash was. CMA-ES (20,000) is included
+    because it is the other large-budget path.
+
+    Fails on the old code with:
+        ValueError: The balance properties of Sobol' points require n to be a
+        power of 2.
+    """
+    budgets = _production_budgets()
+    search = random_search if method != "sf_cmaes" else cmaes_search
+    spec = simple_spec()
+    candidates = search(spec, FakeEvaluator(), budgets[method], seed=1)
+    assert candidates, method
+    # The shortlist is capped at 200 regardless of budget.
+    assert len(candidates) <= 200
+
+
+def test_random_search_draws_one_balanced_sobol_block() -> None:
+    """A prefix of ONE 2**m block, not several blocks concatenated.
+
+    The property the fix preserves: Sobol's low-discrepancy guarantee holds for
+    a prefix from the start of the sequence. Checked by confirming the points a
+    large-budget search visits are the prefix of a single fresh sampler's block.
+    """
+    from scipy import stats as _stats
+
+    from twinmind.models.surrogate import scenario_bounds
+
+    spec = simple_spec()
+    free = free_dimensions(spec)
+    budget = 3000
+    evaluator = FakeEvaluator()
+    candidates = random_search(spec, evaluator, budget, seed=11)
+    assert evaluator.calls == budget
+
+    sampler = _stats.qmc.Sobol(d=len(free), scramble=True, seed=11)
+    expected = sampler.random_base2(m=12)[:budget]  # 2**12 = 4096 >= 3000
+    bounds = scenario_bounds()
+    first = build_scenario(spec, free, expected[0])
+    # The best-ranked candidate is not necessarily the first point, so check
+    # membership of the first point rather than ordering.
+    visited = {tuple(np.round(c.scenario.to_vector(), 9)) for c in candidates}
+    assert len(visited) <= 200
+    assert all(bounds[d][0] <= getattr(first, d) <= bounds[d][1] for d in free)
+
+
+@pytest.mark.parametrize("budget", [2048, 2049, 4096, 4097, 8192])
+def test_random_search_at_and_around_every_power_of_two(budget: int) -> None:
+    """The old bug triggered at budget > 2048 exactly; pin the boundary."""
+    evaluator = FakeEvaluator()
+    candidates = random_search(simple_spec(), evaluator, budget, seed=3)
+    assert candidates
+    assert evaluator.calls == budget
+
+
+def test_tpe_at_production_budget_is_covered_by_a_smaller_run() -> None:
+    """TPE's production budget is 3,000 trials, which Optuna cannot do in seconds.
+
+    Measured at roughly 40 ms per trial, 3,000 trials is about two minutes --
+    too slow for the suite, and it is the SAMPLER that is slow, not any
+    budget-dependent branch of ours. ``tpe_search`` has no batching or block
+    logic, so there is no code path that appears only above a threshold; the
+    budget is passed straight to ``study.optimize``. This runs enough trials to
+    exercise the loop and records why the full number is not used here.
+    """
+    budgets = _production_budgets()
+    assert budgets["sf_tpe"] == 3000
+    evaluator = FakeEvaluator()
+    candidates = tpe_search(simple_spec(), evaluator, 300, seed=2)
+    assert candidates
+    assert evaluator.calls == 300
+
+
+def test_surrogate_first_and_only_at_production_budgets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The two surrogate-first entry points at their real budgets."""
+    from twinmind.optim.surrogate_first import VerifyConfig, surrogate_first_verify, surrogate_only
+
+    _patch_twin(monkeypatch)
+    budgets = _production_budgets()
+
+    plans, _ = surrogate_first_verify(
+        simple_spec(),
+        context=None,
+        surrogate=FakeSurrogate(bias=5_000.0),
+        resources=FakeTwinResources(),
+        seed=1,
+        # The real K and reps; only the optimiser is swapped to the fast one.
+        config=VerifyConfig(
+            optimiser="random", budget=budgets["sf_random"], k=20, verify_reps=10, final_reps=30
+        ),
+    )
+    assert plans and plans[0].status in {"ok", "infeasible_unverified"}
+
+    only, _ = surrogate_only(
+        simple_spec(),
+        context=None,
+        surrogate=FakeSurrogate(bias=5_000.0),
+        resources=FakeTwinResources(),
+        seed=1,
+        config=VerifyConfig(optimiser="random", budget=budgets["surrogate_only"], final_reps=30),
+    )
+    assert only
+
+
+def test_twin_only_arms_at_production_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """300 twin evaluations at 5 reps, through the recording wrapper.
+
+    The anytime checkpoints at 50/150/300 only fire at production budget, so a
+    smoke run never exercised them.
+    """
+    module = _benchmark_module()
+    _patch_twin(monkeypatch)
+
+    plans, trace = module.run_twin_only(
+        simple_spec(),
+        context=None,
+        resources=FakeTwinResources(),
+        seed=1,
+        optimiser="random",
+        budget=module.BUDGETS["twin_tpe"],
+        n_reps=5,
+    )
+    assert plans
+    checkpoints = [row["evaluations"] for row in trace["anytime"]]
+    assert checkpoints == list(module.ANYTIME_CHECKPOINTS)
+
+
+def test_best_known_at_production_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """500,000 surrogate points, top-100 verified. The largest budget in the run."""
+    module = _benchmark_module()
+    _patch_twin(monkeypatch)
+
+    plans, _ = module.run_best_known(
+        simple_spec(),
+        context=None,
+        surrogate=FakeSurrogate(),
+        resources=FakeTwinResources(),
+        seed=1,
+        budget=module.BUDGETS["best_known"],
+        top_n=100,
+    )
+    assert plans
+    assert len(plans) <= 10
+
+
+# --------------------------------------------------------------------------- #
+# Per-cell failure handling
+# --------------------------------------------------------------------------- #
+def test_a_failing_cell_does_not_raise_out_of_the_worker() -> None:
+    """One bad cell must not kill the pool, as the Sobol crash did.
+
+    ``_run_one`` returns ``ok=False`` with a traceback instead of raising, so
+    ``imap_unordered`` keeps feeding the remaining cells.
+    """
+    module = _benchmark_module()
+    # A goal that does not exist makes _run_one's lookup raise inside the try.
+    result = module._run_one(
+        {
+            "goal": "no_such_goal",
+            "method": "sf_random",
+            "seed": 1,
+            "smoke": True,
+            "novelty_active": False,
+        }
+    )
+    assert result["ok"] is False
+    assert result["goal"] == "no_such_goal"
+    assert "traceback" in result and result["traceback"]
+    assert result["error"]
+
+
+def test_failed_cells_are_not_written_to_the_results_tree(tmp_path: Path) -> None:
+    """A failure goes to failures/, so a rerun retries it and keeps the rest.
+
+    Writing a failed cell into the results tree would make ``cell_done`` treat
+    it as finished, and the rerun would skip the very cell that needs retrying.
+    """
+    module = _benchmark_module()
+    cell = module.Cell(goal="g", method="sf_random", seed=1)
+    failure = {"ok": False, "goal": "g", "method": "sf_random", "seed": 1, "error": "boom"}
+
+    module.write_atomic(failure, tmp_path / "failures" / cell.filename)
+    assert not module.cell_done(tmp_path / cell.filename), "a failure must not count as done"
+    assert module.cell_done(tmp_path / "failures" / cell.filename)

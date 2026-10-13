@@ -40,6 +40,7 @@ reason the surrogate exists.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 import numpy as np
@@ -192,21 +193,43 @@ def feature_names(bounds: dict[str, tuple[float, float]] | None = None) -> list[
     return names
 
 
-def _categorical_levels(dim: str) -> list[int]:
-    """The integer levels a categorical dimension can take, from twin.yaml."""
+@lru_cache(maxsize=1)
+def _bounds_from_config() -> tuple[tuple[str, float, float], ...]:
+    """The scenario bounds, parsed from twin.yaml **once per process**.
+
+    Cached because it is on a very hot path and was not cheap. ``load_config``
+    re-reads and re-validates the YAML on every call, measured at **17.4 ms**,
+    and ``build_scenario`` called this plus ``_categorical_levels`` for every
+    candidate — 18 ms per candidate. At ``best_known``'s 500,000-point budget
+    that is 2.5 hours of YAML parsing per cell, which would have made the full
+    benchmark take days rather than hours.
+
+    A tuple rather than a dict is returned so a caller cannot mutate the cached
+    value; the public helpers build a fresh container from it each call, which
+    costs about a microsecond.
+    """
     from twinmind.utils.config import TwinConfig, load_config
 
     config = cast(TwinConfig, load_config("twin"))
-    spec = next(d for d in config.scenario_space if d.name == dim)
-    return list(range(int(round(spec.min)), int(round(spec.max)) + 1))
+    return tuple((d.name, float(d.min), float(d.max)) for d in config.scenario_space)
+
+
+def clear_bounds_cache() -> None:
+    """Drop the cached bounds. For tests that rewrite ``configs/twin.yaml``."""
+    _bounds_from_config.cache_clear()
+
+
+def _categorical_levels(dim: str) -> list[int]:
+    """The integer levels a categorical dimension can take, from twin.yaml."""
+    for name, low, high in _bounds_from_config():
+        if name == dim:
+            return list(range(int(round(low)), int(round(high)) + 1))
+    raise KeyError(f"{dim!r} is not a scenario dimension")
 
 
 def scenario_bounds() -> dict[str, tuple[float, float]]:
     """``{dim: (min, max)}`` from twin.yaml, in canonical order."""
-    from twinmind.utils.config import TwinConfig, load_config
-
-    config = cast(TwinConfig, load_config("twin"))
-    return {d.name: (float(d.min), float(d.max)) for d in config.scenario_space}
+    return {name: (low, high) for name, low, high in _bounds_from_config()}
 
 
 def encode(

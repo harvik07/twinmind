@@ -377,6 +377,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", default=str(RESULTS_DIR))
     parser.add_argument("--smoke", action="store_true", help="Tiny budgets on 2 dev goals.")
     parser.add_argument("--methods", nargs="+", default=list(METHODS))
+    parser.add_argument(
+        "--goals",
+        nargs="+",
+        default=None,
+        help="Run only these goals by name. Used for the production-budget dry run, "
+        "which must target a DEV goal so no held-out result is ever produced by it.",
+    )
+    parser.add_argument(
+        "--split",
+        choices=("dev", "held_out"),
+        default=None,
+        help="Override the split. Defaults to held_out, or dev with --smoke.",
+    )
     parser.add_argument("--force-new-manifest", action="store_true")
     return parser
 
@@ -385,8 +398,24 @@ _WORKER: dict[str, Any] = {}
 
 
 def _init_worker() -> None:
-    """Workers ignore Ctrl-C so the parent can shut the pool down cleanly."""
+    """Worker set-up: ignore Ctrl-C, and pin torch to a single thread.
+
+    Ctrl-C is ignored so the parent can shut the pool down cleanly.
+
+    The single thread matters more than it looks. Torch defaults to one thread
+    per physical core -- 6 here -- so a 6-worker pool launches 36 threads onto 6
+    cores, a 6x oversubscription where the threads spend their time fighting
+    over the cores rather than working. Measured in the dry run: sf_tpe took
+    652 s against about 105 s of actual work. Inference is deterministic
+    regardless of thread count, so this costs nothing but contention.
+    """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        import torch
+
+        torch.set_num_threads(1)
+    except ImportError:  # pragma: no cover - torch is a hard dependency
+        pass
 
 
 def _worker_context() -> dict[str, Any]:
@@ -431,15 +460,38 @@ def _context_for_goal(goal: Goal, state: dict[str, Any]) -> Any:
 
 
 def _run_one(task: dict[str, Any]) -> dict[str, Any]:
-    """Worker entry point. Module-level and plain-data in/out, for spawn."""
-    state = _worker_context()
-    goal = next(g for g in load_goals() if g.name == task["goal"])
-    cell = Cell(goal=task["goal"], method=task["method"], seed=task["seed"])
-    context = _context_for_goal(goal, state)
-    novelty = state["novelty"] if task["novelty_active"] else None
-    result = run_cell(
-        cell, goal, context, state["surrogate"], state["resources"], novelty, task["smoke"]
-    )
+    """Worker entry point. Module-level and plain-data in/out, for spawn.
+
+    **Never raises.** A failure is returned as a result with ``ok=False`` and a
+    traceback, because an exception escaping here propagates out of
+    ``imap_unordered`` and kills the whole pool -- which is exactly what a Sobol
+    ValueError in one cell did to the first production run, taking the other 251
+    cells with it. A three-hour job must not be destroyed by one bad cell.
+    """
+    import traceback
+
+    started = time.perf_counter()
+    try:
+        state = _worker_context()
+        goal = next(g for g in load_goals() if g.name == task["goal"])
+        cell = Cell(goal=task["goal"], method=task["method"], seed=task["seed"])
+        context = _context_for_goal(goal, state)
+        novelty = state["novelty"] if task["novelty_active"] else None
+        result = run_cell(
+            cell, goal, context, state["surrogate"], state["resources"], novelty, task["smoke"]
+        )
+        result["ok"] = True
+    except BaseException as error:  # noqa: BLE001 - every failure must be reported, not raised
+        result = {
+            "ok": False,
+            "goal": task["goal"],
+            "method": task["method"],
+            "seed": task["seed"],
+            "error": f"{type(error).__name__}: {error}",
+            "traceback": traceback.format_exc(),
+            "wall_seconds": time.perf_counter() - started,
+            "smoke": task["smoke"],
+        }
     try:
         import psutil
 
@@ -486,9 +538,20 @@ def main() -> int:
     else:
         write_atomic(manifest, manifest_path)
 
-    goals = load_goals(split="dev" if args.smoke else "held_out")
-    if args.smoke:
+    split = args.split or ("dev" if args.smoke else "held_out")
+    goals = load_goals(split=split)
+    if args.goals:
+        wanted = set(args.goals)
+        goals = [g for g in goals if g.name in wanted]
+        missing = wanted - {g.name for g in goals}
+        if missing:
+            raise SystemExit(
+                f"no such goal(s) in the {split} split: {sorted(missing)}. "
+                f"Available: {', '.join(g.name for g in load_goals(split=split))}"
+            )
+    elif args.smoke:
         goals = goals[:2]
+    logger.info("split=%s, %d goal(s): %s", split, len(goals), ", ".join(g.name for g in goals))
     methods = [m for m in args.methods if m in METHODS]
 
     tasks = []
@@ -531,11 +594,29 @@ def main() -> int:
     rss: list[float] = []
     context = mp.get_context("spawn")
     pool = context.Pool(workers, initializer=_init_worker)
+    failures: list[dict[str, Any]] = []
+    failure_dir = out / "failures"
     try:
         for result in pool.imap_unordered(_run_one, tasks):
             cell = Cell(goal=result["goal"], method=result["method"], seed=result["seed"])
-            write_atomic(result, out / cell.filename)
             done += 1
+            if result.get("ok", True):
+                # Only a SUCCESSFUL cell is written to the results tree, so a
+                # rerun retries the failure and skips the completed work.
+                write_atomic(result, out / cell.filename)
+            else:
+                failures.append(result)
+                write_atomic(result, failure_dir / cell.filename)
+                logger.error(
+                    "[%3d/%3d] FAILED %-28s %-15s seed %d  %s",
+                    done,
+                    len(tasks),
+                    result["goal"],
+                    result["method"],
+                    result["seed"],
+                    result["error"],
+                )
+                continue
             if np.isfinite(result.get("worker_rss_gb", np.nan)):
                 rss.append(result["worker_rss_gb"])
             elapsed = time.perf_counter() - started
@@ -560,7 +641,13 @@ def main() -> int:
         pool.join()
 
     elapsed = time.perf_counter() - started
-    logger.info("wrote %d cells in %.1f min", done, elapsed / 60.0)
+    logger.info(
+        "finished %d cells in %.1f min (%d succeeded, %d FAILED)",
+        done,
+        elapsed / 60.0,
+        done - len(failures),
+        len(failures),
+    )
     if rss:
         logger.info(
             "worker memory: %.2f GB mean, %.2f GB peak; ~%.1f GB across %d workers",
@@ -572,74 +659,101 @@ def main() -> int:
     if args.smoke:
         _estimate_full_run(out, workers, len(args.seeds))
 
-    summary = {"cells": done, "elapsed_s": elapsed, "out": str(out), "manifest": manifest}
+    if failures:
+        # Loud, itemised, and a non-zero exit. A silent partial run is how a
+        # results table ends up quietly missing a method.
+        logger.error("=== %d CELL(S) FAILED ===", len(failures))
+        by_error: dict[str, list[str]] = {}
+        for failure in failures:
+            key = failure["error"][:120]
+            by_error.setdefault(key, []).append(
+                f"{failure['goal']}/{failure['method']}/seed{failure['seed']}"
+            )
+        for error, cells in sorted(by_error.items(), key=lambda kv: -len(kv[1])):
+            logger.error("  %d x %s", len(cells), error)
+            for name in cells[:6]:
+                logger.error("      %s", name)
+            if len(cells) > 6:
+                logger.error("      ... and %d more", len(cells) - 6)
+        logger.error("tracebacks are in %s", failure_dir)
+        logger.error("rerun the same command to retry failures; completed cells are skipped")
+
+    summary = {
+        "cells": done,
+        "succeeded": done - len(failures),
+        "failed": len(failures),
+        "failures": [{k: f[k] for k in ("goal", "method", "seed", "error")} for f in failures],
+        "elapsed_s": elapsed,
+        "out": str(out),
+        "manifest": manifest,
+    }
     write_atomic(
         summary,
         results_dir()
         / ("optim_benchmark_smoke.json" if args.smoke else "optim_benchmark_run.json"),
     )
-    return 0
+    return 1 if failures else 0
 
 
 def _estimate_full_run(out: Path, workers: int, n_seeds: int) -> None:
-    """Project the full run from the configured budgets, not from smoke wall time.
+    """Project the full run from MEASURED per-method timings.
 
-    Scaling the smoke wall time by a guessed factor spans 7.5 to 30 hours, which
-    is too wide to plan around. The full run is dominated by TWIN runs, and the
-    number of those is known exactly from the budgets rather than guessed, so
-    the projection is built from them and a measured throughput.
+    These come from a production-budget dry run on one dev goal, one seed, with
+    the real twin and the real surrogate, on 6 workers with torch pinned to one
+    thread per worker. They are not extrapolated from smoke budgets, which
+    scaled so badly the first estimate spanned 7.5 to 30 hours.
+
+    ``surrogate_only`` is the exception and is labelled as such: its 20,000-trial
+    TPE budget could not be run inside a 10-minute window, so it is extrapolated
+    from measured TPE scaling with the real surrogate (23.2 s at 500 trials,
+    57.4 s at 1,000, 174.9 s at 2,000, 599.6 s at 4,000 -- about O(n^1.78)).
     """
-    n_cells = n_seeds * 12  # 12 held-out goals
-    # Twin runs per cell, from the configured budgets.
-    per_cell_twin = {
-        "sf_random": 20 * 10 + 30,
-        "sf_tpe": 20 * 10 + 30,
-        "sf_cmaes": 20 * 10 + 30,
-        "surrogate_only": 30,
-        "twin_tpe": 300 * 5 + 30,
-        "twin_cmaes": 300 * 5 + 30,
-        "best_known": 100 * 30,
+    # Seconds per (goal, seed), measured unless noted.
+    measured = {
+        "sf_random": 66.9,
+        "sf_cmaes": 89.5,
+        "sf_tpe": 499.6,
+        "twin_cmaes": 330.9,
+        "twin_tpe": 351.5,
+        "best_known": 744.7,
     }
-    per_cell_surrogate = {
-        "sf_random": 50_000,
-        "sf_tpe": 3_000,
-        "sf_cmaes": 20_000,
-        "surrogate_only": 20_000,
-        "twin_tpe": 0,
-        "twin_cmaes": 0,
-        "best_known": 500_000,
-    }
-    total_twin = sum(v * n_cells for v in per_cell_twin.values())
-    total_surrogate = sum(v * n_cells for v in per_cell_surrogate.values())
+    extrapolated = {"surrogate_only": 10_850.0}
 
-    # Measured on this machine: 27.5 twin runs/s on 6 workers with the grid
-    # cache (reports/data_cards/rollouts.md section 4).
-    twin_hours = total_twin / 27.5 / 3600.0
-    # The surrogate's batched rate is 0.079 ms/scenario, but TPE and CMA-ES
-    # evaluate in small batches where per-call overhead dominates, so the range
-    # spans both.
-    best_case = total_surrogate * 0.079e-3 / workers / 3600.0
-    worst_case = total_surrogate * 2.0e-3 / workers / 3600.0
+    n_cells_per_method = n_seeds * 12  # 12 held-out goals
+    serial = sum(measured.values()) + sum(extrapolated.values())
+    hours = serial * n_cells_per_method / workers / 3600.0
+    hours_without = sum(measured.values()) * n_cells_per_method / workers / 3600.0
 
     logger.info("=== duration estimate for the full run ===")
     logger.info(
-        "  %d cells (12 held-out goals x %d methods x %d seeds)",
-        n_cells * len(per_cell_twin),
-        len(per_cell_twin),
+        "  %d cells (12 held-out goals x %d methods x %d seeds) on %d workers",
+        n_cells_per_method * (len(measured) + len(extrapolated)),
+        len(measured) + len(extrapolated),
         n_seeds,
-    )
-    logger.info("  %s twin runs -> %.1f h at a measured 27.5 runs/s", f"{total_twin:,}", twin_hours)
-    logger.info(
-        "  %s surrogate evals -> %.1f to %.1f h depending on batch size",
-        f"{total_surrogate:,}",
-        best_case,
-        worst_case,
-    )
-    logger.info(
-        "  TOTAL: %.1f to %.1f hours on %d workers (twin-dominated)",
-        twin_hours + best_case,
-        twin_hours + worst_case,
         workers,
+    )
+    for name, seconds in sorted(measured.items(), key=lambda kv: -kv[1]):
+        logger.info(
+            "  %-15s %7.0f s/cell  -> %5.1f h total",
+            name,
+            seconds,
+            seconds * n_cells_per_method / workers / 3600.0,
+        )
+    for name, seconds in extrapolated.items():
+        logger.info(
+            "  %-15s %7.0f s/cell  -> %5.1f h total   (EXTRAPOLATED, see below)",
+            name,
+            seconds,
+            seconds * n_cells_per_method / workers / 3600.0,
+        )
+    logger.info("  TOTAL: %.1f hours", hours)
+    logger.warning(
+        "  surrogate_only alone is %.1f h of that. Its 20,000-trial TPE budget makes "
+        "the CHEAP ablation the most expensive arm in the benchmark; without it the "
+        "run is %.1f h. The budget is frozen by the pre-registration, so it has not "
+        "been changed -- see the stage A report.",
+        extrapolated["surrogate_only"] * n_cells_per_method / workers / 3600.0,
+        hours_without,
     )
     del out
 
