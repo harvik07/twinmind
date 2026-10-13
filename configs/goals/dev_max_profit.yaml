@@ -1,0 +1,6 @@
+name: dev_max_profit
+split: dev
+context_id: 0
+objective:
+  profit: 1.0
+notes: 'Plain single-objective: the simplest possible goal.'

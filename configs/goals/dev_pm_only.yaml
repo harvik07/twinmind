@@ -1,0 +1,18 @@
+name: dev_pm_only
+split: dev
+context_id: 4
+objective:
+  profit: 1.0
+free_dims:
+- pm_interval_M1
+- pm_interval_M2
+- pm_interval_M3
+- pm_interval_M4
+- pm_interval_M5
+constraints:
+- kpi: unplanned_failures
+  op: <=
+  threshold: 1.0
+notes: 'Frozen dimensions: only the five PM intervals move. This is the maintenance-planning
+  question in isolation, and it is also the only goal shape where grid search applies
+  on a 5-dim space (it does not: 5 > 4, so grid reports n/a).'

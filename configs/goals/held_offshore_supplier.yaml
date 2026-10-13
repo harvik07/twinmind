@@ -1,0 +1,12 @@
+name: held_offshore_supplier
+split: held_out
+context_id: 28
+objective:
+  profit: 1.0
+fixed:
+  supplier_choice: 2
+constraints:
+- kpi: stockout_probability
+  op: <=
+  threshold: 0.15
+notes: 'Exogenous what-if: forced onto the 21-day offshore supplier.'

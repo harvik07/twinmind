@@ -1,0 +1,9 @@
+name: dev_weighted_profit_oee
+split: dev
+context_id: 2
+objective:
+  profit: 1.0
+  oee: 200000.0
+notes: Weighted multi-objective. The OEE weight converts a point of OEE into pounds;
+  200,000 makes a 0.05 OEE gain worth about GBP 10,000, which is the same order as
+  the profit differences between good plans.

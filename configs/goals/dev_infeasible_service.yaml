@@ -1,0 +1,16 @@
+name: dev_infeasible_service
+split: dev
+context_id: 7
+objective:
+  profit: 1.0
+constraints:
+- kpi: on_time_delivery_rate
+  op: '>='
+  threshold: 0.995
+- kpi: stockout_probability
+  op: <=
+  threshold: 0.005
+infeasible_by_design: true
+notes: INFEASIBLE BY DESIGN. The twin's best observed on-time delivery is about 0.98
+  and the line cannot hold stockout below 0.5% at any plan, so this must return status=infeasible_unverified
+  rather than a plan that looks fine because the check was skipped.

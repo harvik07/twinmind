@@ -1,0 +1,16 @@
+name: held_pm_only
+split: held_out
+context_id: 25
+objective:
+  profit: 1.0
+free_dims:
+- pm_interval_M1
+- pm_interval_M2
+- pm_interval_M3
+- pm_interval_M4
+- pm_interval_M5
+constraints:
+- kpi: unplanned_failures
+  op: <=
+  threshold: 1.0
+notes: 'Frozen dimensions: only PM intervals move.'

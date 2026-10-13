@@ -1,0 +1,11 @@
+name: dev_min_unit_cost
+split: dev
+context_id: 3
+objective:
+  unit_cost: 1.0
+sense: minimise
+constraints:
+- kpi: on_time_delivery_rate
+  op: '>='
+  threshold: 0.85
+notes: A minimise goal, to exercise the sense flip.

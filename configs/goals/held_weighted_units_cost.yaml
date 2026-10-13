@@ -1,0 +1,8 @@
+name: held_weighted_units_cost
+split: held_out
+context_id: 22
+objective:
+  units_produced: 20.0
+  unit_cost: -500.0
+notes: Weighted trade-off between volume and unit cost, with a negative weight rather
+  than a minimise sense, to exercise mixed-sign weights.

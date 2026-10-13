@@ -1,0 +1,9 @@
+name: held_price_cut
+split: held_out
+context_id: 29
+objective:
+  profit: 1.0
+fixed:
+  price_multiplier: 0.9
+notes: 'Exogenous what-if: a 10% price cut, which raises demand through the elasticity
+  assumption. A demand surge the plant did not choose.'

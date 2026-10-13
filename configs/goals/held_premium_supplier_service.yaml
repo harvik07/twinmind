@@ -1,0 +1,16 @@
+name: held_premium_supplier_service
+split: held_out
+context_id: 30
+objective:
+  profit: 1.0
+fixed:
+  supplier_choice: 1
+constraints:
+- kpi: on_time_delivery_rate
+  op: '>='
+  threshold: 0.93
+- kpi: downtime_hours
+  op: <=
+  threshold: 20.0
+notes: Exogenous what-if on the premium local supplier (3-day lead, higher price),
+  under a tighter service constraint than the default.
