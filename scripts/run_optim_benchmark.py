@@ -730,11 +730,24 @@ def main() -> int:
         "out": str(out),
         "manifest": manifest,
     }
-    write_atomic(
-        summary,
-        results_dir()
-        / ("optim_benchmark_smoke.json" if args.smoke else "optim_benchmark_run.json"),
-    )
+    # The summary ALWAYS goes beside the cells it describes.
+    write_atomic(summary, out / "summary.json")
+    # Only a run against the DEFAULT results tree also publishes the canonical
+    # copy in reports/results. An earlier version wrote the canonical file
+    # unconditionally, so a production-budget dry run pointed at a scratch
+    # directory overwrote reports/results/optim_benchmark_run.json with a
+    # one-cell dev-goal summary -- at the very path the real held-out run owns.
+    if Path(args.out).resolve() == RESULTS_DIR.resolve():
+        write_atomic(
+            summary,
+            results_dir()
+            / ("optim_benchmark_smoke.json" if args.smoke else "optim_benchmark_run.json"),
+        )
+    else:
+        logger.info(
+            "non-default --out: summary written to %s only, not to reports/results",
+            out / "summary.json",
+        )
     return 1 if failures else 0
 
 

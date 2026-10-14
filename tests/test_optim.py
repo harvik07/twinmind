@@ -1059,3 +1059,19 @@ def test_failed_cells_are_not_written_to_the_results_tree(tmp_path: Path) -> Non
         json.loads((tmp_path / "failures" / cell.filename).read_text(encoding="utf-8"))["error"]
         == "boom"
     )
+
+
+def test_a_scratch_run_never_writes_the_canonical_summary() -> None:
+    """A dry run pointed at --out <scratch> must not touch reports/results.
+
+    It did: the production-budget dry run on a DEV goal overwrote
+    reports/results/optim_benchmark_run.json with a one-cell summary -- the
+    path the real held-out run owns. The canonical copy is now gated on --out
+    being the default results directory, checked here against the source so the
+    gate cannot be removed without this test failing.
+    """
+    source = (PROJECT_ROOT / "scripts" / "run_optim_benchmark.py").read_text(encoding="utf-8")
+    tail = source[source.index('write_atomic(summary, out / "summary.json")') :]
+    gate = tail.index("if Path(args.out).resolve() == RESULTS_DIR.resolve():")
+    canonical = tail.index('"optim_benchmark_run.json"')
+    assert gate < canonical, "the canonical summary must be written only inside the gate"
