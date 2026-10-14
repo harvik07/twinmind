@@ -47,6 +47,11 @@ DEFAULT_K = 10
 #: dimension. ``sqrt(2)`` because two one-hot columns differ by 1 each.
 CATEGORICAL_SCALE = 1.0 / np.sqrt(2.0)
 
+#: Most float64 elements one chunk's ``[rows, N, D]`` difference tensor may
+#: hold: 2e6 elements is 16 MiB. ``np.linalg.norm`` squares it into a second
+#: tensor of the same size, so the real peak is about twice this.
+_DIFF_BUDGET = 2_000_000
+
 
 def normalise_scenarios(scenarios: NDArray[np.float64]) -> NDArray[np.float64]:
     """Map raw ``[N, 18]`` scenario values into the distance space.
@@ -106,11 +111,21 @@ class NoveltyScorer:
         Chunked so a large query does not allocate an ``[N, 32768]`` distance
         matrix all at once: the benchmark scores tens of thousands of candidates
         and the full matrix would be gigabytes.
+
+        The chunk is sized by the ``[rows, N, D]`` DIFFERENCE tensor, which is
+        the real peak, not by the ``[rows, N]`` distances it reduces to. Sizing
+        by the distances alone allowed 1,220 rows per chunk against 32,768
+        training points in 20 dimensions: a 6.4 GB intermediate, and 105 MB even
+        for a 20-row shortlist. The difference tensor is now at most
+        ``_DIFF_BUDGET`` elements (16 MiB; ~32 MiB peak with its square). Each
+        row's distances do not depend on which chunk it is in,
+        so the scores are bitwise unchanged.
         """
         query = np.atleast_2d(np.asarray(query, dtype="float64"))
         k = min(self.k, self.training.shape[0])
         out = np.empty(query.shape[0], dtype="float64")
-        chunk = max(1, int(4e7 // max(self.training.shape[0], 1)))
+        n, d = self.training.shape
+        chunk = max(1, int(_DIFF_BUDGET // max(n * d, 1)))
         for start in range(0, query.shape[0], chunk):
             block = query[start : start + chunk]
             distances = np.linalg.norm(block[:, None, :] - self.training[None, :, :], axis=2)

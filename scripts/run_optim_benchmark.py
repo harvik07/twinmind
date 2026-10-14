@@ -1,14 +1,19 @@
 """The optimisation benchmark: every method on every held-out goal.
 
-    python scripts/run_optim_benchmark.py --workers 6          # the full run
+    python scripts/run_optim_benchmark.py --workers 3          # the full run
     python scripts/run_optim_benchmark.py --smoke              # tiny, 2 dev goals
 
 RESUMABLE BY CONSTRUCTION. One atomic JSON file per ``(goal, method, seed)``
 cell plus a manifest. A cell whose file exists and parses is skipped, so an
 interrupted multi-hour run restarts where it stopped. The manifest records the
-twin config hash, the surrogate hash and every declared assumption; resuming
-against a changed twin is refused, because mixing results from two different
-simulators into one table is worse than having no table.
+twin config hash, the surrogate hash, every declared assumption, the budgets,
+the goal library and the seeds -- but not the git commit; resuming against a
+change to any of them is refused, because mixing results from two different
+experiments into one table is worse than having no table.
+
+BOUNDED MEMORY. At most 3 workers by default and at most ONE ``best_known``
+cell at a time (see :func:`dispatch`), workers recycled every
+:data:`MAX_TASKS_PER_CHILD` cells, and every cell records its own peak memory.
 
 THE METHODS, AND WHAT EACH IS FOR.
 
@@ -46,7 +51,14 @@ import numpy as np
 from twinmind.eval.registry import results_dir
 from twinmind.models.surrogate import KPI_ORDER
 from twinmind.optim.contracts import ObjectiveSpec, Plan
-from twinmind.optim.evaluators import EvalCost, SurrogateEvaluator, TwinEvaluator, feasible_robust
+from twinmind.optim.evaluators import (
+    OPTIM_SEED_ROOT,
+    STREAM_NAMES,
+    EvalCost,
+    SurrogateEvaluator,
+    TwinEvaluator,
+    feasible_robust,
+)
 from twinmind.optim.goals import Goal, load_goals
 from twinmind.optim.novelty import NoveltyScorer
 from twinmind.optim.optimisers import OPTIMISERS, free_dimensions
@@ -92,6 +104,49 @@ BUDGETS = {
 
 METHODS = tuple(BUDGETS)
 
+#: The memory-heavy method, and how many of its cells may run at once.
+#:
+#: The first full run queued goal -> method -> seed, so the first six tasks
+#: handed to six workers were all ``best_known`` cells, which then each tried to
+#: allocate their 500,000-point Sobol block at the same moment on an 8 GB
+#: machine. ``random_search`` is now bounded-memory, but ``best_known`` is still
+#: the longest cell and the one that verifies 100 plans on the twin, so it gets
+#: one lane: the scheduler in :func:`dispatch` never runs more than this many
+#: concurrently, whatever the worker count.
+HEAVY_METHOD = "best_known"
+MAX_CONCURRENT_HEAVY = 1
+
+#: Recycle a worker after this many cells. A fresh worker costs about 20 s
+#: (imports plus the surrogate, demand grid and rollout loads), so recycling
+#: after every cell would add ~25 min to a 230-cell run on 3 workers; every
+#: 4 cells bounds any fragmentation or slow growth for about 6 min.
+MAX_TASKS_PER_CHILD = 4
+
+#: Seconds one worker takes to start: imports plus the surrogate, demand-grid
+#: and rollout loads. Measured, cold, in a single process.
+WORKER_STARTUP_S = 20.0
+
+#: Measured seconds per cell at PRODUCTION budget: one dev goal, one seed, real
+#: twin and surrogate, torch pinned to one thread per worker, 6 workers. Used
+#: for the scheduling priority and for the duration estimate.
+#:
+#: A SPEED CAVEAT, measured. Re-run on 2026-10-14 at 3 workers (hot machine,
+#: ~1.3 GB RAM free at idle), the two cells that finished inside a 10-minute
+#: cap took 1.75x (sf_cmaes 156.9 s) and 1.76x (sf_random 117.9 s) these
+#: figures, and twin_cmaes had not finished at 600 s (>= 1.81x). Every cell is
+#: CPU-bound (~98% of one core), so the slowdown is the machine's clock, not
+#: memory. Treat the estimate as a cool-machine lower bound and expect up to
+#: ~1.8x on a hot one.
+MEASURED_S_PER_CELL = {
+    "best_known": 744.7,
+    "sf_tpe": 499.6,
+    "surrogate_only": 377.1,
+    "twin_tpe": 351.5,
+    "twin_cmaes": 330.9,
+    "sf_cmaes": 89.5,
+    "sf_random": 66.9,
+}
+
 
 @dataclass(frozen=True)
 class Cell:
@@ -123,11 +178,43 @@ def build_manifest(resources: Any, args: argparse.Namespace) -> dict[str, Any]:
         "demand_scale": float(resources.demand_scale),
         "budgets": dict(BUDGETS),
         "budgets_hash": budgets_hash(),
+        "goals_hash": goals_hash(),
+        "seed_scheme": seed_scheme(),
         "methods": list(METHODS),
         "seeds": list(args.seeds),
         "kpi_order": list(KPI_ORDER),
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
+
+
+def goals_hash() -> str:
+    """A stable hash of every goal in the library, both splits.
+
+    A goal is defined by its spec -- objective, constraints, free and fixed
+    dimensions, context -- so an edited constraint threshold changes what every
+    cell of that goal means. Hashed over the parsed specs rather than the YAML
+    bytes, so a comment or whitespace edit does not invalidate a run.
+    """
+    payload = json.dumps(
+        [
+            {"name": g.name, "split": g.split, "spec": g.spec.to_dict()}
+            for g in sorted(load_goals(), key=lambda g: g.name)
+        ],
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def seed_scheme() -> dict[str, Any]:
+    """What a cell's seed MEANS: the root and the named streams it derives from.
+
+    The seed list alone is not enough. Seed 1 under a different root, or with
+    the streams renamed or reordered, draws different twin replications, so a
+    cell written under one scheme is not the same experiment as one under
+    another.
+    """
+    return {"root": int(OPTIM_SEED_ROOT), "streams": list(STREAM_NAMES)}
 
 
 def budgets_hash() -> str:
@@ -144,6 +231,11 @@ def budgets_hash() -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
+#: What a results tree's cells depend on. Deliberately NOT the git commit: a
+#: commit that changes neither the twin, the surrogate, the goals, the budgets
+#: nor the seeds -- a docs edit, or the bounded-memory rewrite of
+#: ``random_search``, which is bitwise identical -- must not orphan hours of
+#: completed cells.
 INVALIDATING_KEYS = (
     "twin_config_hash",
     "surrogate_hash",
@@ -151,12 +243,44 @@ INVALIDATING_KEYS = (
     "demand_scale",
     "budgets",
     "budgets_hash",
+    "goals_hash",
+    "seed_scheme",
+    "seeds",
 )
+
+#: Keys added to the manifest after a run had already started. A manifest that
+#: predates them is UPGRADED rather than refused, provided every key it does
+#: record matches. This is a closed list: any other missing key is a conflict.
+#:
+#: Why upgrading is safe for these two: the goal library and the seed scheme
+#: are unchanged since the pre-registration commit (4f54ac8), which predates
+#: every manifest written by this script -- checked with ``git diff 4f54ac8 --
+#: configs/goals src/twinmind/optim/goals.py src/twinmind/optim/evaluators.py``
+#: when the keys were added. From the upgrade on, they are enforced like any
+#: other key.
+ADDED_MANIFEST_KEYS = ("goals_hash", "seed_scheme")
 
 
 def manifest_conflicts(existing: dict[str, Any], current: dict[str, Any]) -> list[str]:
-    """Keys on which a stored manifest disagrees with the current one."""
-    return [k for k in INVALIDATING_KEYS if existing.get(k) != current.get(k)]
+    """Keys on which a stored manifest disagrees with the current one.
+
+    A key in :data:`ADDED_MANIFEST_KEYS` that the stored manifest lacks is not
+    a conflict; see :func:`upgrade_manifest`.
+    """
+    return [
+        k
+        for k in INVALIDATING_KEYS
+        if not (k in ADDED_MANIFEST_KEYS and k not in existing)
+        and existing.get(k) != current.get(k)
+    ]
+
+
+def upgrade_manifest(
+    existing: dict[str, Any], current: dict[str, Any]
+) -> tuple[dict[str, Any], list[str]]:
+    """Fill keys a pre-upgrade manifest lacks, keeping everything it recorded."""
+    added = [k for k in ADDED_MANIFEST_KEYS if k not in existing]
+    return {**existing, **{k: current[k] for k in added}}, added
 
 
 def write_atomic(payload: dict[str, Any], path: Path) -> Path:
@@ -308,6 +432,14 @@ def run_best_known(
     surrogate_eval = SurrogateEvaluator(surrogate=surrogate, context=context)
     candidates = OPTIMISERS["random"](spec, surrogate_eval, budget, seed)
     shortlist = candidates[:top_n]
+    logger.info(
+        "best_known %s seed %d: %d surrogate points in %.0f s; verifying the top %d at 30 reps",
+        spec.name,
+        seed,
+        budget,
+        time.perf_counter() - started,
+        len(shortlist),
+    )
 
     final_eval = TwinEvaluator(
         resources=resources, context=context, goal_seed=seed, n_reps=30, stream="reeval"
@@ -415,7 +547,12 @@ def run_cell(
 def build_parser() -> argparse.ArgumentParser:
     """Command-line interface for this script."""
     parser = argparse.ArgumentParser(description="Run the optimisation benchmark.")
-    parser.add_argument("--workers", type=int, default=6, help="Max 6, spawn start method.")
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=3,
+        help="Max 6, spawn start method. Default 3, from measured peak memory and heat.",
+    )
     parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3])
     parser.add_argument("--out", default=str(RESULTS_DIR))
     parser.add_argument("--smoke", action="store_true", help="Tiny budgets on 2 dev goals.")
@@ -506,14 +643,27 @@ def _run_one(task: dict[str, Any]) -> dict[str, Any]:
     """Worker entry point. Module-level and plain-data in/out, for spawn.
 
     **Never raises.** A failure is returned as a result with ``ok=False`` and a
-    traceback, because an exception escaping here propagates out of
-    ``imap_unordered`` and kills the whole pool -- which is exactly what a Sobol
+    traceback, because an exception escaping here propagated out of
+    ``imap_unordered`` and killed the whole pool -- which is exactly what a Sobol
     ValueError in one cell did to the first production run, taking the other 251
-    cells with it. A three-hour job must not be destroyed by one bad cell.
+    cells with it. A multi-hour job must not be destroyed by one bad cell.
+    (:func:`dispatch` now also turns an escaped exception into a failure
+    result, as a second line of defence.)
+
+    Each cell records its own peak memory; see :class:`_PeakMemory`.
     """
     import traceback
 
     started = time.perf_counter()
+    sampler = _PeakMemory()
+    sampler.start()
+    logger.info(
+        "start %s / %s / seed %d in worker pid %d",
+        task["goal"],
+        task["method"],
+        task["seed"],
+        os.getpid(),
+    )
     try:
         state = _worker_context()
         goal = next(g for g in load_goals() if g.name == task["goal"])
@@ -535,13 +685,210 @@ def _run_one(task: dict[str, Any]) -> dict[str, Any]:
             "wall_seconds": time.perf_counter() - started,
             "smoke": task["smoke"],
         }
-    try:
+    result.update(sampler.stop())
+    return result
+
+
+class _PeakMemory:
+    """Peak memory of THIS process over one cell, sampled on a thread.
+
+    Two figures, because on Windows they diverge and the second is the one
+    that fails. ``rss`` is the working set, what is resident. ``private`` is
+    committed memory (``memory_info().private`` on Windows, USS elsewhere), and
+    a ``MemoryError`` on Windows means the commit limit was hit, not RAM: a
+    freshly loaded worker measured 0.39 GB resident against 1.19 GB committed.
+
+    Sampled every 0.25 s, so a spike shorter than that can be missed; the
+    lifetime peak working set the OS records (``peak_wset``) is reported too,
+    as a check that the sampler is not under-reading.
+    """
+
+    def __init__(self, interval: float = 0.25) -> None:
+        import threading
+
+        self.interval = interval
+        self.peak_rss = 0.0
+        self.peak_private = 0.0
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _sample(self) -> None:
         import psutil
 
-        result["worker_rss_gb"] = float(psutil.Process(os.getpid()).memory_info().rss / 1e9)
-    except Exception:  # noqa: BLE001 - diagnostics must never break the run
-        result["worker_rss_gb"] = float("nan")
-    return result
+        info = psutil.Process(os.getpid()).memory_info()
+        self.peak_rss = max(self.peak_rss, float(info.rss))
+        private = getattr(info, "private", None)
+        if private is None:
+            private = psutil.Process(os.getpid()).memory_full_info().uss
+        self.peak_private = max(self.peak_private, float(private))
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            try:
+                self._sample()
+            except Exception:  # noqa: BLE001 - diagnostics must never break the run
+                return
+            self._stop.wait(self.interval)
+
+    def start(self) -> None:
+        """Begin sampling."""
+        self._thread.start()
+
+    def stop(self) -> dict[str, float]:
+        """Stop, take a last sample, and return the figures in GB."""
+        self._stop.set()
+        self._thread.join(timeout=5.0)
+        out = {
+            "worker_rss_gb": float("nan"),
+            "cell_peak_rss_gb": float("nan"),
+            "cell_peak_private_gb": float("nan"),
+            "worker_lifetime_peak_rss_gb": float("nan"),
+        }
+        try:
+            import psutil
+
+            self._sample()
+            info = psutil.Process(os.getpid()).memory_info()
+            out["worker_rss_gb"] = float(info.rss) / 1e9
+            out["cell_peak_rss_gb"] = self.peak_rss / 1e9
+            out["cell_peak_private_gb"] = self.peak_private / 1e9
+            lifetime = getattr(info, "peak_wset", None)
+            if lifetime is not None:
+                out["worker_lifetime_peak_rss_gb"] = float(lifetime) / 1e9
+        except Exception:  # noqa: BLE001 - diagnostics must never break the run
+            pass
+        return out
+
+
+def order_tasks(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Priority order: the heavy method first, then longest expected cell first.
+
+    The heavy cells form a serial lane (see :data:`MAX_CONCURRENT_HEAVY`) and
+    are the longest, so that lane is the critical path and must never sit idle.
+    The rest is longest-processing-time first, the standard greedy for keeping
+    the last worker from finishing long after the others.
+    """
+    return sorted(
+        tasks,
+        key=lambda t: (
+            t["method"] != HEAVY_METHOD,
+            -MEASURED_S_PER_CELL.get(t["method"], 0.0),
+            t["goal"],
+            t["seed"],
+        ),
+    )
+
+
+def _next_task(
+    pending: list[dict[str, Any]], heavy_running: int, max_heavy: int
+) -> dict[str, Any] | None:
+    """Pop the first pending task allowed to start now, or None."""
+    for index, task in enumerate(pending):
+        if task["method"] != HEAVY_METHOD or heavy_running < max_heavy:
+            return pending.pop(index)
+    return None
+
+
+def dispatch(
+    pool: Any,
+    func: Any,
+    tasks: list[dict[str, Any]],
+    workers: int,
+    max_heavy: int = MAX_CONCURRENT_HEAVY,
+) -> Any:
+    """Run ``func`` over ``tasks`` on ``pool``; yield results as they finish.
+
+    Unlike ``imap_unordered``, which hands tasks out in list order, this keeps
+    at most ``workers`` tasks in flight and at most ``max_heavy`` of the heavy
+    method, so no queue order can put two ``best_known`` cells side by side.
+    """
+    import queue
+
+    pending = order_tasks(tasks)
+    finished: queue.Queue[dict[str, Any]] = queue.Queue()
+    in_flight = heavy = 0
+    while pending or in_flight:
+        while in_flight < workers:
+            task = _next_task(pending, heavy, max_heavy)
+            if task is None:
+                break
+            heavy += task["method"] == HEAVY_METHOD
+            in_flight += 1
+            pool.apply_async(
+                func,
+                (task,),
+                callback=finished.put,
+                error_callback=lambda error, task=task: finished.put(
+                    _dispatch_failure(task, error)
+                ),
+            )
+        while True:
+            # A timeout, so Ctrl-C is not stuck behind an uninterruptible wait.
+            try:
+                result = finished.get(timeout=1.0)
+                break
+            except queue.Empty:
+                continue
+        in_flight -= 1
+        heavy -= result["method"] == HEAVY_METHOD
+        yield result
+
+
+def _dispatch_failure(task: dict[str, Any], error: BaseException) -> dict[str, Any]:
+    """A failure result for a task whose worker could not even return one."""
+    return {
+        "ok": False,
+        "goal": task["goal"],
+        "method": task["method"],
+        "seed": task["seed"],
+        "error": f"{type(error).__name__}: {error}",
+        "traceback": "",
+        "wall_seconds": float("nan"),
+        "smoke": task["smoke"],
+    }
+
+
+def simulate_hours(
+    counts: dict[str, int],
+    workers: int,
+    seconds: dict[str, float] | None = None,
+    max_heavy: int = MAX_CONCURRENT_HEAVY,
+    startup_s: float = WORKER_STARTUP_S,
+) -> float:
+    """Wall-clock hours for ``counts`` cells under exactly :func:`dispatch`'s policy.
+
+    A discrete-event replay of the scheduler with each cell taking its measured
+    seconds, plus a worker start-up every :data:`MAX_TASKS_PER_CHILD` cells. It
+    replaces "total work / workers", which ignores that the heavy lane is
+    serial: with one ``best_known`` at a time, the run can never finish before
+    ``n_best_known x seconds_per_best_known``, however many workers there are.
+    """
+    import heapq
+
+    seconds = MEASURED_S_PER_CELL if seconds is None else seconds
+    pending = order_tasks(
+        [
+            {"method": method, "goal": "", "seed": index}
+            for method, n in counts.items()
+            for index in range(n)
+        ]
+    )
+    clock = 0.0
+    running: list[tuple[float, int, str]] = []  # (finish time, tiebreak, method)
+    heavy = started = 0
+    while pending or running:
+        while len(running) < workers:
+            task = _next_task(pending, heavy, max_heavy)
+            if task is None:
+                break
+            heavy += task["method"] == HEAVY_METHOD
+            # Each worker starts fresh once per MAX_TASKS_PER_CHILD cells.
+            cost = seconds[task["method"]] + startup_s / MAX_TASKS_PER_CHILD
+            heapq.heappush(running, (clock + cost, started, task["method"]))
+            started += 1
+        clock, _, method = heapq.heappop(running)
+        heavy -= method == HEAVY_METHOD
+    return clock / 3600.0
 
 
 def main() -> int:
@@ -574,9 +921,19 @@ def main() -> int:
         if conflicts:
             raise SystemExit(
                 f"refusing to resume: the manifest in {out} disagrees on {conflicts}.\n"
-                "The twin, its assumptions or the surrogate changed since those cells were "
-                "written, so mixing them would put results from two different systems in one "
-                "table.\nPass --force-new-manifest to overwrite, after moving the old cells."
+                "The twin, its assumptions, the surrogate, the goals, the budgets or the seeds "
+                "changed since those cells were written, so mixing them would put results from "
+                "two different experiments in one table.\n"
+                "Pass --force-new-manifest to overwrite, after moving the old cells."
+            )
+        upgraded, added = upgrade_manifest(existing, manifest)
+        if added:
+            write_atomic(upgraded, manifest_path)
+            logger.warning(
+                "manifest in %s predates %s; every key it records matches, so it was "
+                "upgraded in place and its completed cells are kept",
+                out,
+                added,
             )
     else:
         write_atomic(manifest, manifest_path)
@@ -624,23 +981,28 @@ def main() -> int:
         len(args.seeds),
         workers,
     )
+    if tasks and not args.smoke:
+        outstanding: dict[str, int] = {}
+        for task in tasks:
+            outstanding[task["method"]] = outstanding.get(task["method"], 0) + 1
+        _estimate_full_run(outstanding, workers)
     if not tasks:
         logger.info("nothing to do; every cell is present")
         if args.smoke:
             # Still print the projection: a resumed smoke run is exactly when
             # someone wants to know how long the real one will take.
-            _estimate_full_run(out, workers, len(args.seeds))
+            _estimate_full_run({m: len(args.seeds) * 12 for m in METHODS}, workers)
         return 0
 
     started = time.perf_counter()
     done = 0
-    rss: list[float] = []
+    rss: dict[str, list[tuple[float, float]]] = {}
     context = mp.get_context("spawn")
-    pool = context.Pool(workers, initializer=_init_worker)
+    pool = context.Pool(workers, initializer=_init_worker, maxtasksperchild=MAX_TASKS_PER_CHILD)
     failures: list[dict[str, Any]] = []
     failure_dir = out / "failures"
     try:
-        for result in pool.imap_unordered(_run_one, tasks):
+        for result in dispatch(pool, _run_one, tasks, workers):
             cell = Cell(goal=result["goal"], method=result["method"], seed=result["seed"])
             done += 1
             if result.get("ok", True):
@@ -660,8 +1022,11 @@ def main() -> int:
                     result["error"],
                 )
                 continue
-            if np.isfinite(result.get("worker_rss_gb", np.nan)):
-                rss.append(result["worker_rss_gb"])
+            peak = result.get("cell_peak_rss_gb", np.nan)
+            if np.isfinite(peak):
+                rss.setdefault(result["method"], []).append(
+                    (peak, result.get("cell_peak_private_gb", np.nan))
+                )
             elapsed = time.perf_counter() - started
             rate = done / max(elapsed, 1e-9)
             logger.info(
@@ -691,16 +1056,16 @@ def main() -> int:
         done - len(failures),
         len(failures),
     )
-    if rss:
+    for method, peaks in sorted(rss.items()):
         logger.info(
-            "worker memory: %.2f GB mean, %.2f GB peak; ~%.1f GB across %d workers",
-            float(np.mean(rss)),
-            float(np.max(rss)),
-            float(np.max(rss)) * workers,
-            workers,
+            "peak memory %-15s rss %.2f GB, committed %.2f GB (max over %d cells)",
+            method,
+            max(p[0] for p in peaks),
+            max(p[1] for p in peaks),
+            len(peaks),
         )
     if args.smoke:
-        _estimate_full_run(out, workers, len(args.seeds))
+        _estimate_full_run({m: len(args.seeds) * 12 for m in METHODS}, workers)
 
     if failures:
         # Loud, itemised, and a non-zero exit. A silent partial run is how a
@@ -751,57 +1116,40 @@ def main() -> int:
     return 1 if failures else 0
 
 
-def _estimate_full_run(out: Path, workers: int, n_seeds: int) -> None:
-    """Project the full run from MEASURED per-method timings.
+def _estimate_full_run(counts: dict[str, int], workers: int) -> None:
+    """Project a run's wall-clock time from MEASURED per-method timings.
 
-    Every figure below comes from a production-budget run on one dev goal, one
-    seed, with the real twin and the real surrogate, on 6 workers with torch
-    pinned to one thread each. Nothing is extrapolated any more:
-    ``surrogate_only`` was the one estimated entry and has been re-measured at
-    its matched 3,000-trial budget (377.1 s, down from about 10,850 s at the old
-    20,000 -- see Amendment 1 in reports/preregistration_optim.md).
+    ``counts`` is cells per method -- the full grid, or just what is still
+    outstanding on a resume. The seconds per cell are
+    :data:`MEASURED_S_PER_CELL`; the hours come from :func:`simulate_hours`,
+    which replays the real scheduling policy. That matters: with at most one
+    ``best_known`` at a time, the run cannot finish before the serial
+    ``best_known`` lane does, so "total work / workers" understates it.
 
-    The arithmetic, stated so it can be checked: each method runs
-    ``n_seeds x 12`` cells, the cells are spread over ``workers``, so
+    The bound stated so it can be checked by hand:
 
-        hours = seconds_per_cell x (n_seeds x 12) / workers / 3600
-
-    which at 3 seeds and 6 workers is simply ``seconds_per_cell / 600``.
+        hours >= max(sum(seconds x cells) / workers,
+                     best_known seconds x best_known cells) / 3600
     """
-    measured = {
-        "best_known": 744.7,
-        "sf_tpe": 499.6,
-        "surrogate_only": 377.1,
-        "twin_tpe": 351.5,
-        "twin_cmaes": 330.9,
-        "sf_cmaes": 89.5,
-        "sf_random": 66.9,
-    }
-
-    n_cells_per_method = n_seeds * 12
-    divisor = n_cells_per_method / workers / 3600.0
-
-    logger.info("=== duration estimate for the full run ===")
+    seconds = MEASURED_S_PER_CELL
+    total = sum(seconds[m] * n for m, n in counts.items())
+    lane = seconds[HEAVY_METHOD] * counts.get(HEAVY_METHOD, 0)
+    logger.info("=== duration estimate: %d cells ===", sum(counts.values()))
+    logger.info("  %-15s %6s %9s %11s", "method", "cells", "s/cell", "cell-hours")
+    for name, n in sorted(counts.items(), key=lambda kv: -seconds[kv[0]]):
+        logger.info("  %-15s %6d %9.1f %11.2f", name, n, seconds[name], seconds[name] * n / 3600)
+    logger.info("  %-15s %6d %9s %11.2f", "SUM", sum(counts.values()), "", total / 3600)
     logger.info(
-        "  %d cells (12 held-out goals x %d methods x %d seeds) on %d workers",
-        n_cells_per_method * len(measured),
-        len(measured),
-        n_seeds,
-        workers,
+        "  serial %s lane: %.2f h, a floor whatever the worker count", HEAVY_METHOD, lane / 3600
     )
-    logger.info("  %-15s %9s %9s", "method", "s/cell", "hours")
-    for name, seconds in sorted(measured.items(), key=lambda kv: -kv[1]):
-        logger.info("  %-15s %9.1f %9.2f", name, seconds, seconds * divisor)
-    serial = sum(measured.values())
-    logger.info("  %-15s %9.1f %9.2f", "SUM", serial, serial * divisor)
-    logger.info(
-        "  = %.1f s/cell x %d cells / %d workers / 3600 = %.2f hours",
-        serial,
-        n_cells_per_method,
-        workers,
-        serial * divisor,
-    )
-    del out
+    for n_workers in sorted({2, 3, 4, workers}):
+        logger.info(
+            "  %d workers: %.2f h simulated (lower bound %.2f h)%s",
+            n_workers,
+            simulate_hours(counts, n_workers),
+            max(total / n_workers, lane) / 3600,
+            "  <- this run" if n_workers == workers else "",
+        )
 
 
 def _hms(seconds: float) -> str:

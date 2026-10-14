@@ -1075,3 +1075,453 @@ def test_a_scratch_run_never_writes_the_canonical_summary() -> None:
     gate = tail.index("if Path(args.out).resolve() == RESULTS_DIR.resolve():")
     canonical = tail.index('"optim_benchmark_run.json"')
     assert gate < canonical, "the canonical summary must be written only inside the gate"
+
+
+# --------------------------------------------------------------------------- #
+# Bounded memory
+# --------------------------------------------------------------------------- #
+#
+# The first full run died with MemoryError: ``best_known`` drew its whole
+# 500,000-point Sobol sample as one 2**19 x 16 float64 block (64 MiB), six such
+# cells started at once because the queue put them first, and on an 8 GB laptop
+# the machine ran out. The draw is now chunked and the queue keeps best_known
+# to one lane; these pin both, and pin that neither changed a single result.
+
+
+def _one_block(d: int, budget: int, seed: int) -> Any:
+    """The draw the chunked sampler replaces: one 2**ceil(log2(budget)) block."""
+    import math
+
+    from scipy import stats as _stats
+
+    sampler = _stats.qmc.Sobol(d=d, scramble=True, seed=seed)
+    return sampler.random_base2(m=max(int(math.ceil(math.log2(max(budget, 2)))), 1))[:budget]
+
+
+@pytest.mark.parametrize(
+    ("d", "budget", "chunk"),
+    [
+        (16, 500_000, 2**15),  # best_known, at its real budget and real chunk
+        (3, 50_000, 2**15),  # sf_random
+        (3, 20_000, 2**12),  # several chunks, last one truncated
+        (3, 2**16, 2**15),  # an exact multiple: no truncation
+        (3, 2**15 + 1, 2**15),  # one point into the second chunk
+        (3, 3_000, 2**15),  # fits in one chunk: the old path exactly
+    ],
+)
+def test_chunked_sobol_is_bitwise_identical_to_the_single_block(
+    d: int, budget: int, chunk: int
+) -> None:
+    """Same points, same order, same bits -- with every warning an error.
+
+    Bitwise, not ``allclose``: the completed ``sf_random`` cells were produced
+    by the single-block draw, and they stay valid only if not one bit moves.
+    Warnings are errors because scipy's balance warning is how a non-power-of-
+    two draw would announce itself, and a warning is easy to miss in a log.
+    """
+    import warnings
+
+    from twinmind.optim.optimisers import sobol_chunks
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        parts = list(sobol_chunks(d, budget, seed=7, chunk=chunk))
+        expected = _one_block(d, budget, seed=7)
+    starts = [start for start, _ in parts]
+    chunked = np.concatenate([points for _, points in parts])
+    assert starts == list(range(0, budget, chunk))[: len(parts)]
+    assert max(points.shape[0] for _, points in parts) <= chunk
+    assert chunked.shape == expected.shape == (budget, d)
+    assert np.array_equal(chunked.view(np.uint64), expected.view(np.uint64))
+
+
+def test_sobol_chunks_rejects_a_chunk_that_is_not_a_power_of_two() -> None:
+    from twinmind.optim.optimisers import sobol_chunks
+
+    with pytest.raises(ValueError, match="power of two"):
+        list(sobol_chunks(3, 10_000, seed=0, chunk=3000))
+
+
+def _signature(candidates: list[Any]) -> list[tuple[Any, ...]]:
+    return [(tuple(c.scenario.to_vector()), c.score, c.violation) for c in candidates]
+
+
+def _one_shot_random_search(spec: ObjectiveSpec, evaluator: Any, budget: int, seed: int) -> Any:
+    """The old code, reduced to its definition: one block, score all, sort once."""
+    from twinmind.optim.optimisers import _score_batch
+
+    free = free_dimensions(spec)
+    points = _one_block(len(free), budget, seed)
+    scenarios = [build_scenario(spec, free, row) for row in points]
+    everything = _score_batch(spec, scenarios, evaluator)
+    everything.sort(key=rank_key)  # stable: ties keep evaluation order
+    return everything[:200]
+
+
+def _constrained_spec() -> ObjectiveSpec:
+    """simple_spec plus a constraint, so feasibility-first ordering bites."""
+    return simple_spec(
+        constraints=(Constraint(kpi="stockout_probability", op="<=", threshold=0.3),)
+    )
+
+
+def test_chunked_top_k_equals_the_one_shot_top_k_at_20k(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The running top-K merge returns exactly the one-shot top-K.
+
+    The chunk is shrunk to 4,096 so the 20,000 budget spans five chunks (the
+    last truncated); at the production chunk of 32,768 it would be one chunk
+    and prove nothing.
+    """
+    import twinmind.optim.optimisers as optimisers
+
+    monkeypatch.setattr(optimisers, "SOBOL_CHUNK", 4096)
+    chunked = random_search(_constrained_spec(), FakeEvaluator(), 20_000, seed=4)
+    one_shot = _one_shot_random_search(_constrained_spec(), FakeEvaluator(), 20_000, seed=4)
+    assert len(list(optimisers.sobol_chunks(3, 20_000, 4, chunk=4096))) == 5
+    assert _signature(chunked) == _signature(one_shot)
+    assert any(c.feasible for c in chunked) and len(chunked) == 200
+
+
+def test_best_known_returns_the_same_plans_as_the_one_shot_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End to end through ``run_best_known``: shortlist, twin verification, ranking."""
+    import twinmind.optim.optimisers as optimisers
+
+    module = _benchmark_module()
+    _patch_twin(monkeypatch)
+    monkeypatch.setattr(optimisers, "SOBOL_CHUNK", 4096)
+
+    def plans_with(search: Any) -> list[tuple[Any, ...]]:
+        monkeypatch.setitem(module.OPTIMISERS, "random", search)
+        plans, _ = module.run_best_known(
+            _constrained_spec(),
+            context=None,
+            surrogate=FakeSurrogate(),
+            resources=FakeTwinResources(),
+            seed=2,
+            budget=20_000,
+            top_n=100,
+        )
+        return [
+            (tuple(p.scenario.to_vector()), p.objective_value, p.status, p.feasible_robust)
+            for p in plans
+        ]
+
+    new = plans_with(random_search)
+    old = plans_with(_one_shot_random_search)
+    assert new == old
+    assert len(new) == 10
+
+
+def test_random_search_is_deterministic_per_seed_across_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import twinmind.optim.optimisers as optimisers
+
+    monkeypatch.setattr(optimisers, "SOBOL_CHUNK", 4096)
+    first = random_search(simple_spec(), FakeEvaluator(), 20_000, seed=5)
+    again = random_search(simple_spec(), FakeEvaluator(), 20_000, seed=5)
+    other = random_search(simple_spec(), FakeEvaluator(), 20_000, seed=6)
+    assert _signature(first) == _signature(again)
+    assert _signature(first) != _signature(other)
+
+
+def test_random_search_memory_is_bounded_at_the_best_known_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """tracemalloc peak over the full 500,000-point search, all 16 dimensions free.
+
+    THE BOUND IS 16 MiB, a quarter of the 64 MiB the single-block draw held for
+    its points alone (2**19 rows x 16 x 8 bytes), so the old code fails this
+    test on the Sobol block before evaluating anything. The new peak is one
+    32,768-row chunk (4 MiB) plus one 2,048-row batch plus the top-K buffer.
+
+    Per-row Scenario construction is stubbed (to a copied row) and the
+    surrogate is a vectorised closed form, because under tracemalloc the real
+    ones cost ~0.9 ms a point -- about 8 minutes at this budget. Both allocate
+    per BATCH, not per budget, so stubbing them changes the constant and not
+    the scaling; measured with the real ones at 50,000 points (two chunks) the
+    peak was 13.5 MiB.
+    """
+    import tracemalloc
+    import warnings
+    from types import SimpleNamespace
+
+    import twinmind.optim.optimisers as optimisers
+
+    budget = _production_budgets()["best_known"]
+    spec = ObjectiveSpec(name="memory", objective={"profit": 1.0}, free_dims=CONTROLLABLE_DIMS)
+    assert len(free_dimensions(spec)) == 16
+
+    def fake_surrogate(
+        spec: ObjectiveSpec, rows: Any, evaluator: Any, margins: Any = None
+    ) -> list[Any]:
+        evaluator.calls += len(rows)
+        block = np.asarray(rows)
+        score = block[:, 0] - 0.5 * (block[:, 1] - 0.3) ** 2
+        violation = np.maximum(block[:, 2] - 0.8, 0.0)
+        return [
+            optimisers.Candidate(scenario=row, kpis={}, score=float(s), violation=float(v))
+            for row, s, v in zip(rows, score, violation, strict=True)
+        ]
+
+    monkeypatch.setattr(optimisers, "build_scenario", lambda spec, free, row: row.copy())
+    monkeypatch.setattr(optimisers, "_score_batch", fake_surrogate)
+    counter = SimpleNamespace(calls=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tracemalloc.start()
+        try:
+            best = optimisers.random_search(spec, counter, budget, seed=0)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+
+    assert counter.calls == budget
+    assert len(best) == optimisers.TOP_K
+    assert peak < 16 * 2**20, f"peak {peak / 2**20:.1f} MiB"
+
+
+def test_top_k_stays_bounded_and_breaks_ties_by_evaluation_order() -> None:
+    """TPE's and CMA-ES's ``found`` used to grow to the budget (20,000 for sf_cmaes)."""
+    import twinmind.optim.optimisers as optimisers
+
+    top = optimisers.TopK(k=5)
+    scenarios = [Scenario(throughput_multiplier=1.0 + i / 2000) for i in range(1000)]
+    for start in range(0, 1000, 7):
+        top.add(
+            [
+                optimisers.Candidate(
+                    scenario=scenarios[i], kpis={}, score=float(i % 13), violation=0.0
+                )
+                for i in range(start, min(start + 7, 1000))
+            ]
+        )
+        assert len(top._items) < 2 * top.k + 7
+    assert top.seen == 1000
+    best = top.result()
+    # Score 12 is the maximum; among equal scores the earliest evaluation wins.
+    assert [c.score for c in best] == [12.0] * 5
+    assert [c.scenario for c in best] == [scenarios[i] for i in (12, 25, 38, 51, 64)]
+
+
+def test_grid_walks_the_same_points_in_the_same_order() -> None:
+    """Batched grid == the full meshgrid it replaced."""
+    spec = simple_spec()
+    free = free_dimensions(spec)
+    seen: list[Any] = []
+
+    class Recording(FakeEvaluator):
+        def evaluate(self, scenarios: Any) -> list[dict[str, float]]:
+            seen.extend(s.to_vector() for s in scenarios)
+            return super().evaluate(scenarios)
+
+    grid_search(spec, Recording(), 2000, seed=0, batch_size=100)
+    per_dim = max(2, int(round(2000 ** (1.0 / len(free)))))
+    axes = [np.linspace(0.0, 1.0, per_dim) for _ in free]
+    mesh = np.stack([g.ravel() for g in np.meshgrid(*axes, indexing="ij")], axis=1)
+    expected = [build_scenario(spec, free, row).to_vector() for row in mesh]
+    assert np.array_equal(np.array(seen), np.array(expected))
+
+
+def test_novelty_chunks_by_the_difference_tensor_and_scores_identically() -> None:
+    """The [rows, N, D] intermediate is what is bounded, and no score moves.
+
+    The old chunk ignored D: 50 queries against 20,000 x 20 training points went
+    in one chunk, a 160 MB difference tensor, so the 48 MiB bound fails on it.
+    """
+    import tracemalloc
+
+    rng = np.random.default_rng(0)
+    scorer = NoveltyScorer(training=rng.random((20_000, 20)), k=10)
+    query = rng.random((50, 20))
+
+    tracemalloc.start()
+    try:
+        scores = scorer.score_normalised(query)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 48 * 2**20, f"peak {peak / 2**20:.1f} MiB"
+
+    head = query[:4]
+    distances = np.linalg.norm(head[:, None, :] - scorer.training[None, :, :], axis=2)
+    reference = np.partition(distances, 9, axis=1)[:, :10].mean(axis=1)
+    assert np.array_equal(scores[:4], reference)
+
+
+# --------------------------------------------------------------------------- #
+# Scheduling: best_known never runs beside another best_known
+# --------------------------------------------------------------------------- #
+def _tasks(module: Any, goals: int = 3, seeds: tuple[int, ...] = (1, 2)) -> list[dict[str, Any]]:
+    """The old goal -> method -> seed order, best_known first within each goal."""
+    methods = ("best_known", *[m for m in module.METHODS if m != "best_known"])
+    return [
+        {"goal": f"g{g}", "method": m, "seed": s, "smoke": False, "novelty_active": True}
+        for g in range(goals)
+        for m in methods
+        for s in seeds
+    ]
+
+
+def _concurrency_probe() -> tuple[Any, dict[str, Any]]:
+    """A worker function that records how many cells, and best_known cells, overlap."""
+    import threading
+    import time as _time
+
+    lock = threading.Lock()
+    state: dict[str, Any] = {"heavy": 0, "max_heavy": 0, "live": 0, "max_live": 0, "starts": []}
+
+    def work(task: dict[str, Any]) -> dict[str, Any]:
+        heavy = int(task["method"] == "best_known")
+        with lock:
+            state["starts"].append(task["method"])
+            state["live"] += 1
+            state["heavy"] += heavy
+            state["max_live"] = max(state["max_live"], state["live"])
+            state["max_heavy"] = max(state["max_heavy"], state["heavy"])
+        _time.sleep(0.03 if heavy else 0.005)
+        with lock:
+            state["live"] -= 1
+            state["heavy"] -= heavy
+        return {**task, "ok": True}
+
+    return work, state
+
+
+def test_dispatch_never_runs_two_best_known_cells_at_once() -> None:
+    from multiprocessing.pool import ThreadPool
+
+    module = _benchmark_module()
+    tasks = _tasks(module)
+    work, state = _concurrency_probe()
+    with ThreadPool(4) as pool:
+        results = list(module.dispatch(pool, work, tasks, workers=4))
+
+    assert sorted((r["goal"], r["method"], r["seed"]) for r in results) == sorted(
+        (t["goal"], t["method"], t["seed"]) for t in tasks
+    )
+    assert state["max_heavy"] == 1
+    assert state["max_live"] <= 4
+    # The heavy lane is the critical path, so it starts first.
+    assert state["starts"][0] == "best_known"
+
+
+def test_the_old_queue_order_did_run_best_known_cells_together() -> None:
+    """Negative control: the probe can see the overlap the scheduler prevents."""
+    from multiprocessing.pool import ThreadPool
+
+    module = _benchmark_module()
+    work, state = _concurrency_probe()
+    with ThreadPool(4) as pool:
+        list(pool.imap_unordered(work, _tasks(module)))
+    assert state["max_heavy"] > 1
+
+
+def test_failed_dispatch_is_reported_not_lost() -> None:
+    """A task whose worker raises still comes back, as a failure."""
+    from multiprocessing.pool import ThreadPool
+
+    module = _benchmark_module()
+
+    def explode(task: dict[str, Any]) -> dict[str, Any]:
+        raise RuntimeError("worker died")
+
+    with ThreadPool(2) as pool:
+        results = list(module.dispatch(pool, explode, _tasks(module, goals=1, seeds=(1,)), 2))
+    assert len(results) == len(module.METHODS)
+    assert all(r["ok"] is False and "worker died" in r["error"] for r in results)
+
+
+def test_the_pool_recycles_workers_and_uses_the_scheduler() -> None:
+    source = (PROJECT_ROOT / "scripts" / "run_optim_benchmark.py").read_text(encoding="utf-8")
+    assert "maxtasksperchild=MAX_TASKS_PER_CHILD" in source
+    assert "dispatch(pool, _run_one, tasks, workers)" in source
+    assert "imap_unordered(_run_one" not in source
+
+
+def test_simulated_duration_respects_both_lower_bounds() -> None:
+    """The serial best_known lane is a floor no worker count gets under."""
+    module = _benchmark_module()
+    seconds = module.MEASURED_S_PER_CELL
+    counts = {m: 36 for m in module.METHODS}
+    lane = seconds["best_known"] * 36 / 3600
+    for workers in (1, 2, 3, 4, 6):
+        hours = module.simulate_hours(counts, workers)
+        total = sum(seconds[m] * n for m, n in counts.items()) / workers / 3600
+        assert hours >= max(lane, total) - 1e-9
+    # One worker is simply the sum, start-ups included.
+    serial = sum(
+        (seconds[m] + module.WORKER_STARTUP_S / module.MAX_TASKS_PER_CHILD) * n
+        for m, n in counts.items()
+    )
+    assert module.simulate_hours(counts, 1) == pytest.approx(serial / 3600)
+
+
+# --------------------------------------------------------------------------- #
+# Manifest: what invalidates a results tree, and the upgrade that keeps it
+# --------------------------------------------------------------------------- #
+def _manifest(module: Any) -> dict[str, Any]:
+    return {
+        "twin_config_hash": "t",
+        "surrogate_hash": "s",
+        "assumptions": {"demand_capacity_ratio": 0.85},
+        "demand_scale": 0.44,
+        "budgets": dict(module.BUDGETS),
+        "budgets_hash": module.budgets_hash(),
+        "goals_hash": module.goals_hash(),
+        "seed_scheme": module.seed_scheme(),
+        "seeds": [1, 2, 3],
+        "created": "now",
+    }
+
+
+def test_manifest_covers_goals_seeds_and_budgets_but_not_the_commit() -> None:
+    module = _benchmark_module()
+    for key in ("goals_hash", "seed_scheme", "seeds", "budgets_hash", "surrogate_hash"):
+        assert key in module.INVALIDATING_KEYS
+    assert not any("git" in key or "commit" in key for key in module.INVALIDATING_KEYS)
+    current = _manifest(module)
+    assert module.manifest_conflicts(current, {**current, "created": "later"}) == []
+    assert module.manifest_conflicts({**current, "goals_hash": "edited"}, current) == ["goals_hash"]
+    assert module.manifest_conflicts({**current, "seeds": [1, 2]}, current) == ["seeds"]
+
+
+def test_goals_hash_moves_when_a_goal_changes(monkeypatch: pytest.MonkeyPatch) -> None:
+    from dataclasses import replace
+
+    module = _benchmark_module()
+    before = module.goals_hash()
+    goals = load_goals()
+    first = goals[0]
+    edited = replace(first, spec=replace(first.spec, name=first.spec.name + "_edited"))
+    monkeypatch.setattr(module, "load_goals", lambda: [edited, *goals[1:]])
+    assert module.goals_hash() != before
+
+
+def test_a_manifest_from_before_the_new_keys_is_upgraded_not_refused() -> None:
+    """The completed held-out cells were written under a manifest without
+    ``goals_hash`` and ``seed_scheme``. Refusing it would throw them away for a
+    check that did not exist yet; upgrading is allowed for exactly those keys.
+    """
+    module = _benchmark_module()
+    current = _manifest(module)
+    legacy = {k: v for k, v in current.items() if k not in ("goals_hash", "seed_scheme")}
+    assert module.manifest_conflicts(legacy, current) == []
+    upgraded, added = module.upgrade_manifest(legacy, current)
+    assert sorted(added) == ["goals_hash", "seed_scheme"]
+    assert upgraded["goals_hash"] == current["goals_hash"]
+    assert upgraded["created"] == legacy["created"], "the original record is kept"
+    # Once upgraded, the keys are enforced like any other.
+    assert module.manifest_conflicts({**upgraded, "goals_hash": "x"}, current) == ["goals_hash"]
+
+
+def test_a_legacy_manifest_still_conflicts_on_any_key_it_does_record() -> None:
+    module = _benchmark_module()
+    current = _manifest(module)
+    legacy = {k: v for k, v in current.items() if k not in ("goals_hash", "seed_scheme")}
+    assert module.manifest_conflicts({**legacy, "budgets_hash": "old"}, current) == ["budgets_hash"]
+    # Only the named keys may be missing; any other absence is a conflict.
+    no_twin = {k: v for k, v in legacy.items() if k != "twin_config_hash"}
+    assert module.manifest_conflicts(no_twin, current) == ["twin_config_hash"]

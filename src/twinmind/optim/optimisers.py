@@ -21,7 +21,7 @@ it about half the time on the twin. The multiplier is a hyperparameter and is
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -45,6 +45,16 @@ GRID_MAX_DIMS = 4
 #: Integer-valued Scenario fields.
 INTEGER_DIMS: frozenset[str] = frozenset({"shift_count", "supplier_choice"})
 
+#: Candidates every optimiser keeps. ``best_known`` verifies the top 100 of
+#: these and ``surrogate_first_verify`` shortlists 20, so 200 is ample.
+TOP_K = 200
+
+#: Rows per Sobol draw. A power of two (so the first draw is a balanced
+#: ``random_base2`` block) and a multiple of the 2,048-row evaluation batch (so
+#: the surrogate sees exactly the batches it saw before chunking). 2**15 rows
+#: over all 16 controllables is 4 MiB, against 64 MiB for one 2**19 block.
+SOBOL_CHUNK = 2**15
+
 
 @dataclass
 class Candidate:
@@ -64,6 +74,84 @@ class Candidate:
 def rank_key(candidate: Candidate) -> tuple[float, float, float]:
     """Sort key implementing feasibility-first ordering (smaller is better)."""
     return (0.0 if candidate.feasible else 1.0, candidate.violation, -candidate.score)
+
+
+class TopK:
+    """The best ``k`` candidates seen so far, in bounded memory.
+
+    Each candidate is tagged with its global evaluation index, and the order is
+    ``(rank_key, index)``: feasibility-first, then the earlier evaluation on a
+    tie. That is a strict total order, so the top ``k`` of everything is the top
+    ``k`` of (the top ``k`` so far, plus what came after) -- trimming as we go
+    returns exactly what sorting the full list once would have, and is what
+    the old code did implicitly through a stable sort.
+
+    Trimming waits until the buffer holds ``2k`` so a one-at-a-time caller
+    (TPE) does not re-sort on every trial.
+    """
+
+    def __init__(self, k: int = TOP_K) -> None:
+        self.k = k
+        self.seen = 0
+        self._items: list[tuple[tuple[float, float, float], int, Candidate]] = []
+
+    def add(self, candidates: Sequence[Candidate]) -> None:
+        """Merge a batch, in evaluation order."""
+        for candidate in candidates:
+            self._items.append((rank_key(candidate), self.seen, candidate))
+            self.seen += 1
+        if len(self._items) >= 2 * self.k:
+            self._trim()
+
+    def _trim(self) -> None:
+        self._items.sort(key=lambda item: (item[0], item[1]))
+        del self._items[self.k :]
+
+    def result(self) -> list[Candidate]:
+        """The best ``k``, best first."""
+        self._trim()
+        return [candidate for _, _, candidate in self._items]
+
+
+def sobol_chunks(
+    d: int, budget: int, seed: int, chunk: int = SOBOL_CHUNK
+) -> Iterator[tuple[int, NDArray[np.float64]]]:
+    """The first ``budget`` points of one scrambled Sobol sequence, ``chunk`` rows at a time.
+
+    Yields ``(global_start, points)``. The concatenation is bitwise identical
+    to ``Sobol(d, scramble=True, seed=seed).random_base2(m)[:budget]`` with
+    ``2**m >= budget`` -- the single-block draw this replaces -- without ever
+    holding more than ``chunk`` rows. A regression test pins that identity.
+
+    WHY THIS DOES NOT TRIP SCIPY'S BALANCE CHECK. ``random_base2(m)`` refuses
+    unless the running total ``num_generated + 2**m`` is a power of two, which is
+    why the original per-batch code crashed, and why repeated ``random_base2``
+    calls cannot be used here either (2**15 + 2**15 + 2**15 is not a power of
+    two). ``random(n)`` checks the power-of-two property ONLY when nothing has
+    been generated yet. So the first draw is ``random_base2`` -- balanced, and
+    silent -- and every later draw is ``random(chunk)``, which continues the same
+    sequence from where it stopped. The last chunk is drawn in full and
+    truncated, so ``n`` is a power of two on every call regardless.
+
+    A budget that fits in one chunk takes the old path exactly: one block of
+    ``2**ceil(log2(budget))``, truncated.
+    """
+    if chunk <= 0 or chunk & (chunk - 1):
+        raise ValueError(f"chunk must be a positive power of two, got {chunk}")
+    sampler = stats.qmc.Sobol(d=d, scramble=True, seed=seed)
+    m = max(int(math.ceil(math.log2(max(budget, 2)))), 1)
+    if 2**m <= chunk:
+        yield 0, sampler.random_base2(m=m)[:budget]
+        return
+    drawn = 0
+    while drawn < budget:
+        if drawn == 0:
+            block = sampler.random_base2(m=int(math.log2(chunk)))
+        else:
+            block = sampler.random(chunk)
+        block = block[: budget - drawn]
+        yield drawn, block
+        drawn += block.shape[0]
 
 
 def free_dimensions(spec: ObjectiveSpec) -> list[str]:
@@ -142,8 +230,9 @@ def random_search(
     seed: int,
     batch_size: int = 2048,
     margins: dict[str, float] | None = None,
+    chunk: int | None = None,
 ) -> list[Candidate]:
-    """Scrambled Sobol over the free dimensions.
+    """Scrambled Sobol over the free dimensions, in bounded memory.
 
     Sobol rather than uniform random: it covers the space far more evenly at the
     same budget, which matters most at the small budgets the twin-only arms use.
@@ -169,20 +258,29 @@ def random_search(
 
     This only bit above ``batch_size`` (2,048), so the smoke run, whose largest
     budget was 1,000, passed while the production run died in seconds.
-    """
-    free = free_dimensions(spec)
-    sampler = stats.qmc.Sobol(d=len(free), scramble=True, seed=seed)
-    m = max(int(math.ceil(math.log2(max(budget, 2)))), 1)
-    points = sampler.random_base2(m=m)[:budget]
 
-    best: list[Candidate] = []
-    for start in range(0, len(points), batch_size):
-        block = points[start : start + batch_size]
-        scenarios = [build_scenario(spec, free, row) for row in block]
-        best.extend(_score_batch(spec, scenarios, evaluator, margins))
-        best.sort(key=rank_key)
-        best = best[:200]
-    return best
+    BOUNDED MEMORY. The one-block draw then held all ``2**19`` points of the
+    500,000 ``best_known`` budget at once -- 64 MiB over 16 dimensions -- and six
+    ``best_known`` cells doing that concurrently on an 8 GB machine ran it out
+    of memory. The SAME sequence is now drawn ``chunk`` rows at a time by
+    :func:`sobol_chunks` (bitwise identical, see there), evaluated in the same
+    ``batch_size`` batches as before, and merged into a running :class:`TopK`.
+    Peak memory is one chunk plus ``TOP_K`` candidates, whatever the budget.
+    Results are unchanged: same points, same batches, same order.
+    """
+    chunk = SOBOL_CHUNK if chunk is None else chunk
+    if chunk % batch_size and budget > chunk:
+        # Batches must not straddle chunks, or the surrogate would see
+        # different batch compositions than the single-block code did.
+        raise ValueError(f"chunk ({chunk}) must be a multiple of batch_size ({batch_size})")
+    free = free_dimensions(spec)
+    best = TopK()
+    for _, points in sobol_chunks(len(free), budget, seed, chunk):
+        for start in range(0, points.shape[0], batch_size):
+            block = points[start : start + batch_size]
+            scenarios = [build_scenario(spec, free, row) for row in block]
+            best.add(_score_batch(spec, scenarios, evaluator, margins))
+    return best.result()
 
 
 # --------------------------------------------------------------------------- #
@@ -194,6 +292,7 @@ def grid_search(
     budget: int,
     seed: int,
     margins: dict[str, float] | None = None,
+    batch_size: int = 2048,
 ) -> list[Candidate] | None:
     """A full factorial grid, or ``None`` when the free space is too large.
 
@@ -214,12 +313,19 @@ def grid_search(
         return None
 
     per_dim = max(2, int(round(budget ** (1.0 / len(free)))))
-    axes = [np.linspace(0.0, 1.0, per_dim) for _ in free]
-    mesh = np.stack([g.ravel() for g in np.meshgrid(*axes, indexing="ij")], axis=1)
-    scenarios = [build_scenario(spec, free, row) for row in mesh]
-    candidates = _score_batch(spec, scenarios, evaluator, margins)
-    candidates.sort(key=rank_key)
-    return candidates[:200]
+    axis = np.linspace(0.0, 1.0, per_dim)
+    shape = (per_dim,) * len(free)
+    total = per_dim ** len(free)
+    # The grid is walked in C order -- the order ``meshgrid(indexing="ij")``
+    # ravels to -- one batch at a time, rather than materialising the whole
+    # mesh and scoring it in a single call.
+    best = TopK()
+    for start in range(0, total, batch_size):
+        index = np.arange(start, min(start + batch_size, total))
+        mesh = axis[np.stack(np.unravel_index(index, shape), axis=1)]
+        scenarios = [build_scenario(spec, free, row) for row in mesh]
+        best.add(_score_batch(spec, scenarios, evaluator, margins))
+    return best.result()
 
 
 # --------------------------------------------------------------------------- #
@@ -243,13 +349,13 @@ def tpe_search(
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     free = free_dimensions(spec)
-    found: list[Candidate] = []
+    found = TopK()
 
     def objective(trial: Any) -> float:
         unit = np.array([trial.suggest_float(dim, 0.0, 1.0) for dim in free], dtype="float64")
         scenario = build_scenario(spec, free, unit)
         candidate = _score_batch(spec, [scenario], evaluator, margins)[0]
-        found.append(candidate)
+        found.add([candidate])
         # Infeasible points are pushed below every feasible one by a constant
         # offset plus their violation, which preserves the ordering without a
         # tunable weight.
@@ -257,8 +363,7 @@ def tpe_search(
 
     study = optuna.create_study(direction="maximize", sampler=optuna.samplers.TPESampler(seed=seed))
     study.optimize(objective, n_trials=budget, show_progress_bar=False)
-    found.sort(key=rank_key)
-    return found[:200]
+    return found.result()
 
 
 # --------------------------------------------------------------------------- #
@@ -306,7 +411,9 @@ def cmaes_search(
         results.sort(key=rank_key)
         return results[:200]
 
-    found: list[Candidate] = []
+    # A running top-K, not a list of every evaluation: at the 20,000 sf_cmaes
+    # budget the full list was 20,000 Candidates, each a Scenario plus a KPI dict.
+    found = TopK()
     options = {
         "seed": int(seed) % (2**31 - 1) + 1,
         "bounds": [0.0, 1.0],
@@ -314,19 +421,18 @@ def cmaes_search(
         "maxfevals": budget,
     }
     strategy = cma.CMAEvolutionStrategy([0.5] * len(free), 0.25, options)
-    while not strategy.stop() and len(found) < budget:
+    while not strategy.stop() and found.seen < budget:
         points = strategy.ask()
         scenarios = [build_scenario(spec, free, np.asarray(p)) for p in points]
         batch = _score_batch(spec, scenarios, evaluator, margins)
-        found.extend(batch)
+        found.add(batch)
         # CMA-ES minimises, so the sign is flipped; infeasible points get the
         # same lexicographic treatment as everywhere else.
         strategy.tell(
             points,
             [(-c.score if c.feasible else 1e12 + c.violation) for c in batch],
         )
-    found.sort(key=rank_key)
-    return found[:200]
+    return found.result()
 
 
 #: Name -> callable, for the benchmark and the tests.
