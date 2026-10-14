@@ -191,3 +191,118 @@ comparable.
 
 The verdict rule above applies to this amendment too: the result is reported
 whatever it is, and nothing further is changed after held-out results are seen.
+
+---
+
+## Amendment 2 — reduced-scale design
+
+**Dated 2026-10-14.** Appended below the pre-registration and Amendment 1,
+both of which are unchanged: the text above this section is byte-identical to
+commit **`6376e45`**, blob **`18895022e8911b7b871082508193f84b3ead3ed5`** (and
+the original pre-registration to `4f54ac8`, blob `3f2690e8…`).
+
+### Why
+
+**Runtime, on the hardware available.** The benchmark runs on an 8 GB laptop
+that overheats under load. With the memory fixes, at most one `best_known` cell
+at a time and at most 3 workers, the full design's 230 outstanding cells
+projected to **7.8 h on a cool machine and ~14 h at the 1.8× slowdown measured
+on a hot one**. The serial `best_known` lane alone (36 cells) was a 7.4 h floor
+that no worker count could get under.
+
+**Decided from timing and goal structure only.** At the time of this amendment
+the held-out results tree holds 22 completed cells (listed below). **No
+objective value, plan, gap, feasibility outcome or any other result field of
+any held-out cell has been looked at.** The only things read from those files
+were their names, their key names and their `budgets_hash`, to check that a
+resume would accept them. Verdict rule 2 forbids dropping a goal *after
+held-out results are seen*; none had been seen when this selection was fixed.
+
+### The design
+
+Recorded in `configs/benchmark_design.yaml` (design hash
+**`829a2d71c70acb8b`**), not in the goal files: the goal specs, and so the goal
+library hash in the results manifest, are unchanged. The design hash is in the
+manifest, so a resume under a different design is refused.
+
+**Goals — 8 of the 12 held-out goals.** The rule is structural: every goal
+family stays represented; within a family the most redundant goal is moved to
+a reserve; the two goals that already had completed cells are kept.
+
+| Core (run and analysed) | Family / reason kept |
+|---|---|
+| `held_failures_cap` | `unplanned_failures` cap, the surrogate's weakest KPI; has cells |
+| `held_infeasible_profit_floor` | infeasible by design (H4); has cells |
+| `held_inventory_only` | frozen dimensions, 3 free; the only grid-applicable goal |
+| `held_max_profit_service` | profit under on-time and stockout constraints |
+| `held_weighted_units_cost` | weighted multi-objective |
+| `held_pm_only` | frozen dimensions, 5 free (PM intervals) |
+| `held_premium_supplier_service` | supplier what-if; the **only** `downtime_hours` constraint |
+| `held_min_unit_cost` | minimise sense |
+
+| Reserve (stays in the library, never run, never analysed) | Covered by |
+|---|---|
+| `held_max_profit` | `held_max_profit_service` (same objective, constrained) |
+| `held_offshore_supplier` | `held_premium_supplier_service` (same supplier what-if) |
+| `held_price_cut` | the exogenous what-if family, via the supplier goal |
+| `held_speed_only` | `held_pm_only` (same 5-free frozen-dimension shape) |
+
+**One change to the list as first proposed, made on structural grounds before
+anything was run:** the proposal kept `held_offshore_supplier` and reserved
+`held_premium_supplier_service`. That would have left **no** core goal
+constraining `downtime_hours` — the library's coverage test requires one, and
+the "Known limitations" above name `downtime_hours` (R² 0.907) as one of the
+surrogate's two weak KPIs. Both are supplier what-ifs (supplier fixed to 1 or
+2), so swapping them keeps the family; `held_offshore_supplier`'s only
+constraint (stockout) is already covered by two other core goals. The cost is
+one fewer dev/held-out mirror pair (`dev_offshore_supplier`) and no core goal
+that moves the price lever (`held_price_cut`).
+
+**The reserve is not a pool to draw from.** The reserve goals are never run
+later, for any reason, including to "check" a result. The runner refuses a
+reserve goal on the held-out split.
+
+**Seeds.** `best_known`: **seed 1 only** (8 cells). Every other method: **seeds
+1 and 2** (96 cells). Seed 3 is excluded by rule. Total: **104 cells**.
+
+**Budgets: unchanged.** `best_known` is still a 500,000-candidate surrogate
+sweep with the top 100 verified at 30 reps; every other budget is as in
+Amendment 1.
+
+### The 22 existing cells
+
+**Inside the design (15), kept and used:** `held_failures_cap` × {`sf_random`,
+`sf_tpe`, `sf_cmaes`, `surrogate_only`, `twin_tpe`, `twin_cmaes`} × seeds 1–2
+(12); `held_infeasible_profit_floor` × `sf_cmaes` seed 1 and × `sf_random`
+seeds 1–2 (3).
+
+**Outside the design (7), kept on disk and excluded from every analysis:**
+`held_failures_cap` × {`sf_random`, `sf_tpe`, `sf_cmaes`, `surrogate_only`,
+`twin_tpe`, `twin_cmaes`} × seed 3 (6), and `held_infeasible_profit_floor` ×
+`sf_random` × seed 3 (1). The analysis loader lists these by filename and never
+opens them. No existing cell belongs to a reserve goal.
+
+### What did **not** change
+
+- No hypothesis. H1–H4 are exactly as stated above.
+- No threshold: the 5% median gap, the 1/5 twin CPU-second ratio, the 90%
+  feasibility rate and the AUROC gate of 0.75.
+- No budget, no metric, no normalisation, no verdict rule, no goal spec.
+
+### Consequences, stated before any result
+
+- **H1** — the median normalised gap is over **7 feasible goals** (the 8 core
+  goals less `held_infeasible_profit_floor`), not 11. The same 7 carry H2's
+  gap comparison, H3, and H4's feasibility rate.
+- **H4** still has **n = 1** for its infeasible-by-design clause: the held-out
+  library only ever had one such goal (`held_infeasible_profit_floor`); the
+  other is a dev goal.
+- **Seed variance comes from 2 replicates**, not 3, so it can say even less
+  than the "crude" estimate the Known limitations already warned about. The
+  `best_known` sweep has one seed and therefore no seed variance of its own.
+- **Wider confidence intervals.** The paired bootstrap resamples 7 goals
+  instead of 11, and each goal's value averages 2 seeds instead of 3. A
+  difference that would have been resolved at full scale may now be reported
+  as a tie, and that will be said rather than read as "matches".
+- Results generalise to the core families only; the price what-if is not
+  tested on held-out data at all.
