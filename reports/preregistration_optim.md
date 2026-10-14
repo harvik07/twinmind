@@ -123,3 +123,71 @@ seeds the search used.
   to the best anything found", not "close to optimal".
 - The 3 optimiser seeds give a crude variance estimate. They are enough to show
   whether a difference is robust to the seed, not to put a tight interval on it.
+
+---
+
+## Amendment 1 — matched-budget ablation for `surrogate_only`
+
+**Dated 2026-10-14.** Appended to the pre-registration above, which is unchanged:
+the original text is byte-identical and this section is added below it. The
+pre-amendment file is commit **`4f54ac8`**, blob
+**`3f2690e89ed6030ffbe73eddb858437158a1fd61`**.
+
+**Made before any held-out result existed.** At the time of this amendment the
+benchmark results tree contains **zero** held-out cells — the first production
+run crashed within seconds on a Sobol bug and wrote only a manifest, which was
+deleted. No held-out goal has been evaluated, and no held-out result has been
+looked at.
+
+### What changed
+
+`surrogate_only`'s TPE search budget: **20,000 → 3,000 trials**, now the same
+shared constant the `sf_tpe` arm uses.
+
+### Why
+
+**The ablation was not matched.** `surrogate_only` exists to isolate one thing:
+what twin verification is worth. It should differ from `surrogate_first_verify`
+in the verification step alone — K=1 and no verification, against K=20 verified
+— and in nothing else. At 20,000 trials against `sf_tpe`'s 3,000 it was also the
+**best-searched** arm, so H3 would have compared "no verification but a 6.7×
+larger search" against "verification with a smaller search". A result either way
+would have been uninterpretable: if `surrogate_only` had won, that could have
+been the extra search rather than the absence of verification.
+
+**And it dominated the cost.** Measured at production budget on a dev goal,
+`surrogate_only` was ~10,850 s per cell — **18.1 of the full run's 21.6 hours**,
+for the arm that is meant to be the cheap baseline. Optuna's TPE scales at about
+O(n^1.78) with the real surrogate (23.2 s at 500 trials, 57.4 s at 1,000,
+174.9 s at 2,000, 599.6 s at 4,000), so 20,000 trials costs roughly 18× what
+3,000 does.
+
+**The 20,000 was not specified anywhere.** The task specification fixed budgets
+for the surrogate-side random (50k), CMA-ES (20k) and TPE (3k) arms and for
+twin-only (300 evaluations). It gave no budget for `surrogate_only`; 20,000 was
+chosen while building Stage A, and it was the wrong choice.
+
+### What did **not** change
+
+- No hypothesis. H1–H4 are exactly as stated above, including H3's two clauses
+  and the requirement that the surrogate-minus-twin profit gap be positive.
+- No goal. The library is still the same 20 goals on the same contexts, with the
+  same 2 infeasible by design.
+- No threshold. The 5% gap, the 1/5 CPU-second ratio, the 90% feasibility rate
+  and the AUROC gate of 0.75 are unchanged.
+- **No other budget.** `sf_random` 50,000, `sf_tpe` 3,000, `sf_cmaes` 20,000,
+  `twin_tpe` and `twin_cmaes` 300, `best_known` 500,000 are all unchanged.
+- No metric, no normalisation, no verdict rule.
+
+### Effect on H3
+
+H3 becomes a cleaner test rather than an easier one. With matched search
+budgets, any difference between `surrogate_only` and `surrogate_first_verify`
+is attributable to verification, which is what H3 claims to measure. If
+`surrogate_only` now does *better* than it would have at 20,000 trials, that
+makes H3 harder to pass, not easier — a less-searched ablation is a weaker
+opponent, and it has been made stronger relative to its purpose by being made
+comparable.
+
+The verdict rule above applies to this amendment too: the result is reported
+whatever it is, and nothing further is changed after held-out results are seen.
