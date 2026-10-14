@@ -1,10 +1,10 @@
 {
-  "cells": 6,
-  "succeeded": 6,
+  "cells": 1,
+  "succeeded": 1,
   "failed": 0,
   "failures": [],
-  "elapsed_s": 759.5009496999992,
-  "out": "C:\\Users\\Admin\\AppData\\Local\\Temp\\claude\\C--Users-Admin-Desktop-TwinMind\\06412bc9-41fd-41b3-91c1-4c68b52c7269\\scratchpad\\dryrun2\\full",
+  "elapsed_s": 398.96784680000565,
+  "out": "C:\\Users\\Admin\\AppData\\Local\\Temp\\claude\\C--Users-Admin-Desktop-TwinMind\\06412bc9-41fd-41b3-91c1-4c68b52c7269\\scratchpad\\dryrun3\\full",
   "manifest": {
     "twin_config_hash": "d38e63f94f8f0524",
     "surrogate_hash": "9af34fae63a00509",
@@ -30,11 +30,12 @@
       "sf_random": 50000,
       "sf_tpe": 3000,
       "sf_cmaes": 20000,
-      "surrogate_only": 20000,
+      "surrogate_only": 3000,
       "twin_tpe": 300,
       "twin_cmaes": 300,
       "best_known": 500000
     },
+    "budgets_hash": "de8ac316eabc9953",
     "methods": [
       "sf_random",
       "sf_tpe",
@@ -57,7 +58,7 @@
       "unplanned_failures",
       "on_time_delivery_rate"
     ],
-    "created": "2026-10-13T22:56:49",
+    "created": "2026-10-14T12:08:09",
     "smoke": false
   }
 }

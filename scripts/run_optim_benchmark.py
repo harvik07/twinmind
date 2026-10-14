@@ -65,11 +65,26 @@ ANYTIME_CHECKPOINTS = (50, 150, 300)
 #: Budgets. Surrogate-side budgets are large because surrogate evaluations are
 #: free by comparison; twin-only gets 300 evaluations, which at 5 reps each is
 #: 1,500 twin runs -- roughly what a plant engineer could afford to wait for.
+#: The surrogate-side TPE budget, shared by ``sf_tpe`` and its ablation.
+#:
+#: ONE constant, referenced twice, because the two arms must stay matched.
+#: ``surrogate_only`` isolates what twin verification is worth, so it has to
+#: differ from ``surrogate_first_verify`` in the verification step alone -- K=1
+#: and no verification against K=20 verified -- and in nothing else. It was
+#: 20,000 against this arm's 3,000, which made the ablation the BEST-SEARCHED
+#: method in the benchmark and would have left H3 uninterpretable: a win for
+#: ``surrogate_only`` could have been the extra search rather than the absence
+#: of verification. See Amendment 1 in reports/preregistration_optim.md.
+#:
+#: Two literals would drift apart the moment one was tuned, which is exactly how
+#: they came to differ in the first place.
+SURROGATE_TPE_BUDGET = 3_000
+
 BUDGETS = {
     "sf_random": 50_000,
-    "sf_tpe": 3_000,
+    "sf_tpe": SURROGATE_TPE_BUDGET,
     "sf_cmaes": 20_000,
-    "surrogate_only": 20_000,
+    "surrogate_only": SURROGATE_TPE_BUDGET,
     "twin_tpe": 300,
     "twin_cmaes": 300,
     "best_known": 500_000,
@@ -107,11 +122,26 @@ def build_manifest(resources: Any, args: argparse.Namespace) -> dict[str, Any]:
         "assumptions": {k: float(v.value) for k, v in config.assumptions.items()},
         "demand_scale": float(resources.demand_scale),
         "budgets": dict(BUDGETS),
+        "budgets_hash": budgets_hash(),
         "methods": list(METHODS),
         "seeds": list(args.seeds),
         "kpi_order": list(KPI_ORDER),
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
+
+
+def budgets_hash() -> str:
+    """A stable hash of every method's budget.
+
+    Recorded in the manifest AND in each result file. The manifest check refuses
+    a resume across a budget change, which protects the run as a whole; the
+    per-cell copy is finer-grained, so a cell produced under an old budget is
+    simply retried instead of the whole run being refused. That matters here
+    because ``surrogate_only``'s budget changed from 20,000 to 3,000 while cells
+    from the old value could still be sitting in a results tree.
+    """
+    payload = json.dumps(dict(sorted(BUDGETS.items())), sort_keys=True)
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
 INVALIDATING_KEYS = (
@@ -120,6 +150,7 @@ INVALIDATING_KEYS = (
     "assumptions",
     "demand_scale",
     "budgets",
+    "budgets_hash",
 )
 
 
@@ -144,14 +175,24 @@ def write_atomic(payload: dict[str, Any], path: Path) -> Path:
 
 
 def cell_done(path: Path) -> bool:
-    """True when a cell's file exists and parses."""
+    """True when a cell exists, parses, AND was produced under the current budgets.
+
+    The budget check is what stops a resumed run silently mixing cells from two
+    different configurations. A cell written under the old 20,000-trial
+    ``surrogate_only`` budget would otherwise be counted as finished and its
+    number averaged in beside 3,000-trial cells, producing a table whose rows
+    were not comparable and giving no sign that anything was wrong.
+
+    A cell with no recorded hash predates the check and is treated as stale, so
+    it is regenerated rather than trusted.
+    """
     if not path.exists():
         return False
     try:
-        json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return False
-    return True
+    return bool(payload.get("budgets_hash") == budgets_hash())
 
 
 # --------------------------------------------------------------------------- #
@@ -357,6 +398,8 @@ def run_cell(
         "split": goal.split,
         "method": cell.method,
         "seed": cell.seed,
+        "budget": budget,
+        "budgets_hash": budgets_hash(),
         "infeasible_by_design": spec.infeasible_by_design,
         "n_free_dims": len(free_dimensions(spec)),
         "plans": [p.to_dict() for p in plans[:5]],
@@ -698,62 +741,52 @@ def main() -> int:
 def _estimate_full_run(out: Path, workers: int, n_seeds: int) -> None:
     """Project the full run from MEASURED per-method timings.
 
-    These come from a production-budget dry run on one dev goal, one seed, with
-    the real twin and the real surrogate, on 6 workers with torch pinned to one
-    thread per worker. They are not extrapolated from smoke budgets, which
-    scaled so badly the first estimate spanned 7.5 to 30 hours.
+    Every figure below comes from a production-budget run on one dev goal, one
+    seed, with the real twin and the real surrogate, on 6 workers with torch
+    pinned to one thread each. Nothing is extrapolated any more:
+    ``surrogate_only`` was the one estimated entry and has been re-measured at
+    its matched 3,000-trial budget (377.1 s, down from about 10,850 s at the old
+    20,000 -- see Amendment 1 in reports/preregistration_optim.md).
 
-    ``surrogate_only`` is the exception and is labelled as such: its 20,000-trial
-    TPE budget could not be run inside a 10-minute window, so it is extrapolated
-    from measured TPE scaling with the real surrogate (23.2 s at 500 trials,
-    57.4 s at 1,000, 174.9 s at 2,000, 599.6 s at 4,000 -- about O(n^1.78)).
+    The arithmetic, stated so it can be checked: each method runs
+    ``n_seeds x 12`` cells, the cells are spread over ``workers``, so
+
+        hours = seconds_per_cell x (n_seeds x 12) / workers / 3600
+
+    which at 3 seeds and 6 workers is simply ``seconds_per_cell / 600``.
     """
-    # Seconds per (goal, seed), measured unless noted.
     measured = {
-        "sf_random": 66.9,
-        "sf_cmaes": 89.5,
-        "sf_tpe": 499.6,
-        "twin_cmaes": 330.9,
-        "twin_tpe": 351.5,
         "best_known": 744.7,
+        "sf_tpe": 499.6,
+        "surrogate_only": 377.1,
+        "twin_tpe": 351.5,
+        "twin_cmaes": 330.9,
+        "sf_cmaes": 89.5,
+        "sf_random": 66.9,
     }
-    extrapolated = {"surrogate_only": 10_850.0}
 
-    n_cells_per_method = n_seeds * 12  # 12 held-out goals
-    serial = sum(measured.values()) + sum(extrapolated.values())
-    hours = serial * n_cells_per_method / workers / 3600.0
-    hours_without = sum(measured.values()) * n_cells_per_method / workers / 3600.0
+    n_cells_per_method = n_seeds * 12
+    divisor = n_cells_per_method / workers / 3600.0
 
     logger.info("=== duration estimate for the full run ===")
     logger.info(
         "  %d cells (12 held-out goals x %d methods x %d seeds) on %d workers",
-        n_cells_per_method * (len(measured) + len(extrapolated)),
-        len(measured) + len(extrapolated),
+        n_cells_per_method * len(measured),
+        len(measured),
         n_seeds,
         workers,
     )
+    logger.info("  %-15s %9s %9s", "method", "s/cell", "hours")
     for name, seconds in sorted(measured.items(), key=lambda kv: -kv[1]):
-        logger.info(
-            "  %-15s %7.0f s/cell  -> %5.1f h total",
-            name,
-            seconds,
-            seconds * n_cells_per_method / workers / 3600.0,
-        )
-    for name, seconds in extrapolated.items():
-        logger.info(
-            "  %-15s %7.0f s/cell  -> %5.1f h total   (EXTRAPOLATED, see below)",
-            name,
-            seconds,
-            seconds * n_cells_per_method / workers / 3600.0,
-        )
-    logger.info("  TOTAL: %.1f hours", hours)
-    logger.warning(
-        "  surrogate_only alone is %.1f h of that. Its 20,000-trial TPE budget makes "
-        "the CHEAP ablation the most expensive arm in the benchmark; without it the "
-        "run is %.1f h. The budget is frozen by the pre-registration, so it has not "
-        "been changed -- see the stage A report.",
-        extrapolated["surrogate_only"] * n_cells_per_method / workers / 3600.0,
-        hours_without,
+        logger.info("  %-15s %9.1f %9.2f", name, seconds, seconds * divisor)
+    serial = sum(measured.values())
+    logger.info("  %-15s %9.1f %9.2f", "SUM", serial, serial * divisor)
+    logger.info(
+        "  = %.1f s/cell x %d cells / %d workers / 3600 = %.2f hours",
+        serial,
+        n_cells_per_method,
+        workers,
+        serial * divisor,
     )
     del out
 

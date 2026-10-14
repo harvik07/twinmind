@@ -48,6 +48,7 @@ from twinmind.optim.optimisers import (
     tpe_search,
 )
 from twinmind.twin.runner import KPI_NAMES, SCENARIO_DIMS, Scenario
+from twinmind.utils.paths import PROJECT_ROOT
 
 
 # --------------------------------------------------------------------------- #
@@ -525,7 +526,10 @@ def _benchmark_module() -> Any:
 def test_benchmark_writes_atomically_and_resume_skips(tmp_path: Path) -> None:
     module = _benchmark_module()
     path = tmp_path / "cell.json"
-    module.write_atomic({"a": 1}, path)
+    # cell_done also checks the budget hash, so a cell counted as finished must
+    # carry the current one -- see test_a_cell_from_a_different_budget_is_not_
+    # counted_as_done for why.
+    module.write_atomic({"a": 1, "budgets_hash": module.budgets_hash()}, path)
     assert path.exists()
     assert not list(tmp_path.glob("*.tmp.json"))
     assert module.cell_done(path)
@@ -785,6 +789,63 @@ def test_every_method_has_a_budget() -> None:
     assert all(v > 0 for v in module.BUDGETS.values())
 
 
+def test_surrogate_only_is_a_matched_ablation_of_sf_tpe() -> None:
+    """The two arms must share ONE budget constant, not two equal literals.
+
+    ``surrogate_only`` isolates what twin verification is worth, so it has to
+    differ from ``surrogate_first_verify`` in the verification step alone --
+    K=1 and no verification against K=20 verified. It was 20,000 against
+    ``sf_tpe``'s 3,000, which made the ablation the best-searched arm and would
+    have left H3 uninterpretable: a win for ``surrogate_only`` could have been
+    the larger search rather than the absence of verification.
+
+    Asserting they are *equal* would pass with two literals that later drift.
+    This asserts they are the *same constant*, which is what stops the drift.
+    """
+    module = _benchmark_module()
+    assert module.BUDGETS["sf_tpe"] is module.SURROGATE_TPE_BUDGET
+    assert module.BUDGETS["surrogate_only"] is module.SURROGATE_TPE_BUDGET
+    assert module.SURROGATE_TPE_BUDGET == 3_000
+
+    source = (PROJECT_ROOT / "scripts" / "run_optim_benchmark.py").read_text(encoding="utf-8")
+    budget_block = source[source.index("BUDGETS = {") : source.index("METHODS = tuple")]
+    assert budget_block.count("SURROGATE_TPE_BUDGET") == 2
+    assert "20_000" not in budget_block.replace('"sf_cmaes": 20_000,', "")
+
+
+def test_budget_hash_changes_when_any_budget_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hash is what stops a resume mixing cells from two configurations."""
+    module = _benchmark_module()
+    before = module.budgets_hash()
+    monkeypatch.setitem(module.BUDGETS, "surrogate_only", 20_000)
+    assert module.budgets_hash() != before
+
+
+def test_a_cell_from_a_different_budget_is_not_counted_as_done(tmp_path: Path) -> None:
+    """A stale cell must be retried, not averaged in beside current ones.
+
+    This is the concrete risk from Amendment 1: a ``surrogate_only`` cell
+    written under the old 20,000-trial budget sitting in a results tree. Without
+    the check it would count as finished and its number would be averaged
+    alongside 3,000-trial cells, giving a table whose rows are not comparable
+    and no sign that anything was wrong.
+    """
+    module = _benchmark_module()
+    path = tmp_path / "cell.json"
+
+    module.write_atomic({"goal": "g", "budgets_hash": module.budgets_hash()}, path)
+    assert module.cell_done(path)
+
+    module.write_atomic({"goal": "g", "budgets_hash": "0000stale0000"}, path)
+    assert not module.cell_done(path)
+
+    # A cell with no hash at all predates the check and is treated as stale.
+    module.write_atomic({"goal": "g"}, path)
+    assert not module.cell_done(path)
+
+
 # --------------------------------------------------------------------------- #
 # Production budgets
 # --------------------------------------------------------------------------- #
@@ -991,4 +1052,10 @@ def test_failed_cells_are_not_written_to_the_results_tree(tmp_path: Path) -> Non
 
     module.write_atomic(failure, tmp_path / "failures" / cell.filename)
     assert not module.cell_done(tmp_path / cell.filename), "a failure must not count as done"
-    assert module.cell_done(tmp_path / "failures" / cell.filename)
+    # The failure file exists and parses; it is simply not in the results tree,
+    # which is what makes a rerun retry it.
+    assert (tmp_path / "failures" / cell.filename).exists()
+    assert (
+        json.loads((tmp_path / "failures" / cell.filename).read_text(encoding="utf-8"))["error"]
+        == "boom"
+    )

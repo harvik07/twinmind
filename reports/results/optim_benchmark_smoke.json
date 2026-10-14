@@ -1,6 +1,9 @@
 {
   "cells": 42,
-  "elapsed_s": 269.80402219999996,
+  "succeeded": 42,
+  "failed": 0,
+  "failures": [],
+  "elapsed_s": 161.89404120000108,
   "out": "C:\\Users\\Admin\\Desktop\\TwinMind\\data\\processed\\optim_benchmark\\smoke",
   "manifest": {
     "twin_config_hash": "d38e63f94f8f0524",
@@ -27,11 +30,12 @@
       "sf_random": 50000,
       "sf_tpe": 3000,
       "sf_cmaes": 20000,
-      "surrogate_only": 20000,
+      "surrogate_only": 3000,
       "twin_tpe": 300,
       "twin_cmaes": 300,
       "best_known": 500000
     },
+    "budgets_hash": "de8ac316eabc9953",
     "methods": [
       "sf_random",
       "sf_tpe",
@@ -56,7 +60,7 @@
       "unplanned_failures",
       "on_time_delivery_rate"
     ],
-    "created": "2026-10-13T20:22:24",
+    "created": "2026-10-14T12:16:00",
     "smoke": true
   }
 }
