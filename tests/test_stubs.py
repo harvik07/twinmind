@@ -41,6 +41,7 @@ MODULES = [
     "twinmind.twin.prng",
     "twinmind.twin.streams",
     "twinmind.optim.contracts",
+    "twinmind.optim.design",
     "twinmind.optim.evaluators",
     "twinmind.optim.goals",
     "twinmind.optim.novelty",

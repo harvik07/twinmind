@@ -1,7 +1,14 @@
-"""The optimisation benchmark: every method on every held-out goal.
+"""The optimisation benchmark: every method on the design's held-out goals.
 
     python scripts/run_optim_benchmark.py --workers 3          # the full run
     python scripts/run_optim_benchmark.py --smoke              # tiny, 2 dev goals
+
+THE DESIGN (Amendment 2). Which held-out cells exist is set by
+configs/benchmark_design.yaml: 8 core goals, ``best_known`` on seed 1, every
+other method on seeds 1 and 2 -- 104 cells. Reserve goals and seed 3 are
+refused on the held-out split, and the analysis reads design cells only
+(:func:`twinmind.optim.design.load_design_cells`). ``--max-hours N`` stops
+starting cells after N hours and exits cleanly; rerunning resumes.
 
 RESUMABLE BY CONSTRUCTION. One atomic JSON file per ``(goal, method, seed)``
 cell plus a manifest. A cell whose file exists and parses is skipped, so an
@@ -51,6 +58,7 @@ import numpy as np
 from twinmind.eval.registry import results_dir
 from twinmind.models.surrogate import KPI_ORDER
 from twinmind.optim.contracts import ObjectiveSpec, Plan
+from twinmind.optim.design import DESIGN_PATH, BenchmarkDesign
 from twinmind.optim.evaluators import (
     OPTIM_SEED_ROOT,
     STREAM_NAMES,
@@ -162,8 +170,15 @@ class Cell:
         return f"{self.goal}__{self.method}__seed{self.seed}.json"
 
 
-def build_manifest(resources: Any, args: argparse.Namespace) -> dict[str, Any]:
+def build_manifest(
+    resources: Any,
+    args: argparse.Namespace,
+    design: BenchmarkDesign | None = None,
+    plan: list[tuple[str, str, int]] | None = None,
+) -> dict[str, Any]:
     """Everything that invalidates existing cells if it changes."""
+    design = design if design is not None else BenchmarkDesign.load()
+    seeds = sorted({s for _, _, s in plan}) if plan else list(args.seeds or [])
     config = resources.config
     surrogate_dir = PROJECT_ROOT / "models" / "surrogate"
     digest = hashlib.sha256()
@@ -180,8 +195,10 @@ def build_manifest(resources: Any, args: argparse.Namespace) -> dict[str, Any]:
         "budgets_hash": budgets_hash(),
         "goals_hash": goals_hash(),
         "seed_scheme": seed_scheme(),
+        "design_hash": design.hash(),
+        "design": design.to_dict(),
         "methods": list(METHODS),
-        "seeds": list(args.seeds),
+        "seeds": seeds,
         "kpi_order": list(KPI_ORDER),
         "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
@@ -232,10 +249,16 @@ def budgets_hash() -> str:
 
 
 #: What a results tree's cells depend on. Deliberately NOT the git commit: a
-#: commit that changes neither the twin, the surrogate, the goals, the budgets
-#: nor the seeds -- a docs edit, or the bounded-memory rewrite of
-#: ``random_search``, which is bitwise identical -- must not orphan hours of
-#: completed cells.
+#: commit that changes neither the twin, the surrogate, the goals, the budgets,
+#: the seed scheme nor the run design -- a docs edit, or the bounded-memory
+#: rewrite of ``random_search``, which is bitwise identical -- must not orphan
+#: hours of completed cells.
+#:
+#: The seed LIST is covered by ``design_hash``: since Amendment 2 the seeds a
+#: run uses come from configs/benchmark_design.yaml (seed 1 for best_known,
+#: 1 and 2 for the rest), so the design hash is what pins them. The bare
+#: ``seeds`` entry is still recorded, for reading, but not compared: a
+#: pre-amendment manifest says [1, 2, 3] and the cells it covers are valid.
 INVALIDATING_KEYS = (
     "twin_config_hash",
     "surrogate_hash",
@@ -245,20 +268,27 @@ INVALIDATING_KEYS = (
     "budgets_hash",
     "goals_hash",
     "seed_scheme",
-    "seeds",
+    "design_hash",
 )
 
 #: Keys added to the manifest after a run had already started. A manifest that
 #: predates them is UPGRADED rather than refused, provided every key it does
 #: record matches. This is a closed list: any other missing key is a conflict.
 #:
-#: Why upgrading is safe for these two: the goal library and the seed scheme
-#: are unchanged since the pre-registration commit (4f54ac8), which predates
-#: every manifest written by this script -- checked with ``git diff 4f54ac8 --
-#: configs/goals src/twinmind/optim/goals.py src/twinmind/optim/evaluators.py``
-#: when the keys were added. From the upgrade on, they are enforced like any
-#: other key.
-ADDED_MANIFEST_KEYS = ("goals_hash", "seed_scheme")
+#: Why upgrading is safe:
+#:
+#: * ``goals_hash``, ``seed_scheme`` -- the goal library and the seed scheme are
+#:   unchanged since the pre-registration commit (4f54ac8), which predates
+#:   every manifest written by this script; checked with ``git diff 4f54ac8 --
+#:   configs/goals src/twinmind/optim/goals.py src/twinmind/optim/evaluators.py``.
+#: * ``design_hash`` -- a cell's result does not depend on the design; the
+#:   design only selects WHICH cells are run and analysed. A pre-amendment
+#:   results tree is a superset of the reduced design's cells, and the cells
+#:   outside the design are ignored by both the runner and the analysis.
+#:
+#: From the upgrade on, they are enforced like any other key, so a later run
+#: under a DIFFERENT design is refused.
+ADDED_MANIFEST_KEYS = ("goals_hash", "seed_scheme", "design_hash")
 
 
 def manifest_conflicts(existing: dict[str, Any], current: dict[str, Any]) -> list[str]:
@@ -278,8 +308,13 @@ def manifest_conflicts(existing: dict[str, Any], current: dict[str, Any]) -> lis
 def upgrade_manifest(
     existing: dict[str, Any], current: dict[str, Any]
 ) -> tuple[dict[str, Any], list[str]]:
-    """Fill keys a pre-upgrade manifest lacks, keeping everything it recorded."""
-    added = [k for k in ADDED_MANIFEST_KEYS if k not in existing]
+    """Fill keys a pre-upgrade manifest lacks, keeping everything it recorded.
+
+    Only reached once :func:`manifest_conflicts` is empty, so every invalidating
+    key the stored manifest lacks is one of :data:`ADDED_MANIFEST_KEYS`; any
+    other missing key is informational (``design``) and is filled too.
+    """
+    added = [k for k in current if k not in existing]
     return {**existing, **{k: current[k] for k in added}}, added
 
 
@@ -553,7 +588,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="Max 6, spawn start method. Default 3, from measured peak memory and heat.",
     )
-    parser.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3])
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Held-out: only NARROWS the design's seeds. Dev/smoke: the seeds (default 1 2 3).",
+    )
+    parser.add_argument(
+        "--design",
+        default=str(DESIGN_PATH),
+        help="Run design: which held-out goals and seeds (Amendment 2).",
+    )
+    parser.add_argument(
+        "--max-hours",
+        type=float,
+        default=None,
+        help="Stop STARTING cells after this many hours; in-flight cells finish, the "
+        "summary is written, and a rerun resumes from there.",
+    )
     parser.add_argument("--out", default=str(RESULTS_DIR))
     parser.add_argument("--smoke", action="store_true", help="Tiny budgets on 2 dev goals.")
     parser.add_argument("--methods", nargs="+", default=list(METHODS))
@@ -572,6 +625,63 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--force-new-manifest", action="store_true")
     return parser
+
+
+def plan_cells(
+    args: argparse.Namespace, design: BenchmarkDesign
+) -> tuple[str, list[tuple[str, str, int]]]:
+    """The (goal, method, seed) cells this invocation is responsible for.
+
+    HELD-OUT: exactly the design's cells. ``--goals`` and ``--seeds`` may only
+    narrow it; asking for a reserve goal or a seed outside the design is an
+    error, because running one "just to see" is how a reserve turns into a
+    pool to cherry-pick from.
+
+    DEV / SMOKE: unchanged -- the requested goals (two with ``--smoke``) on the
+    requested seeds, default 1 2 3. The design governs held-out goals only.
+    """
+    split = args.split or ("dev" if args.smoke else "held_out")
+    methods = [m for m in args.methods if m in METHODS]
+    library = load_goals(split=split)
+    names = [g.name for g in library]
+    if args.goals:
+        unknown = sorted(set(args.goals) - set(names))
+        if unknown:
+            raise SystemExit(
+                f"no such goal(s) in the {split} split: {unknown}. Available: {', '.join(names)}"
+            )
+
+    if split != "held_out":
+        goals = [n for n in names if n in set(args.goals)] if args.goals else names
+        if args.smoke and not args.goals:
+            goals = goals[:2]
+        seeds = args.seeds or [1, 2, 3]
+        return split, [(g, m, s) for g in goals for m in methods for s in seeds]
+
+    design.check_against(names, METHODS)
+    if args.goals:
+        reserve = sorted(set(args.goals) & set(design.reserve_goals))
+        if reserve:
+            raise SystemExit(
+                f"{reserve} are RESERVE goals under Amendment 2: they stay in the library "
+                "and are never run. See configs/benchmark_design.yaml."
+            )
+    plan = []
+    for goal, method, seed in design.cells(methods):
+        if args.goals and goal not in args.goals:
+            continue
+        if args.seeds and seed not in args.seeds:
+            continue
+        plan.append((goal, method, seed))
+    if args.seeds:
+        allowed = {s for m in methods for s in design.seeds_for(m)}
+        outside = sorted(set(args.seeds) - allowed)
+        if outside:
+            raise SystemExit(
+                f"seed(s) {outside} are outside the design (seeds per method: "
+                f"{design.to_dict()['seeds']}). Seed 3 is excluded by rule under Amendment 2."
+            )
+    return split, plan
 
 
 _WORKER: dict[str, Any] = {}
@@ -795,12 +905,20 @@ def dispatch(
     tasks: list[dict[str, Any]],
     workers: int,
     max_heavy: int = MAX_CONCURRENT_HEAVY,
+    deadline: float | None = None,
+    clock: Any = time.monotonic,
 ) -> Any:
     """Run ``func`` over ``tasks`` on ``pool``; yield results as they finish.
 
     Unlike ``imap_unordered``, which hands tasks out in list order, this keeps
     at most ``workers`` tasks in flight and at most ``max_heavy`` of the heavy
     method, so no queue order can put two ``best_known`` cells side by side.
+
+    ``deadline`` (a ``clock()`` value, from ``--max-hours``) stops new cells
+    from STARTING once it has passed. Cells already running are allowed to
+    finish and are yielded as usual, because killing one mid-cell throws away
+    up to ~25 minutes of work. The caller sees fewer results than tasks and
+    reports the difference as not started.
     """
     import queue
 
@@ -808,6 +926,16 @@ def dispatch(
     finished: queue.Queue[dict[str, Any]] = queue.Queue()
     in_flight = heavy = 0
     while pending or in_flight:
+        if deadline is not None and pending and clock() >= deadline:
+            logger.warning(
+                "--max-hours reached: starting no more cells; %d in flight will finish, "
+                "%d not started",
+                in_flight,
+                len(pending),
+            )
+            pending = []
+            if not in_flight:
+                break
         while in_flight < workers:
             task = _next_task(pending, heavy, max_heavy)
             if task is None:
@@ -896,6 +1024,8 @@ def main() -> int:
     import multiprocessing as mp
 
     args = build_parser().parse_args()
+    if args.max_hours is not None and args.max_hours <= 0:
+        raise SystemExit(f"--max-hours must be positive, got {args.max_hours}")
     workers = max(1, min(args.workers, 6))
     out = Path(args.out) / ("smoke" if args.smoke else "full")
 
@@ -911,7 +1041,17 @@ def main() -> int:
     model = CachedDemandModel.load(cache_path)
     resources = build_resources(demand_model=model, series_id=model.series_ids[0])
 
-    manifest = build_manifest(resources, args)
+    design = BenchmarkDesign.load(Path(args.design))
+    split, plan = plan_cells(args, design)
+    logger.info(
+        "split=%s, design amendment %d (%s), %d cell(s) in the plan",
+        split,
+        design.amendment,
+        design.hash(),
+        len(plan),
+    )
+
+    manifest = build_manifest(resources, args, design, plan)
     manifest["smoke"] = args.smoke
     out.mkdir(parents=True, exist_ok=True)
     manifest_path = out / "manifest.json"
@@ -938,47 +1078,26 @@ def main() -> int:
     else:
         write_atomic(manifest, manifest_path)
 
-    split = args.split or ("dev" if args.smoke else "held_out")
-    goals = load_goals(split=split)
-    if args.goals:
-        wanted = set(args.goals)
-        goals = [g for g in goals if g.name in wanted]
-        missing = wanted - {g.name for g in goals}
-        if missing:
-            raise SystemExit(
-                f"no such goal(s) in the {split} split: {sorted(missing)}. "
-                f"Available: {', '.join(g.name for g in load_goals(split=split))}"
-            )
-    elif args.smoke:
-        goals = goals[:2]
-    logger.info("split=%s, %d goal(s): %s", split, len(goals), ", ".join(g.name for g in goals))
-    methods = [m for m in args.methods if m in METHODS]
-
     tasks = []
-    for goal in goals:
-        for method in methods:
-            for seed in args.seeds:
-                cell = Cell(goal=goal.name, method=method, seed=seed)
-                if cell_done(out / cell.filename):
-                    continue
-                tasks.append(
-                    {
-                        "goal": goal.name,
-                        "method": method,
-                        "seed": seed,
-                        "smoke": args.smoke,
-                        "novelty_active": True,
-                    }
-                )
+    for goal_name, method, seed in plan:
+        if cell_done(out / Cell(goal=goal_name, method=method, seed=seed).filename):
+            continue
+        tasks.append(
+            {
+                "goal": goal_name,
+                "method": method,
+                "seed": seed,
+                "smoke": args.smoke,
+                "novelty_active": True,
+            }
+        )
 
-    total = len(goals) * len(methods) * len(args.seeds)
     logger.info(
-        "%d of %d cells outstanding (%d goals x %d methods x %d seeds) on %d workers",
+        "%d of %d cells outstanding (%d goals, %d methods) on %d workers",
         len(tasks),
-        total,
-        len(goals),
-        len(methods),
-        len(args.seeds),
+        len(plan),
+        len({g for g, _, _ in plan}),
+        len({m for _, m, _ in plan}),
         workers,
     )
     if tasks and not args.smoke:
@@ -991,10 +1110,17 @@ def main() -> int:
         if args.smoke:
             # Still print the projection: a resumed smoke run is exactly when
             # someone wants to know how long the real one will take.
-            _estimate_full_run({m: len(args.seeds) * 12 for m in METHODS}, workers)
+            _estimate_full_run(design_counts(design), workers)
         return 0
 
     started = time.perf_counter()
+    deadline = time.monotonic() + args.max_hours * 3600.0 if args.max_hours is not None else None
+    if args.max_hours is not None:
+        logger.info(
+            "--max-hours %.2f: no new cell starts after %s from now",
+            args.max_hours,
+            _hms(args.max_hours * 3600.0),
+        )
     done = 0
     rss: dict[str, list[tuple[float, float]]] = {}
     context = mp.get_context("spawn")
@@ -1002,7 +1128,7 @@ def main() -> int:
     failures: list[dict[str, Any]] = []
     failure_dir = out / "failures"
     try:
-        for result in dispatch(pool, _run_one, tasks, workers):
+        for result in dispatch(pool, _run_one, tasks, workers, deadline=deadline):
             cell = Cell(goal=result["goal"], method=result["method"], seed=result["seed"])
             done += 1
             if result.get("ok", True):
@@ -1049,6 +1175,7 @@ def main() -> int:
         pool.join()
 
     elapsed = time.perf_counter() - started
+    not_started = len(tasks) - done
     logger.info(
         "finished %d cells in %.1f min (%d succeeded, %d FAILED)",
         done,
@@ -1056,6 +1183,12 @@ def main() -> int:
         done - len(failures),
         len(failures),
     )
+    if not_started:
+        logger.warning(
+            "stopped by --max-hours: %d cell(s) not started. Every finished cell is written; "
+            "rerun the same command to continue.",
+            not_started,
+        )
     for method, peaks in sorted(rss.items()):
         logger.info(
             "peak memory %-15s rss %.2f GB, committed %.2f GB (max over %d cells)",
@@ -1065,7 +1198,7 @@ def main() -> int:
             len(peaks),
         )
     if args.smoke:
-        _estimate_full_run({m: len(args.seeds) * 12 for m in METHODS}, workers)
+        _estimate_full_run(design_counts(design), workers)
 
     if failures:
         # Loud, itemised, and a non-zero exit. A silent partial run is how a
@@ -1092,6 +1225,11 @@ def main() -> int:
         "failed": len(failures),
         "failures": [{k: f[k] for k in ("goal", "method", "seed", "error")} for f in failures],
         "elapsed_s": elapsed,
+        "planned": len(plan),
+        "outstanding_at_start": len(tasks),
+        "not_started": not_started,
+        "stopped_by_max_hours": bool(not_started),
+        "max_hours": args.max_hours,
         "out": str(out),
         "manifest": manifest,
     }
@@ -1114,6 +1252,11 @@ def main() -> int:
             out / "summary.json",
         )
     return 1 if failures else 0
+
+
+def design_counts(design: BenchmarkDesign) -> dict[str, int]:
+    """Cells per method in the full design: core goals x that method's seeds."""
+    return {m: len(design.core_goals) * len(design.seeds_for(m)) for m in METHODS}
 
 
 def _estimate_full_run(counts: dict[str, int], workers: int) -> None:

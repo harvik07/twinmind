@@ -1437,7 +1437,7 @@ def test_failed_dispatch_is_reported_not_lost() -> None:
 def test_the_pool_recycles_workers_and_uses_the_scheduler() -> None:
     source = (PROJECT_ROOT / "scripts" / "run_optim_benchmark.py").read_text(encoding="utf-8")
     assert "maxtasksperchild=MAX_TASKS_PER_CHILD" in source
-    assert "dispatch(pool, _run_one, tasks, workers)" in source
+    assert "dispatch(pool, _run_one, tasks, workers, deadline=deadline)" in source
     assert "imap_unordered(_run_one" not in source
 
 
@@ -1472,20 +1472,33 @@ def _manifest(module: Any) -> dict[str, Any]:
         "budgets_hash": module.budgets_hash(),
         "goals_hash": module.goals_hash(),
         "seed_scheme": module.seed_scheme(),
-        "seeds": [1, 2, 3],
+        "design_hash": module.BenchmarkDesign.load().hash(),
+        "seeds": [1, 2],
         "created": "now",
     }
 
 
-def test_manifest_covers_goals_seeds_and_budgets_but_not_the_commit() -> None:
+_NEW_KEYS = ("goals_hash", "seed_scheme", "design_hash")
+
+
+def test_manifest_covers_goals_design_and_budgets_but_not_the_commit() -> None:
+    """Seeds are pinned through the design hash since Amendment 2, not the bare list.
+
+    The pre-amendment manifest records seeds [1, 2, 3] and its cells are valid;
+    comparing that list to the design's [1, 2] would refuse a correct resume.
+    """
     module = _benchmark_module()
-    for key in ("goals_hash", "seed_scheme", "seeds", "budgets_hash", "surrogate_hash"):
+    for key in ("goals_hash", "seed_scheme", "design_hash", "budgets_hash", "surrogate_hash"):
         assert key in module.INVALIDATING_KEYS
+    assert "seeds" not in module.INVALIDATING_KEYS
     assert not any("git" in key or "commit" in key for key in module.INVALIDATING_KEYS)
     current = _manifest(module)
     assert module.manifest_conflicts(current, {**current, "created": "later"}) == []
     assert module.manifest_conflicts({**current, "goals_hash": "edited"}, current) == ["goals_hash"]
-    assert module.manifest_conflicts({**current, "seeds": [1, 2]}, current) == ["seeds"]
+    assert module.manifest_conflicts({**current, "design_hash": "other"}, current) == [
+        "design_hash"
+    ]
+    assert module.manifest_conflicts({**current, "seeds": [1, 2, 3]}, current) == []
 
 
 def test_goals_hash_moves_when_a_goal_changes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1502,15 +1515,18 @@ def test_goals_hash_moves_when_a_goal_changes(monkeypatch: pytest.MonkeyPatch) -
 
 def test_a_manifest_from_before_the_new_keys_is_upgraded_not_refused() -> None:
     """The completed held-out cells were written under a manifest without
-    ``goals_hash`` and ``seed_scheme``. Refusing it would throw them away for a
-    check that did not exist yet; upgrading is allowed for exactly those keys.
+    ``goals_hash``, ``seed_scheme`` or ``design_hash``. Refusing it would throw
+    them away for a check that did not exist yet; upgrading is allowed for
+    exactly those keys.
     """
     module = _benchmark_module()
     current = _manifest(module)
-    legacy = {k: v for k, v in current.items() if k not in ("goals_hash", "seed_scheme")}
+    legacy = {k: v for k, v in current.items() if k not in _NEW_KEYS}
+    legacy["seeds"] = [1, 2, 3]  # what the real pre-amendment manifest records
     assert module.manifest_conflicts(legacy, current) == []
     upgraded, added = module.upgrade_manifest(legacy, current)
-    assert sorted(added) == ["goals_hash", "seed_scheme"]
+    assert sorted(added) == sorted(_NEW_KEYS)
+    assert upgraded["seeds"] == [1, 2, 3], "the original record is kept"
     assert upgraded["goals_hash"] == current["goals_hash"]
     assert upgraded["created"] == legacy["created"], "the original record is kept"
     # Once upgraded, the keys are enforced like any other.
@@ -1520,8 +1536,206 @@ def test_a_manifest_from_before_the_new_keys_is_upgraded_not_refused() -> None:
 def test_a_legacy_manifest_still_conflicts_on_any_key_it_does_record() -> None:
     module = _benchmark_module()
     current = _manifest(module)
-    legacy = {k: v for k, v in current.items() if k not in ("goals_hash", "seed_scheme")}
+    legacy = {k: v for k, v in current.items() if k not in _NEW_KEYS}
     assert module.manifest_conflicts({**legacy, "budgets_hash": "old"}, current) == ["budgets_hash"]
     # Only the named keys may be missing; any other absence is a conflict.
     no_twin = {k: v for k, v in legacy.items() if k != "twin_config_hash"}
     assert module.manifest_conflicts(no_twin, current) == ["twin_config_hash"]
+
+
+# --------------------------------------------------------------------------- #
+# Amendment 2: the reduced-scale design
+# --------------------------------------------------------------------------- #
+def _design() -> Any:
+    from twinmind.optim.design import BenchmarkDesign
+
+    return BenchmarkDesign.load()
+
+
+def test_the_design_partitions_the_held_out_library_exactly() -> None:
+    """8 core + 4 reserve = the 12 held-out goals; no goal left unaccounted for."""
+    module = _benchmark_module()
+    design = _design()
+    held_out = [g.name for g in load_goals(split="held_out")]
+    design.check_against(held_out, module.METHODS)
+    assert len(design.core_goals) == 8 and len(design.reserve_goals) == 4
+    # The two goals that already had completed cells stay in.
+    assert {"held_failures_cap", "held_infeasible_profit_floor"} <= set(design.core_goals)
+
+
+def test_the_seed_rule_is_one_best_known_seed_and_two_for_the_rest() -> None:
+    module = _benchmark_module()
+    design = _design()
+    assert design.seeds_for("best_known") == (1,)
+    for method in module.METHODS:
+        assert 3 not in design.seeds_for(method), "seed 3 is excluded by rule"
+        if method != "best_known":
+            assert design.seeds_for(method) == (1, 2)
+    assert sum(module.design_counts(design).values()) == 8 * 1 + 8 * 6 * 2 == 104
+
+
+def test_the_core_goals_keep_every_family_represented() -> None:
+    """The structural rule behind the selection, checked rather than asserted.
+
+    Same shapes the full library is required to cover, now on the CORE set: a
+    weighted objective, a minimise goal, frozen dimensions, an exogenous
+    what-if, an infeasible-by-design goal, and a hard constraint on each of the
+    four constrained KPIs. ``downtime_hours`` is the reason
+    ``held_premium_supplier_service`` is core rather than
+    ``held_offshore_supplier``: it is the only held-out goal that constrains it.
+    """
+    design = _design()
+    core = [g.spec for g in load_goals(split="held_out") if g.name in design.core_goals]
+    assert any(len(g.objective) > 1 for g in core), "no weighted goal"
+    assert any(g.sense == "minimise" for g in core), "no minimise goal"
+    assert any(len(g.free_dims) < len(CONTROLLABLE_DIMS) for g in core), "no frozen-dim goal"
+    assert any(set(g.fixed) & set(EXOGENOUS_DIMS) for g in core), "no exogenous what-if"
+    assert any(g.infeasible_by_design for g in core), "no infeasible-by-design goal"
+    constrained = {c.kpi for g in core for c in g.constraints if c.hard}
+    for kpi in ("stockout_probability", "on_time_delivery_rate", "unplanned_failures"):
+        assert kpi in constrained, kpi
+    assert "downtime_hours" in constrained, "the only downtime_hours goal was dropped"
+
+
+def test_the_design_hash_ignores_comments_and_moves_with_the_selection(tmp_path: Path) -> None:
+    from twinmind.optim.design import DESIGN_PATH, BenchmarkDesign
+
+    text = DESIGN_PATH.read_text(encoding="utf-8")
+    commented = tmp_path / "commented.yaml"
+    commented.write_text("# a new comment\n" + text, encoding="utf-8")
+    assert BenchmarkDesign.load(commented).hash() == _design().hash()
+
+    swapped = tmp_path / "swapped.yaml"
+    swapped.write_text(text.replace("default: [1, 2]", "default: [1, 3]"), encoding="utf-8")
+    assert BenchmarkDesign.load(swapped).hash() != _design().hash()
+
+
+def test_a_design_that_leaves_a_held_out_goal_unlisted_is_rejected(tmp_path: Path) -> None:
+    from twinmind.optim.design import DESIGN_PATH, BenchmarkDesign
+
+    module = _benchmark_module()
+    text = DESIGN_PATH.read_text(encoding="utf-8")
+    dropped = tmp_path / "dropped.yaml"
+    dropped.write_text(text.replace("  - held_speed_only", ""), encoding="utf-8")
+    held_out = [g.name for g in load_goals(split="held_out")]
+    with pytest.raises(SpecError, match="partition"):
+        BenchmarkDesign.load(dropped).check_against(held_out, module.METHODS)
+
+
+def _args(module: Any, *argv: str) -> Any:
+    return module.build_parser().parse_args(list(argv))
+
+
+def test_held_out_plan_is_exactly_the_design() -> None:
+    module = _benchmark_module()
+    design = _design()
+    split, plan = module.plan_cells(_args(module), design)
+    assert split == "held_out"
+    assert sorted(plan) == sorted(design.cells(module.METHODS))
+    assert len(plan) == 104
+    assert not any(seed == 3 for _, _, seed in plan)
+    assert not any(goal in design.reserve_goals for goal, _, _ in plan)
+
+
+def test_a_reserve_goal_or_seed_3_cannot_be_run_on_held_out() -> None:
+    module = _benchmark_module()
+    design = _design()
+    with pytest.raises(SystemExit, match="RESERVE"):
+        module.plan_cells(_args(module, "--goals", "held_max_profit"), design)
+    with pytest.raises(SystemExit, match="outside the design"):
+        module.plan_cells(_args(module, "--seeds", "3"), design)
+
+
+def test_goals_and_seeds_only_narrow_the_held_out_design() -> None:
+    module = _benchmark_module()
+    _, plan = module.plan_cells(_args(module, "--goals", "held_pm_only", "--seeds", "2"), _design())
+    assert plan and all(g == "held_pm_only" and s == 2 for g, _, s in plan)
+    # best_known has no seed 2 under the design, so narrowing to 2 leaves it out.
+    assert "best_known" not in {m for _, m, _ in plan}
+
+
+def test_dev_and_smoke_runs_are_not_governed_by_the_design() -> None:
+    """The production-budget dry run targets a dev goal with seed 0; that must still work."""
+    module = _benchmark_module()
+    split, plan = module.plan_cells(
+        _args(module, "--split", "dev", "--goals", "dev_max_profit", "--seeds", "0"), _design()
+    )
+    assert split == "dev" and {s for _, _, s in plan} == {0}
+    assert len(plan) == len(module.METHODS)
+    split, plan = module.plan_cells(_args(module, "--smoke"), _design())
+    assert split == "dev"
+    assert len(plan) == 2 * len(module.METHODS) * 3
+
+
+def test_the_loader_reads_only_design_cells_and_never_opens_the_rest(tmp_path: Path) -> None:
+    """The analysis input. Seed-3 and reserve files are listed, never opened.
+
+    Proved by making the out-of-design files invalid JSON: if the loader opened
+    them they would land in ``stale``, not ``excluded``.
+    """
+    from twinmind.optim.design import load_design_cells
+
+    module = _benchmark_module()
+    design = _design()
+    good = {"budgets_hash": module.budgets_hash(), "ok": True}
+    module.write_atomic(good, tmp_path / "held_pm_only__sf_tpe__seed1.json")
+    module.write_atomic(good, tmp_path / "held_pm_only__best_known__seed1.json")
+    module.write_atomic(
+        {"budgets_hash": "old"}, tmp_path / "held_pm_only__sf_tpe__seed2.json"
+    )  # stale: another budget
+    for outside in (
+        "held_pm_only__sf_tpe__seed3.json",  # seed 3
+        "held_pm_only__best_known__seed2.json",  # best_known has one seed
+        "held_max_profit__sf_tpe__seed1.json",  # reserve goal
+    ):
+        (tmp_path / outside).write_text("{not json", encoding="utf-8")
+
+    found = load_design_cells(tmp_path, design, module.METHODS, module.budgets_hash())
+    assert len(found.cells) == 2
+    assert found.stale == ["held_pm_only__sf_tpe__seed2.json"]
+    assert found.excluded == sorted(
+        [
+            "held_max_profit__sf_tpe__seed1.json",
+            "held_pm_only__best_known__seed2.json",
+            "held_pm_only__sf_tpe__seed3.json",
+        ]
+    )
+    assert len(found.missing) == 104 - 3
+
+
+def test_max_hours_stops_starting_cells_but_lets_running_ones_finish() -> None:
+    """After the deadline nothing new starts; whatever was running is still yielded."""
+    import threading
+    import time as _time
+    from multiprocessing.pool import ThreadPool
+
+    module = _benchmark_module()
+    tasks = _tasks(module, goals=2, seeds=(1,))
+    lock = threading.Lock()
+    state = {"started": 0, "finished": 0}
+
+    def work(task: dict[str, Any]) -> dict[str, Any]:
+        with lock:
+            state["started"] += 1
+        _time.sleep(0.02)
+        with lock:
+            state["finished"] += 1
+        return {**task, "ok": True}
+
+    # The clock passes the deadline once two cells have finished.
+    with ThreadPool(3) as pool:
+        results = list(
+            module.dispatch(
+                pool, work, tasks, workers=3, deadline=1.0, clock=lambda: state["finished"] / 2
+            )
+        )
+    assert 2 <= len(results) < len(tasks), "stopped early, but not before the deadline"
+    assert len(results) == state["started"] == state["finished"], "no in-flight cell dropped"
+    assert all(r["ok"] for r in results)
+
+
+def test_max_hours_is_recorded_in_the_summary_and_validated() -> None:
+    source = (PROJECT_ROOT / "scripts" / "run_optim_benchmark.py").read_text(encoding="utf-8")
+    assert "dispatch(pool, _run_one, tasks, workers, deadline=deadline)" in source
+    assert '"stopped_by_max_hours": bool(not_started)' in source
+    assert "--max-hours must be positive" in source
