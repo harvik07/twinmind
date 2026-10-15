@@ -1,0 +1,108 @@
+{
+  "cells": 89,
+  "succeeded": 89,
+  "failed": 0,
+  "failures": [],
+  "elapsed_s": 8050.175908800001,
+  "planned": 104,
+  "outstanding_at_start": 89,
+  "not_started": 0,
+  "stopped_by_max_hours": false,
+  "max_hours": 3.0,
+  "out": "C:\\Users\\Admin\\Desktop\\TwinMind\\data\\processed\\optim_benchmark\\full",
+  "manifest": {
+    "twin_config_hash": "d38e63f94f8f0524",
+    "surrogate_hash": "9af34fae63a00509",
+    "assumptions": {
+      "life_scale_hours_per_cycle": 1.4,
+      "mean_life_operating_days": 18.0,
+      "wear_exponent": 2.0,
+      "defect_base_probability": 0.012,
+      "defect_speed_exponent": 3.0,
+      "energy_speed_exponent": 2.0,
+      "processing_cv": 0.25,
+      "planned_repair_multiplier": 1.0,
+      "unplanned_repair_multiplier": 1.0,
+      "demand_scale": 1.0,
+      "demand_capacity_ratio": 0.85,
+      "price_elasticity": -1.2,
+      "demand_spread_multiplier": 1.0,
+      "supplier_short_ship_fraction": 0.7,
+      "lead_time_multiplier": 1.0
+    },
+    "demand_scale": 0.43847218688809303,
+    "budgets": {
+      "sf_random": 50000,
+      "sf_tpe": 3000,
+      "sf_cmaes": 20000,
+      "surrogate_only": 3000,
+      "twin_tpe": 300,
+      "twin_cmaes": 300,
+      "best_known": 500000
+    },
+    "budgets_hash": "de8ac316eabc9953",
+    "goals_hash": "330153d8d5ae2306",
+    "seed_scheme": {
+      "root": 31415926,
+      "streams": [
+        "search",
+        "reeval"
+      ]
+    },
+    "design_hash": "829a2d71c70acb8b",
+    "design": {
+      "amendment": 2,
+      "dated": "2026-10-14",
+      "core_goals": [
+        "held_failures_cap",
+        "held_infeasible_profit_floor",
+        "held_inventory_only",
+        "held_max_profit_service",
+        "held_weighted_units_cost",
+        "held_pm_only",
+        "held_premium_supplier_service",
+        "held_min_unit_cost"
+      ],
+      "reserve_goals": [
+        "held_max_profit",
+        "held_offshore_supplier",
+        "held_price_cut",
+        "held_speed_only"
+      ],
+      "seeds": {
+        "best_known": [
+          1
+        ],
+        "default": [
+          1,
+          2
+        ]
+      }
+    },
+    "methods": [
+      "sf_random",
+      "sf_tpe",
+      "sf_cmaes",
+      "surrogate_only",
+      "twin_tpe",
+      "twin_cmaes",
+      "best_known"
+    ],
+    "seeds": [
+      1,
+      2
+    ],
+    "kpi_order": [
+      "units_produced",
+      "oee",
+      "unit_cost",
+      "profit",
+      "stockout_probability",
+      "downtime_hours",
+      "unplanned_failures",
+      "on_time_delivery_rate"
+    ],
+    "created": "2026-10-14T22:57:30",
+    "smoke": false
+  }
+}
