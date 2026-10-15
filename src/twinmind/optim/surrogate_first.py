@@ -168,6 +168,10 @@ def surrogate_first_verify(
     chosen: Plan | None = None
     all_plans: list[Plan] = []
     margin_std = cfg.margin_std
+    # Every twin evaluator's own measured cost, merged. The run COUNT used to be
+    # rebuilt by hand from the rounds and the CPU-seconds were dropped, so the
+    # benchmark's surrogate-first cells all reported cpu_seconds = 0.
+    twin_cost = EvalCost()
 
     for round_index in range(cfg.max_rounds + 1):
         # 1. Wide, cheap search on the surrogate.
@@ -198,6 +202,7 @@ def surrogate_first_verify(
             stream="search",
         )
         verified = twin_eval.evaluate_with_spread([c.scenario for c in shortlist])
+        twin_cost = twin_cost.merge(twin_eval.cost)
 
         plans: list[Plan] = []
         for candidate, (mean, sem), score in zip(shortlist, verified, novelty_scores, strict=True):
@@ -256,9 +261,7 @@ def surrogate_first_verify(
             "  no verified-feasible plan after %d rounds -> status=infeasible_unverified",
             cfg.max_rounds + 1,
         )
-        cost = surrogate_eval.cost.merge(
-            EvalCost(twin_runs=sum(r["n_shortlist"] for r in trace["rounds"]) * cfg.verify_reps)
-        )
+        cost = surrogate_eval.cost.merge(twin_cost)
         cost.wall_seconds = time.perf_counter() - started
         return (
             [
@@ -292,12 +295,7 @@ def surrogate_first_verify(
     )
     (final_mean, final_sem) = final_eval.evaluate_with_spread([chosen.scenario])[0]
 
-    cost = surrogate_eval.cost.merge(
-        EvalCost(
-            twin_runs=sum(r["n_shortlist"] for r in trace["rounds"]) * cfg.verify_reps
-            + cfg.final_reps
-        )
-    )
+    cost = surrogate_eval.cost.merge(twin_cost.merge(final_eval.cost))
     cost.wall_seconds = time.perf_counter() - started
 
     final_plan = Plan(
@@ -362,7 +360,7 @@ def surrogate_only(
     )
     (mean, sem) = final_eval.evaluate_with_spread([best.scenario])[0]
 
-    cost = surrogate_eval.cost.merge(EvalCost(twin_runs=cfg.final_reps))
+    cost = surrogate_eval.cost.merge(final_eval.cost)
     cost.wall_seconds = time.perf_counter() - started
     plan = Plan(
         scenario=best.scenario,

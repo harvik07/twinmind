@@ -1739,3 +1739,53 @@ def test_max_hours_is_recorded_in_the_summary_and_validated() -> None:
     assert "dispatch(pool, _run_one, tasks, workers, deadline=deadline)" in source
     assert '"stopped_by_max_hours": bool(not_started)' in source
     assert "--max-hours must be positive" in source
+
+
+# --------------------------------------------------------------------------- #
+# Cost accounting
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("feasible", [True, False])
+def test_surrogate_first_records_its_measured_twin_cpu_seconds(
+    monkeypatch: pytest.MonkeyPatch, feasible: bool
+) -> None:
+    """Every surrogate-first cell of the benchmark reported cpu_seconds = 0.
+
+    The cost was rebuilt by hand from the twin-run COUNT, dropping the
+    CPU-seconds the twin evaluators had measured, so H2's cost clause had to be
+    evaluated on run counts and an estimate. Both exits are checked: the
+    re-evaluated one, and the infeasible one that never re-evaluates.
+    """
+    import time as _time
+
+    from twinmind.optim.surrogate_first import VerifyConfig, surrogate_first_verify
+
+    _patch_twin(monkeypatch)
+    import twinmind.twin.runner as runner
+
+    patched = runner.run_twin
+
+    def slow_twin(*args: Any, **kwargs: Any) -> Any:
+        _time.sleep(0.001)  # so measured CPU-seconds are visibly non-zero
+        return patched(*args, **kwargs)
+
+    monkeypatch.setattr(runner, "run_twin", slow_twin)
+    spec = simple_spec(constraints=(Constraint("stockout_probability", "<=", 0.40),))
+    config = VerifyConfig(
+        optimiser="random", budget=256, k=4, verify_reps=3, final_reps=5, max_rounds=1
+    )
+    plans, trace = surrogate_first_verify(
+        spec,
+        context=None,
+        surrogate=FakeSurrogate(),
+        # A twin whose stockout never drops below 0.6 makes every shortlisted
+        # plan fail verification, which exercises the no-re-evaluation exit.
+        resources=FakeTwinResources(stockout_floor=0.0 if feasible else 0.6),
+        seed=1,
+        config=config,
+    )
+    cost = plans[0].cost
+    shortlisted = sum(r["n_shortlist"] for r in trace["rounds"])
+    expected_runs = shortlisted * 3 + (5 if trace["status"] == "ok" else 0)
+    assert (trace["status"] == "ok") is feasible
+    assert cost["twin_runs"] == expected_runs
+    assert cost["cpu_seconds"] >= expected_runs * 0.001
