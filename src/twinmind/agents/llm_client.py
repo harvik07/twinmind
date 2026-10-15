@@ -1,48 +1,51 @@
 """LLM access for the agent layer.
 
-The agent may only use an LLM to *propose* scenario parameters and to *write*
-explanations. Every KPI, comparison and constraint check is deterministic Python
-elsewhere in the codebase; nothing here is allowed to decide a number that ends
-up in a result table.
+The LLM does exactly two things in this project: it turns a natural-language
+goal into an ``ObjectiveSpec`` (planner) and it writes prose from a structured
+facts object (explainer). It never chooses a plan number. Every KPI, comparison
+and constraint check is deterministic Python elsewhere.
 
-Three pieces:
+Pieces:
 
-* ``LLMClient`` - the abstract interface every backend implements.
-* ``GroqClient`` - the real backend: JSON mode, schema validation with retries,
-  a token-bucket rate limiter, and a JSONL call log for the calls-per-query metric.
-* ``EchoClient`` - a deterministic, offline stub used by tests.
-
-``get_llm_client()`` chooses between them from ``configs/agent.yaml``, so adding
-an Ollama backend later means adding a class here and one line in the factory.
+* :class:`LLMClient` -- the protocol every backend satisfies: one
+  ``complete(messages, json_mode)`` round trip returning an :class:`LLMReply`.
+* :class:`GroqClient` -- the real backend: timeouts, retry with exponential
+  backoff on transient errors, a token-bucket rate limiter, a JSONL call log.
+* :class:`FakeLLM` -- scripted replies, so every graph path is testable offline.
+* :class:`CallBudget` -- a hard cap on LLM calls per goal, wrapping any client.
+  Every round trip, including spec repairs and explanation regenerations, goes
+  through it, so the cap cannot be bypassed by an inner retry loop.
+* :func:`discover_model` -- picks the model from Groq's live model list by the
+  rule in ``configs/agent.yaml``; no model id is hard-coded.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import time
-from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, Protocol
 
-from pydantic import BaseModel, ValidationError
-
-from twinmind.utils.config import AgentConfig, LLMConfig, load_config
 from twinmind.utils.logging import get_logger
-from twinmind.utils.paths import PROJECT_ROOT
 
 logger = get_logger(__name__)
 
 Message = dict[str, str]
-T = TypeVar("T", bound=BaseModel)
 
 #: Rough characters-per-token ratio, used only to pre-charge the token bucket.
 _CHARS_PER_TOKEN = 4.0
 
 
 class LLMError(RuntimeError):
-    """Raised when a backend cannot produce a usable response."""
+    """A backend could not produce a response."""
+
+
+class LLMBudgetError(LLMError):
+    """The per-goal LLM call cap would be exceeded."""
 
 
 # --------------------------------------------------------------------------- #
@@ -139,7 +142,7 @@ class RateLimiter:
 # Call logging
 # --------------------------------------------------------------------------- #
 class CallLogger:
-    """Appends one JSON object per LLM call, for the calls-per-query metric."""
+    """Appends one JSON object per LLM call. Never logs message content or keys."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -161,259 +164,313 @@ def estimate_tokens(messages: Sequence[Message], max_tokens: int) -> int:
     return int(chars / _CHARS_PER_TOKEN) + max_tokens
 
 
-def _schema_instruction(schema: type[BaseModel]) -> str:
-    """The system-message fragment that pins the model to a JSON schema."""
-    return (
-        "Respond with a single JSON object and nothing else. It must validate "
-        f"against this JSON Schema:\n{json.dumps(schema.model_json_schema(), indent=2)}"
-    )
-
-
-def _extract_json(text: str) -> str:
-    """Pull the outermost JSON object out of a response that may be fenced."""
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.split("```")[1]
-        if stripped.startswith("json"):
-            stripped = stripped[4:]
-        stripped = stripped.strip()
-    start, end = stripped.find("{"), stripped.rfind("}")
-    if start == -1 or end <= start:
-        raise LLMError(f"no JSON object found in response: {text[:200]!r}")
-    return stripped[start : end + 1]
-
-
 # --------------------------------------------------------------------------- #
-# Interface
+# Protocol
 # --------------------------------------------------------------------------- #
-class LLMClient(ABC):
-    """Backend-agnostic LLM interface."""
+@dataclass(frozen=True)
+class LLMReply:
+    """One completed round trip."""
 
-    def __init__(self, config: LLMConfig) -> None:
-        self.config = config
+    text: str
+    model: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    latency_seconds: float = 0.0
+    transient_retries: int = 0
 
-    @abstractmethod
-    def complete(
-        self,
-        messages: Sequence[Message],
-        schema: type[BaseModel] | None = None,
-        model: str | None = None,
-    ) -> BaseModel | str:
-        """Return a validated ``schema`` instance, or raw text when ``schema`` is None."""
+    @property
+    def total_tokens(self) -> int:
+        """Prompt plus completion tokens."""
+        return self.prompt_tokens + self.completion_tokens
 
-    def complete_as(
-        self,
-        messages: Sequence[Message],
-        schema: type[T],
-        model: str | None = None,
-    ) -> T:
-        """Typed convenience wrapper around ``complete`` for a known schema."""
-        return cast(T, self.complete(messages, schema=schema, model=model))
+
+class LLMClient(Protocol):
+    """What the agent may call. One round trip per ``complete``; no hidden retries
+    on content -- a reply that fails validation is the CALLER's to repair, so
+    every repair is visible to the per-goal call budget."""
+
+    model: str
+
+    def complete(self, messages: Sequence[Message], json_mode: bool = False) -> LLMReply:
+        """Send ``messages`` and return the reply."""
+        ...
 
 
 # --------------------------------------------------------------------------- #
 # Groq
 # --------------------------------------------------------------------------- #
-class GroqClient(LLMClient):
-    """Groq backend with JSON mode, schema retries, rate limiting and call logging."""
+#: Errors worth a retry: the request did not complete, so nothing was spent.
+_TRANSIENT = (
+    "APIConnectionError",
+    "APITimeoutError",
+    "RateLimitError",
+    "InternalServerError",
+)
+
+
+def load_api_key(env_name: str, env_file: Path | None = None) -> str:
+    """The key from the environment or ``.env``. Never logged or printed."""
+    key = os.getenv(env_name)
+    if not key and env_file is not None and env_file.exists():
+        from dotenv import dotenv_values
+
+        key = dotenv_values(env_file).get(env_name) or None
+    if not key:
+        raise LLMError(f"{env_name} is not set in the environment or in .env.")
+    return key
+
+
+class GroqClient:
+    """Groq chat completions with timeouts, backoff, rate limiting and a call log."""
 
     def __init__(
         self,
-        config: LLMConfig,
+        model: str,
         api_key: str | None = None,
+        *,
+        temperature: float = 0.0,
+        max_tokens: int = 1024,
+        timeout_seconds: float = 30.0,
+        max_transient_retries: int = 3,
+        backoff_seconds: float = 2.0,
+        extra_params: dict[str, Any] | None = None,
         client: Any | None = None,
         rate_limiter: RateLimiter | None = None,
         call_logger: CallLogger | None = None,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
-        super().__init__(config)
-        self.rate_limiter = rate_limiter or RateLimiter(
-            requests_per_minute=config.rate_limit.requests_per_minute,
-            tokens_per_minute=config.rate_limit.tokens_per_minute,
-        )
-        self.call_logger = call_logger or CallLogger(PROJECT_ROOT / config.call_log)
+        self.model = model
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.max_transient_retries = max_transient_retries
+        self.backoff_seconds = backoff_seconds
+        self.extra_params = dict(extra_params or {})
+        self.rate_limiter = rate_limiter or RateLimiter()
+        self.call_logger = call_logger
+        self._sleep = sleeper
         if client is not None:
             self._client = client
-            return
-        key = api_key or os.getenv(config.api_key_env)
-        if not key:
-            raise LLMError(
-                f"{config.api_key_env} is not set. Copy .env.example to .env and fill it in."
-            )
-        try:
+        else:
+            if not api_key:
+                raise LLMError("GroqClient needs an API key.")
             from groq import Groq
-        except ImportError as exc:  # pragma: no cover - groq is a hard dependency
-            raise LLMError("the 'groq' package is not installed") from exc
-        self._client = Groq(api_key=key, timeout=config.timeout_seconds)
 
-    def complete(
-        self,
-        messages: Sequence[Message],
-        schema: type[BaseModel] | None = None,
-        model: str | None = None,
-    ) -> BaseModel | str:
-        """Call Groq, retrying on parse/validation failure up to ``max_parse_retries``."""
-        model_name = model or self.config.model
-        payload: list[Message] = list(messages)
-        if schema is not None:
-            payload = [{"role": "system", "content": _schema_instruction(schema)}, *payload]
+            # max_retries=0: retries are ours, so each one is counted and logged.
+            self._client = Groq(api_key=api_key, timeout=timeout_seconds, max_retries=0)
 
-        attempts = self.config.max_parse_retries + 1
-        last_error: Exception | None = None
-
-        for attempt in range(1, attempts + 1):
-            estimated = estimate_tokens(payload, self.config.max_tokens)
+    def complete(self, messages: Sequence[Message], json_mode: bool = False) -> LLMReply:
+        """One logical call, with up to ``max_transient_retries`` transport retries."""
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": list(messages),
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            **self.extra_params,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        estimated = estimate_tokens(messages, self.max_tokens)
+        retries = 0
+        while True:
             self.rate_limiter.acquire(estimated)
             started = time.monotonic()
-            kwargs: dict[str, Any] = {
-                "model": model_name,
-                "messages": payload,
-                "temperature": self.config.temperature,
-                "max_tokens": self.config.max_tokens,
-            }
-            if schema is not None and self.config.json_mode:
-                kwargs["response_format"] = {"type": "json_object"}
-
-            response = self._client.chat.completions.create(**kwargs)
+            try:
+                response = self._client.chat.completions.create(**kwargs)
+            except Exception as error:  # noqa: BLE001 - classified below
+                if type(error).__name__ in _TRANSIENT and retries < self.max_transient_retries:
+                    delay = self.backoff_seconds * (2**retries)
+                    retries += 1
+                    logger.warning(
+                        "groq %s; retry %d/%d in %.1fs",
+                        type(error).__name__,
+                        retries,
+                        self.max_transient_retries,
+                        delay,
+                    )
+                    self._sleep(delay)
+                    continue
+                raise LLMError(f"groq call failed: {type(error).__name__}: {error}") from error
             latency = time.monotonic() - started
-            text = response.choices[0].message.content or ""
-            usage = getattr(response, "usage", None)
-            prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
-            completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
-            total_tokens = int(getattr(usage, "total_tokens", 0) or 0)
-            if total_tokens:
-                self.rate_limiter.settle(estimated, total_tokens)
-
+            break
+        usage = getattr(response, "usage", None)
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        if prompt_tokens + completion_tokens:
+            self.rate_limiter.settle(estimated, prompt_tokens + completion_tokens)
+        reply = LLMReply(
+            text=response.choices[0].message.content or "",
+            model=self.model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            latency_seconds=latency,
+            transient_retries=retries,
+        )
+        if self.call_logger is not None:
             self.call_logger.log(
                 backend="groq",
-                model=model_name,
-                attempt=attempt,
-                schema=schema.__name__ if schema else None,
+                model=self.model,
+                json_mode=json_mode,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
-                total_tokens=total_tokens,
                 latency_seconds=round(latency, 4),
+                transient_retries=retries,
             )
+        return reply
 
-            if schema is None:
-                return text
-            try:
-                return schema.model_validate_json(_extract_json(text))
-            except (ValidationError, LLMError, json.JSONDecodeError) as exc:
-                last_error = exc
-                logger.warning("schema parse failed (attempt %d/%d): %s", attempt, attempts, exc)
-                payload = [
-                    *payload,
-                    {"role": "assistant", "content": text},
-                    {
-                        "role": "user",
-                        "content": (
-                            "That response did not validate against the schema. "
-                            f"Error: {exc}. Return only a corrected JSON object."
-                        ),
-                    },
-                ]
 
-        raise LLMError(
-            f"could not obtain a schema-valid response after {attempts} attempts: {last_error}"
+# --------------------------------------------------------------------------- #
+# Fake
+# --------------------------------------------------------------------------- #
+Script = str | Callable[[Sequence[Message]], str]
+
+
+@dataclass
+class FakeLLM:
+    """Scripted replies, in order; each may be a string or a function of the messages.
+
+    Records every request so a test can assert on what the model was shown.
+    Running out of script is an error rather than a silent default, so a test
+    cannot pass by accident on an unscripted call.
+    """
+
+    script: list[Script]
+    model: str = "fake-llm"
+    calls: list[list[Message]] = field(default_factory=list)
+
+    def complete(self, messages: Sequence[Message], json_mode: bool = False) -> LLMReply:
+        """Return the next scripted reply."""
+        self.calls.append(list(messages))
+        if len(self.calls) > len(self.script):
+            raise LLMError(f"FakeLLM ran out of script after {len(self.script)} replies")
+        item = self.script[len(self.calls) - 1]
+        text = item(messages) if callable(item) else item
+        chars = sum(len(m.get("content", "")) for m in messages)
+        return LLMReply(
+            text=text,
+            model=self.model,
+            prompt_tokens=int(chars / _CHARS_PER_TOKEN),
+            completion_tokens=int(len(text) / _CHARS_PER_TOKEN),
         )
 
 
 # --------------------------------------------------------------------------- #
-# Echo (offline stub)
+# Budget
 # --------------------------------------------------------------------------- #
-class EchoClient(LLMClient):
-    """Deterministic offline backend for tests and CI. Makes no network calls.
+@dataclass
+class CallRecord:
+    """One LLM round trip, for the trace."""
 
-    With a schema it constructs a schema-valid instance by filling required
-    fields with type-appropriate defaults; without one it echoes the last user
-    message. Canned responses can be supplied to script a specific test.
-    """
+    node: str
+    purpose: str
+    prompt_tokens: int
+    completion_tokens: int
+    latency_seconds: float
+    transient_retries: int
 
-    def __init__(
-        self,
-        config: LLMConfig,
-        responses: Sequence[BaseModel | str] | None = None,
-        call_logger: CallLogger | None = None,
-    ) -> None:
-        super().__init__(config)
-        self._responses = list(responses or [])
-        self._index = 0
-        self.call_count = 0
-        self.call_logger = call_logger
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-ready form."""
+        return dict(self.__dict__)
+
+
+class CallBudget:
+    """Wraps a client and refuses the call that would exceed ``max_calls``."""
+
+    def __init__(self, client: LLMClient, max_calls: int) -> None:
+        self.client = client
+        self.max_calls = max_calls
+        self.records: list[CallRecord] = []
+
+    @property
+    def used(self) -> int:
+        """Calls made so far."""
+        return len(self.records)
+
+    @property
+    def remaining(self) -> int:
+        """Calls still allowed."""
+        return self.max_calls - self.used
 
     def complete(
-        self,
-        messages: Sequence[Message],
-        schema: type[BaseModel] | None = None,
-        model: str | None = None,
-    ) -> BaseModel | str:
-        """Return the next canned response, or a synthesised schema-valid object."""
-        self.call_count += 1
-        if self.call_logger is not None:
-            self.call_logger.log(
-                backend="echo",
-                model=model or self.config.model,
-                schema=schema.__name__ if schema else None,
-                prompt_tokens=estimate_tokens(messages, 0),
-                completion_tokens=0,
-                total_tokens=estimate_tokens(messages, 0),
-                latency_seconds=0.0,
+        self, messages: Sequence[Message], *, node: str, purpose: str, json_mode: bool = False
+    ) -> LLMReply:
+        """One counted call, or :class:`LLMBudgetError` before any is made."""
+        if self.used >= self.max_calls:
+            raise LLMBudgetError(
+                f"LLM call cap of {self.max_calls} per goal reached ({node}/{purpose})"
             )
-        if self._index < len(self._responses):
-            canned = self._responses[self._index]
-            self._index += 1
-            return canned
-        if schema is None:
-            for message in reversed(messages):
-                if message.get("role") == "user":
-                    return f"echo: {message.get('content', '')}"
-            return "echo: (no user message)"
-        return schema.model_validate(self._defaults_for(schema))
-
-    @staticmethod
-    def _defaults_for(schema: type[BaseModel]) -> dict[str, Any]:
-        """Build a minimal payload satisfying the schema's required fields."""
-        payload: dict[str, Any] = {}
-        for name, field in schema.model_fields.items():
-            if not field.is_required():
-                continue
-            payload[name] = EchoClient._default_value(field.annotation)
-        return payload
-
-    @staticmethod
-    def _default_value(annotation: Any) -> Any:
-        """A neutral, valid-ish value for a field annotation."""
-        if annotation is None:
-            return None
-        if isinstance(annotation, type):
-            if issubclass(annotation, BaseModel):
-                return EchoClient._defaults_for(annotation)
-            if issubclass(annotation, bool):
-                return False
-            if issubclass(annotation, int):
-                return 1
-            if issubclass(annotation, float):
-                return 1.0
-            if issubclass(annotation, str):
-                return "echo"
-        origin = getattr(annotation, "__origin__", None)
-        if origin in (list, tuple, set):
-            return []
-        if origin is dict:
-            return {}
-        return "echo"
+        reply = self.client.complete(messages, json_mode=json_mode)
+        self.records.append(
+            CallRecord(
+                node=node,
+                purpose=purpose,
+                prompt_tokens=reply.prompt_tokens,
+                completion_tokens=reply.completion_tokens,
+                latency_seconds=reply.latency_seconds,
+                transient_retries=reply.transient_retries,
+            )
+        )
+        return reply
 
 
 # --------------------------------------------------------------------------- #
-# Factory
+# Model discovery
 # --------------------------------------------------------------------------- #
-def get_llm_client(config: LLMConfig | None = None, **kwargs: Any) -> LLMClient:
-    """Build the backend named in ``configs/agent.yaml`` (or in ``config``)."""
-    if config is None:
-        agent_config = cast(AgentConfig, load_config("agent"))
-        config = agent_config.llm
-    if config.provider == "groq":
-        return GroqClient(config, **kwargs)
-    if config.provider == "echo":
-        return EchoClient(config, **kwargs)
-    raise LLMError(f"unknown LLM provider {config.provider!r}")
+@dataclass(frozen=True)
+class ModelRule:
+    """How to pick a model from Groq's live list (``configs/agent.yaml``)."""
+
+    exclude_patterns: tuple[str, ...]
+    min_context_window: int
+    min_completion_tokens: int
+
+
+def extra_params_for(model_id: str, by_prefix: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Model-family request parameters (e.g. reasoning effort), longest prefix wins."""
+    params: dict[str, Any] = {}
+    for prefix in sorted(by_prefix, key=len):
+        if model_id.startswith(prefix):
+            params = dict(by_prefix[prefix])
+    return params
+
+
+def _size_billions(model_id: str) -> float:
+    """Parameter count from the id (``...-20b`` -> 20); unknown sorts last."""
+    match = re.search(r"(\d+(?:\.\d+)?)b\b", model_id.lower().split("/")[-1])
+    return float(match.group(1)) if match else float("inf")
+
+
+def rank_models(models: Sequence[Any], rule: ModelRule) -> list[str]:
+    """Eligible model ids, fastest (smallest) first, ties by id.
+
+    "Fast" is read as "fewest parameters": on the same serving stack, a smaller
+    model returns sooner and draws less of the free-tier token budget.
+    """
+    eligible = []
+    for model in models:
+        model_id = str(getattr(model, "id", ""))
+        if not model_id or getattr(model, "active", True) is False:
+            continue
+        if any(p in model_id.lower() for p in rule.exclude_patterns):
+            continue
+        if int(getattr(model, "context_window", 0) or 0) < rule.min_context_window:
+            continue
+        if int(getattr(model, "max_completion_tokens", 0) or 0) < rule.min_completion_tokens:
+            continue
+        eligible.append(model_id)
+    return sorted(eligible, key=lambda m: (_size_billions(m), m))
+
+
+def discover_model(raw_client: Any, rule: ModelRule, probe: Callable[[str], bool]) -> str:
+    """The first ranked model that passes a JSON-mode probe.
+
+    ``probe(model_id)`` makes one tiny JSON-mode call and returns whether it
+    parsed. At most one probe per candidate, stopping at the first success.
+    """
+    ranked = rank_models(raw_client.models.list().data, rule)
+    if not ranked:
+        raise LLMError("no Groq model matches the selection rule in configs/agent.yaml")
+    for model_id in ranked:
+        if probe(model_id):
+            return model_id
+        logger.warning("model %s failed the JSON-mode probe; trying the next", model_id)
+    raise LLMError(f"no candidate passed the JSON-mode probe: {ranked}")

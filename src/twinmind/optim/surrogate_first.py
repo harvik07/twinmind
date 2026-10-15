@@ -84,6 +84,11 @@ class VerifyConfig:
     verify_reps: int = 10
     final_reps: int = 30
     novelty_active: bool = True
+    #: False hands the chosen plan back with its SEARCH-stream verification and
+    #: skips step 6; the caller then owns the independent re-evaluation. The
+    #: agent layer does, pairing it with the baseline on the same seeds. The
+    #: benchmark leaves this True.
+    reevaluate: bool = True
 
 
 def select_diverse(candidates: list[Candidate], k: int, min_distance: float) -> list[Candidate]:
@@ -282,6 +287,15 @@ def surrogate_first_verify(
             ],
             {**trace, "status": "infeasible_unverified"},
         )
+
+    if not cfg.reevaluate:
+        cost = surrogate_eval.cost.merge(twin_cost)
+        cost.wall_seconds = time.perf_counter() - started
+        trace["status"] = "ok"
+        trace["free_dims"] = free
+        trace["reevaluated"] = False
+        rest = [p for p in all_plans if p is not chosen]
+        return [Plan(**{**chosen.__dict__, "cost": cost.to_dict()}), *rest], trace
 
     # 6. Independent re-evaluation of the chosen plan, on a stream the search
     #    never touched. Without this the reported value is a maximum over the

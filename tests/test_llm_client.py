@@ -1,32 +1,32 @@
-"""EchoClient must be offline and schema-valid; the rate limiter must actually bite."""
+"""The LLM client layer, offline: transport retries, the call cap, discovery, rate limits.
+
+Nothing here touches the network. GroqClient runs against a fake transport.
+"""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
-from pydantic import BaseModel, Field, ValidationError
 
 from twinmind.agents.llm_client import (
+    CallBudget,
     CallLogger,
-    EchoClient,
+    FakeLLM,
     GroqClient,
+    LLMBudgetError,
     LLMError,
+    ModelRule,
     RateLimiter,
     TokenBucket,
+    discover_model,
     estimate_tokens,
-    get_llm_client,
+    extra_params_for,
+    rank_models,
 )
-from twinmind.utils.config import LLMConfig
-
-
-class Proposal(BaseModel):
-    """A schema of the shape the Explorer node will actually ask for."""
-
-    rationale: str
-    shift_count: int = Field(ge=1, le=3)
-    overtime_hours: float = Field(ge=0.0)
 
 
 class FakeClock:
@@ -40,69 +40,6 @@ class FakeClock:
 
     def advance(self, seconds: float) -> None:
         self.now += seconds
-
-
-# --------------------------------------------------------------------------- #
-# EchoClient
-# --------------------------------------------------------------------------- #
-def test_echo_client_returns_a_schema_valid_object(llm_config: LLMConfig) -> None:
-    client = EchoClient(llm_config)
-    result = client.complete([{"role": "user", "content": "propose a scenario"}], schema=Proposal)
-
-    assert isinstance(result, Proposal)
-    Proposal.model_validate(result.model_dump())  # round-trips cleanly
-    assert client.call_count == 1
-
-
-def test_echo_client_without_schema_returns_text(llm_config: LLMConfig) -> None:
-    client = EchoClient(llm_config)
-    result = client.complete([{"role": "user", "content": "explain"}])
-    assert isinstance(result, str)
-    assert "explain" in result
-
-
-def test_echo_client_is_deterministic(llm_config: LLMConfig) -> None:
-    messages = [{"role": "user", "content": "same input"}]
-    first = EchoClient(llm_config).complete(messages, schema=Proposal)
-    second = EchoClient(llm_config).complete(messages, schema=Proposal)
-    assert isinstance(first, Proposal) and isinstance(second, Proposal)
-    assert first.model_dump() == second.model_dump()
-
-
-def test_echo_client_serves_canned_responses_in_order(llm_config: LLMConfig) -> None:
-    canned = [Proposal(rationale="first", shift_count=3, overtime_hours=2.0), "plain text"]
-    client = EchoClient(llm_config, responses=canned)
-    assert client.complete([], schema=Proposal) == canned[0]
-    assert client.complete([]) == "plain text"
-
-
-def test_echo_client_writes_the_call_log(llm_config: LLMConfig, tmp_path: Path) -> None:
-    logger = CallLogger(tmp_path / "calls.jsonl")
-    client = EchoClient(llm_config, call_logger=logger)
-    client.complete([{"role": "user", "content": "hello"}], schema=Proposal)
-
-    lines = (tmp_path / "calls.jsonl").read_text(encoding="utf-8").strip().splitlines()
-    assert len(lines) == 1
-    record = json.loads(lines[0])
-    assert record["backend"] == "echo"
-    assert record["schema"] == "Proposal"
-    assert "latency_seconds" in record and "total_tokens" in record
-
-
-# --------------------------------------------------------------------------- #
-# Factory
-# --------------------------------------------------------------------------- #
-def test_factory_returns_echo_when_configured(llm_config: LLMConfig) -> None:
-    assert isinstance(get_llm_client(llm_config), EchoClient)
-
-
-def test_factory_groq_without_a_key_fails_clearly(
-    llm_config: LLMConfig, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    groq_config = llm_config.model_copy(update={"provider": "groq"})
-    with pytest.raises(LLMError, match="GROQ_API_KEY"):
-        get_llm_client(groq_config)
 
 
 # --------------------------------------------------------------------------- #
@@ -127,12 +64,9 @@ def test_rate_limiter_blocks_the_twenty_ninth_request_within_a_minute() -> None:
         clock=clock,
         sleeper=sleeps.append,
     )
-
     for i in range(28):
         assert limiter.acquire(estimated_tokens=1) == 0.0, f"call {i + 1} should not have waited"
-
     assert sleeps == []
-
     waited = limiter.acquire(estimated_tokens=1)
     assert waited > 0.0, "the 29th call within the minute must be throttled"
     assert sleeps == [waited]
@@ -142,12 +76,7 @@ def test_rate_limiter_blocks_the_twenty_ninth_request_within_a_minute() -> None:
 def test_rate_limiter_also_throttles_on_tokens() -> None:
     clock = FakeClock()
     sleeps: list[float] = []
-    limiter = RateLimiter(
-        requests_per_minute=28,
-        tokens_per_minute=5500,
-        clock=clock,
-        sleeper=sleeps.append,
-    )
+    limiter = RateLimiter(28, 5500, clock=clock, sleeper=sleeps.append)
     assert limiter.acquire(estimated_tokens=5500) == 0.0
     waited = limiter.acquire(estimated_tokens=1000)
     assert waited > 0.0
@@ -177,109 +106,166 @@ def test_estimate_tokens_counts_prompt_and_output_budget() -> None:
 # --------------------------------------------------------------------------- #
 # GroqClient against a fake transport (still no network)
 # --------------------------------------------------------------------------- #
-class _FakeUsage:
-    prompt_tokens = 10
-    completion_tokens = 5
-    total_tokens = 15
+class RateLimitError(Exception):
+    """Named like groq's, which is how the client classifies transient errors."""
 
 
-class _FakeMessage:
-    def __init__(self, content: str) -> None:
+class BadRequestError(Exception):
+    """A non-transient error: retrying would not help."""
+
+
+def _response(content: str) -> Any:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))],
+        usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+    )
+
+
+class _Transport:
+    """Fake ``client.chat.completions``: raises the queued errors, then answers."""
+
+    def __init__(self, content: str, errors: list[Exception] | None = None) -> None:
         self.content = content
+        self.errors = list(errors or [])
+        self.calls: list[dict[str, Any]] = []
+        self.chat = SimpleNamespace(completions=self)
 
-
-class _FakeChoice:
-    def __init__(self, content: str) -> None:
-        self.message = _FakeMessage(content)
-
-
-class _FakeResponse:
-    def __init__(self, content: str) -> None:
-        self.choices = [_FakeChoice(content)]
-        self.usage = _FakeUsage()
-
-
-class _FakeCompletions:
-    def __init__(self, contents: list[str]) -> None:
-        self._contents = contents
-        self.calls: list[dict[str, object]] = []
-
-    def create(self, **kwargs: object) -> _FakeResponse:
+    def create(self, **kwargs: Any) -> Any:
         self.calls.append(kwargs)
-        index = min(len(self.calls) - 1, len(self._contents) - 1)
-        return _FakeResponse(self._contents[index])
+        if self.errors:
+            raise self.errors.pop(0)
+        return _response(self.content)
 
 
-class _FakeGroq:
-    def __init__(self, contents: list[str]) -> None:
-        self.chat = type("Chat", (), {"completions": _FakeCompletions(contents)})()
-
-
-def _groq_client(contents: list[str], config: LLMConfig, tmp_path: Path) -> GroqClient:
-    return GroqClient(
-        config.model_copy(update={"provider": "groq"}),
-        client=_FakeGroq(contents),
-        rate_limiter=RateLimiter(28, 5500, clock=FakeClock(), sleeper=lambda _: None),
-        call_logger=CallLogger(tmp_path / "calls.jsonl"),
-    )
-
-
-def test_groq_client_parses_a_valid_json_response(llm_config: LLMConfig, tmp_path: Path) -> None:
-    body = json.dumps({"rationale": "run three shifts", "shift_count": 3, "overtime_hours": 1.0})
-    client = _groq_client([body], llm_config, tmp_path)
-    result = client.complete([{"role": "user", "content": "propose"}], schema=Proposal)
-    assert isinstance(result, Proposal)
-    assert result.shift_count == 3
-
-
-def test_groq_client_retries_then_succeeds(llm_config: LLMConfig, tmp_path: Path) -> None:
-    good = json.dumps({"rationale": "ok", "shift_count": 2, "overtime_hours": 0.0})
-    client = _groq_client(["not json at all", good], llm_config, tmp_path)
-    result = client.complete([{"role": "user", "content": "propose"}], schema=Proposal)
-    assert isinstance(result, Proposal)
-
-    records = [
-        json.loads(line)
-        for line in (tmp_path / "calls.jsonl").read_text(encoding="utf-8").strip().splitlines()
-    ]
-    assert [r["attempt"] for r in records] == [1, 2]
-    assert all(r["total_tokens"] == 15 for r in records)
-
-
-def test_groq_client_gives_up_after_the_configured_retries(
-    llm_config: LLMConfig, tmp_path: Path
-) -> None:
-    config = llm_config.model_copy(update={"provider": "groq", "max_parse_retries": 2})
+def _client(transport: _Transport, tmp_path: Path, **kwargs: Any) -> tuple[GroqClient, list[float]]:
+    sleeps: list[float] = []
     client = GroqClient(
-        config,
-        client=_FakeGroq(["nonsense"]),
+        "some/model-8b",
+        client=transport,
         rate_limiter=RateLimiter(28, 5500, clock=FakeClock(), sleeper=lambda _: None),
         call_logger=CallLogger(tmp_path / "calls.jsonl"),
+        sleeper=sleeps.append,
+        **kwargs,
     )
-    with pytest.raises(LLMError, match="3 attempts"):
-        client.complete([{"role": "user", "content": "propose"}], schema=Proposal)
+    return client, sleeps
 
 
-def test_groq_client_rejects_a_schema_violating_response(
-    llm_config: LLMConfig, tmp_path: Path
-) -> None:
-    """Valid JSON, invalid against the schema -- shift_count is out of range."""
-    bad = json.dumps({"rationale": "too many", "shift_count": 9, "overtime_hours": 0.0})
-    client = _groq_client([bad], llm_config, tmp_path)
-    with pytest.raises(LLMError):
-        client.complete([{"role": "user", "content": "propose"}], schema=Proposal)
-    with pytest.raises(ValidationError):
-        Proposal.model_validate_json(bad)
+def test_groq_client_returns_text_and_usage(tmp_path: Path) -> None:
+    client, _ = _client(_Transport('{"ok": true}'), tmp_path)
+    reply = client.complete([{"role": "user", "content": "hi"}], json_mode=True)
+    assert reply.text == '{"ok": true}'
+    assert (reply.prompt_tokens, reply.completion_tokens, reply.total_tokens) == (10, 5, 15)
 
 
-def test_groq_client_requests_json_mode(llm_config: LLMConfig, tmp_path: Path) -> None:
-    body = json.dumps({"rationale": "x", "shift_count": 1, "overtime_hours": 0.0})
-    client = _groq_client([body], llm_config, tmp_path)
-    client.complete([{"role": "user", "content": "propose"}], schema=Proposal)
-    sent = client._client.chat.completions.calls[0]
-    assert sent["response_format"] == {"type": "json_object"}
+def test_groq_client_requests_json_mode_only_when_asked(tmp_path: Path) -> None:
+    transport = _Transport("x")
+    client, _ = _client(transport, tmp_path, extra_params={"reasoning_effort": "low"})
+    client.complete([{"role": "user", "content": "a"}], json_mode=True)
+    client.complete([{"role": "user", "content": "b"}])
+    assert transport.calls[0]["response_format"] == {"type": "json_object"}
+    assert "response_format" not in transport.calls[1]
+    assert transport.calls[0]["reasoning_effort"] == "low"
 
 
-def test_groq_client_without_schema_returns_raw_text(llm_config: LLMConfig, tmp_path: Path) -> None:
-    client = _groq_client(["just prose"], llm_config, tmp_path)
-    assert client.complete([{"role": "user", "content": "explain"}]) == "just prose"
+def test_transient_errors_are_retried_with_exponential_backoff(tmp_path: Path) -> None:
+    transport = _Transport("done", errors=[RateLimitError("429"), RateLimitError("429")])
+    client, sleeps = _client(transport, tmp_path, backoff_seconds=2.0, max_transient_retries=3)
+    reply = client.complete([{"role": "user", "content": "x"}])
+    assert reply.text == "done"
+    assert reply.transient_retries == 2
+    assert sleeps == [2.0, 4.0]
+
+
+def test_transient_retries_are_bounded(tmp_path: Path) -> None:
+    transport = _Transport("never", errors=[RateLimitError("429")] * 5)
+    client, sleeps = _client(transport, tmp_path, max_transient_retries=2)
+    with pytest.raises(LLMError, match="RateLimitError"):
+        client.complete([{"role": "user", "content": "x"}])
+    assert len(sleeps) == 2 and len(transport.calls) == 3
+
+
+def test_a_non_transient_error_is_not_retried(tmp_path: Path) -> None:
+    transport = _Transport("never", errors=[BadRequestError("400")])
+    client, sleeps = _client(transport, tmp_path)
+    with pytest.raises(LLMError, match="BadRequestError"):
+        client.complete([{"role": "user", "content": "x"}])
+    assert sleeps == [] and len(transport.calls) == 1
+
+
+def test_the_call_log_records_usage_but_never_content(tmp_path: Path) -> None:
+    client, _ = _client(_Transport("secret answer"), tmp_path)
+    client.complete([{"role": "user", "content": "secret question"}])
+    log = (tmp_path / "calls.jsonl").read_text(encoding="utf-8")
+    record = json.loads(log.strip())
+    assert record["prompt_tokens"] == 10
+    assert "secret" not in log
+
+
+# --------------------------------------------------------------------------- #
+# FakeLLM and the per-goal cap
+# --------------------------------------------------------------------------- #
+def test_fake_llm_serves_its_script_and_then_refuses() -> None:
+    fake = FakeLLM(["one", lambda messages: f"saw {len(messages)}"])
+    assert fake.complete([{"role": "user", "content": "a"}]).text == "one"
+    assert fake.complete([{"role": "user", "content": "b"}]).text == "saw 1"
+    with pytest.raises(LLMError, match="ran out of script"):
+        fake.complete([{"role": "user", "content": "c"}])
+
+
+def test_call_budget_refuses_the_call_beyond_the_cap() -> None:
+    fake = FakeLLM(["r"] * 10)
+    budget = CallBudget(fake, max_calls=6)
+    for _ in range(6):
+        budget.complete([{"role": "user", "content": "x"}], node="n", purpose="p")
+    with pytest.raises(LLMBudgetError):
+        budget.complete([{"role": "user", "content": "x"}], node="n", purpose="p")
+    assert budget.used == 6
+    assert len(fake.calls) == 6, "the refused call must not reach the model"
+
+
+# --------------------------------------------------------------------------- #
+# Model discovery -- the rule picks from the live list; nothing hard-coded
+# --------------------------------------------------------------------------- #
+def _model(model_id: str, ctx: int = 131072, out: int = 32768, active: bool = True) -> Any:
+    return SimpleNamespace(
+        id=model_id, context_window=ctx, max_completion_tokens=out, active=active
+    )
+
+
+RULE = ModelRule(
+    exclude_patterns=("whisper", "guard", "tts"),
+    min_context_window=32768,
+    min_completion_tokens=4096,
+)
+
+
+def test_rank_models_filters_by_the_rule_and_orders_smallest_first() -> None:
+    models = [
+        _model("vendor/big-120b"),
+        _model("vendor/small-20b"),
+        _model("whisper-large-v3"),
+        _model("meta/llama-prompt-guard-2-86m"),
+        _model("tiny-7b", ctx=4096),
+        _model("retired-8b", active=False),
+        _model("vendor/mid-27b"),
+    ]
+    assert rank_models(models, RULE) == ["vendor/small-20b", "vendor/mid-27b", "vendor/big-120b"]
+
+
+def test_discover_model_takes_the_first_candidate_that_passes_the_probe() -> None:
+    listing = SimpleNamespace(data=[_model("a/m-20b"), _model("b/m-70b")])
+    raw = SimpleNamespace(models=SimpleNamespace(list=lambda: listing))
+    probed: list[str] = []
+
+    def probe(model_id: str) -> bool:
+        probed.append(model_id)
+        return model_id == "b/m-70b"
+
+    assert discover_model(raw, RULE, probe) == "b/m-70b"
+    assert probed == ["a/m-20b", "b/m-70b"]
+
+
+def test_extra_params_follow_the_model_family() -> None:
+    by_prefix = {"openai/gpt-oss": {"reasoning_effort": "low"}}
+    assert extra_params_for("openai/gpt-oss-20b", by_prefix) == {"reasoning_effort": "low"}
+    assert extra_params_for("qwen/qwen3-32b", by_prefix) == {}
