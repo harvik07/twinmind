@@ -76,3 +76,29 @@ agent test existed: the weak-KPI list, the novelty threshold (0.987382, the 95th
 percentile of the T1 scenarios' novelty, not calibrated on the OOD set), the
 "beats the baseline" rule and the one-retry rule. Neither the live planner
 evaluation nor the live demo changes them.
+
+---
+
+## Revision log (appended; the text above is unchanged)
+
+**2026-10-15 — dev run, prompt v1.** 12 calls (12 of 45 used). spec-validity
+10/10, spec-match 7/8, clarification 1/2, refused-or-bounded 2/2. Failures:
+
+- **P01** ("Make as much money as possible over the next four weeks"): the
+  model pinned the exogenous dimensions at their current values
+  (`supplier_choice: 0`, `price_multiplier: 1.0`). Harmless in effect, but not
+  the labelled spec.
+- **A01** ("Keep stockouts low and make as much money as possible"): the model
+  invented an objective weight (−1 on `stockout_probability`) instead of asking
+  for the intended threshold.
+
+**The one permitted revision, prompt v1 → v2** (sha256 prefix
+`0561a3adc2683466`), made on these dev results only, before the test run:
+
+1. Exogenous dimensions are left out of `fixed` unless the goal states a
+   what-if on them.
+2. A KPI the goal wants kept "low", "high", "reasonable" or "in check" is a
+   limit, never an objective weight; if its number is missing, clarify.
+
+No scoring rule, threshold, dataset item or validator changed. The dev split is
+not re-run. The test split runs once, on v2.

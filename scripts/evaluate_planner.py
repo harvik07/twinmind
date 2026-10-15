@@ -110,7 +110,7 @@ def main() -> int:
             "finished": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
     )
-    LEDGER.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8")
+    LEDGER.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8", newline="\n")
     out = results_dir() / f"planner_eval_{args.split}.json"
     out.write_text(
         json.dumps(
@@ -129,6 +129,7 @@ def main() -> int:
         )
         + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     for name, m in metrics.items():
         logger.info(
