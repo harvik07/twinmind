@@ -77,6 +77,22 @@ class PlannerOutcome:
     repairs: int = 0
 
 
+def plant_ids() -> str:
+    """The ids the twin config defines, read from it (prompt v3's only addition).
+
+    v2 described suppliers by name and lead time but never by id, so "supplier
+    S2" was read as the second supplier (index 1) instead of index 2.
+    """
+    from twinmind.utils.config import load_config
+
+    twin: Any = load_config("twin")
+    machines = ", ".join(f"{m.id} = {m.name}" for m in twin.machines)
+    suppliers = ", ".join(
+        f"{s.id} = {s.name} (supplier_choice {i})" for i, s in enumerate(twin.suppliers)
+    )
+    return f"Plant ids: machines {machines}; suppliers {suppliers}."
+
+
 def system_prompt(max_objective_terms: int, max_constraints: int) -> str:
     """The planner's instructions, with the full catalogue of KPIs and dimensions."""
     bounds = scenario_bounds()
@@ -98,6 +114,7 @@ KPIs (the only valid KPI names):
 
 Decision dimensions (the only valid field names), [min, max], current value:
 {dims}
+{plant_ids()}
 Exogenous dimensions are NOT optimised unless the goal explicitly asks for a
 what-if on them; then put them in "fixed" with the stated value. Otherwise
 leave them out of "fixed" entirely -- they already stay at their current value.

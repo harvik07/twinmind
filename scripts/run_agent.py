@@ -53,6 +53,11 @@ def main() -> int:
     group.add_argument("--goal")
     group.add_argument("--demo", choices=sorted(DEMOS))
     parser.add_argument("--context", type=int, default=0)
+    parser.add_argument(
+        "--suffix",
+        default="",
+        help="Appended to the demo's output name, so a re-run keeps earlier evidence.",
+    )
     args = parser.parse_args()
     # The model writes typographic characters (e.g. narrow no-break spaces) that
     # a Windows cp1252 console cannot encode.
@@ -73,7 +78,7 @@ def main() -> int:
     )
     result = run_agent(goal, context, deps)
     if args.demo:
-        out = results_dir() / f"agent_demo_{args.demo}.json"
+        out = results_dir() / f"agent_demo_{args.demo}{args.suffix}.json"
         out.write_text(
             json.dumps({"demo": DEMOS[args.demo], "result": result.to_dict()}, indent=2) + "\n",
             encoding="utf-8",
