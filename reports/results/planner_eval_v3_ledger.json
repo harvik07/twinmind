@@ -1,0 +1,13 @@
+{
+  "cap": 12,
+  "calls_used": 12,
+  "runs": [
+    {
+      "split": "dev",
+      "prompt_version": "v3",
+      "model": "openai/gpt-oss-20b",
+      "calls": 12,
+      "finished": "2026-10-15T17:05:25"
+    }
+  ]
+}
