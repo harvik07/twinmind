@@ -40,8 +40,8 @@ def agent_config() -> AgentConfig:
 
 @pytest.fixture()
 def llm_config(agent_config: AgentConfig) -> LLMConfig:
-    """The LLM section, forced to the offline echo backend."""
-    return agent_config.llm.model_copy(update={"provider": "echo"})
+    """The LLM section, forced to the offline fake backend."""
+    return agent_config.llm.model_copy(update={"provider": "fake"})
 
 
 @pytest.fixture(scope="session")

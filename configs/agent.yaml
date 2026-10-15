@@ -1,51 +1,95 @@
-# Agent layer: LLM backend, rate limits and LangGraph node budgets.
+# Agent layer (Prompt 8): LLM backend, per-goal call budget, and the fixed
+# thresholds the deterministic nodes use. The critic's thresholds were written
+# here BEFORE any agent test existed.
+#
+# The LLM only (a) turns a goal into an ObjectiveSpec and (b) writes an
+# explanation from structured facts. It never chooses a plan number.
+
 llm:
-  provider: groq            # groq | echo   (echo = offline deterministic stub)
-  model: llama-3.3-70b-versatile
-  temperature: 0.2
-  max_tokens: 2048
-  timeout_seconds: 60
+  provider: groq
+  # Discovered from Groq's live model list by `selection` below and recorded
+  # here; re-checked against the live list at run time and re-discovered if
+  # Groq has withdrawn it. Never a hand-typed guess.
+  model: openai/gpt-oss-20b
+  model_discovered: "2026-10-15"
+  selection:
+    # Speech, text-to-speech, and guard/safety classifiers are not chat models.
+    exclude_patterns: [whisper, orpheus, tts, guard, safeguard, embed]
+    min_context_window: 32768
+    min_completion_tokens: 4096
+  # Request parameters for a model family. gpt-oss is a reasoning model;
+  # low effort keeps hidden reasoning tokens (which count against the
+  # free-tier token budget) small.
+  extra_params_by_prefix:
+    "openai/gpt-oss": {reasoning_effort: low}
+  temperature: 0.0
+  max_tokens: 1536
+  timeout_seconds: 30
+  max_transient_retries: 3
+  backoff_seconds: 2.0
   api_key_env: GROQ_API_KEY
-  json_mode: true
-  max_parse_retries: 2      # 2 retries => up to 3 attempts per call
   rate_limit:
-    # Groq free tier is ~30 RPM / 6k TPM; stay under.
-    requests_per_minute: 28
-    tokens_per_minute: 5500
+    # At discovery Groq reported, for this model on this key: 8,000 tokens per
+    # minute and 1,000 requests per day (x-ratelimit-* headers). Stay below.
+    requests_per_minute: 25
+    tokens_per_minute: 6000
   call_log: reports/llm_calls.jsonl
 
-graph:
-  nodes: [planner, explorer, evaluator, critic, explainer]
-  max_iterations: 5
-  early_stop_on_no_improvement: true
+budget:
+  # Hard cap per goal: planner 1 + at most 2 repairs, explainer 1 + at most 1
+  # regeneration = 5 in the worst case, under the cap of 6.
+  max_llm_calls_per_goal: 6
+  max_spec_repairs: 2
+  max_explainer_regenerations: 1
 
 planner:
-  max_objectives: 3
-  default_objective: profit
+  max_objective_terms: 3
+  max_constraints: 6
 
 explorer:
-  # The LLM proposes parameter vectors; the surrogate screens them.
-  proposals_per_iteration: 40
-  surrogate_screen_top_k: 8      # only these are re-verified on the real twin
-  perturbation_scale: 0.15
+  # The best surrogate-first variant in reports/model_cards/d_optimiser.md:
+  # sf_tpe (median gap 0.129, the lowest of the three arms). It was chosen ON
+  # THE HELD-OUT BENCHMARK, so the Prompt 9 benchmark must use goals outside
+  # the 8 core goals.
+  variant: sf_tpe
+  optimiser: tpe
+  # Interactive profile: the benchmark used 3,000 TPE trials (~500 s). Measured
+  # on one worker, explore + evaluate took 122.9 s at 800 trials
+  # (dev_max_profit_service) and 88.9 s at 600 (dev_max_profit), so 600 keeps
+  # a whole run, LLM calls included, inside 60-120 s. It is NOT the
+  # benchmarked configuration; see reports/model_cards/e_agent.md.
+  budget: 600
+  k: 20
+  min_distance: 0.15
+  verify_reps: 10
+  # One round here; the critic owns the single retry (margin + 1 std).
+  max_rounds: 0
+  margin_std: 1.0
+  seed: 1
 
 evaluator:
-  twin_replications: 20
+  reps: 30
+  stream: reeval
   confidence_level: 0.95
-  objective: profit
-  tie_break: unit_cost
 
 critic:
-  # Deterministic Python enforces every constraint; the LLM never decides pass/fail.
-  enforce_constraints: true
-  min_effect_size: 0.02          # relative improvement worth reporting
-  require_non_overlapping_ci: true
+  # (a) constraints on the surrogate's weakest KPIs (R^2 0.733 and 0.907).
+  weak_kpis: [unplanned_failures, downtime_hours]
+  # (c) 95th percentile of NoveltyScorer (k=10) over the 1,000 T1 scenarios.
+  # Calibrated on T1 only, NOT on the OOD set.
+  novelty_threshold: 0.987382
+  # (d) "beats the baseline" means the 95% CI of the paired objective
+  # difference (plan - baseline, same reeval replications) lies above 0 --
+  # or the baseline is infeasible and the plan is point-feasible, because
+  # restoring feasibility is itself an improvement.
+  feasibility_restoration_counts_as_improvement: true
+  # Retry rule: at most one retry per goal. First choice: the best
+  # already-verified candidate whose verification CI lies inside the feasible
+  # region. Otherwise one more explorer round with the margin widened by:
+  max_retries: 1
+  retry_margin_increment_std: 1.0
 
 explainer:
-  max_words: 250
-  cite_kpis: true
+  max_words: 220
 
-memory:
-  backend: duckdb
-  path: reports/agent_memory.duckdb
-  max_episodes: 500
+run_log: reports/agent_runs.jsonl

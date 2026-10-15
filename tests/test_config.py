@@ -62,13 +62,13 @@ def test_broken_cost_ratio_is_rejected(tmp_path: Path, config_dir: Path) -> None
 def test_env_interpolation(
     tmp_path: Path, config_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("TWINMIND_TEST_MEMORY_PATH", "reports/from_env.duckdb")
+    monkeypatch.setenv("TWINMIND_TEST_RUN_LOG", "reports/from_env.jsonl")
     raw = yaml.safe_load((config_dir / "agent.yaml").read_text(encoding="utf-8"))
-    raw["memory"]["path"] = "${TWINMIND_TEST_MEMORY_PATH}"
+    raw["run_log"] = "${TWINMIND_TEST_RUN_LOG}"
     raw["llm"]["model"] = "${TWINMIND_TEST_MISSING:-fallback-model}"
     (tmp_path / "agent.yaml").write_text(yaml.safe_dump(raw), encoding="utf-8")
     config = load_config("agent", tmp_path)
-    assert config.memory.path == "reports/from_env.duckdb"
+    assert config.run_log == "reports/from_env.jsonl"
     assert config.llm.model == "fallback-model"
 
 

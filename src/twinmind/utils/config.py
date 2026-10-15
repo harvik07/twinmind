@@ -412,69 +412,92 @@ class RateLimitConfig(_Base):
     tokens_per_minute: int = Field(gt=0)
 
 
+class ModelSelectionConfig(_Base):
+    """How the Groq model is picked from the live model list."""
+
+    exclude_patterns: list[str]
+    min_context_window: int = Field(gt=0)
+    min_completion_tokens: int = Field(gt=0)
+
+
 class LLMConfig(_Base):
-    provider: Literal["groq", "echo"]
+    provider: Literal["groq", "fake"]
     model: str
+    model_discovered: str
+    selection: ModelSelectionConfig
+    extra_params_by_prefix: dict[str, dict[str, Any]]
     temperature: float = Field(ge=0.0, le=2.0)
     max_tokens: int = Field(gt=0)
     timeout_seconds: float = Field(gt=0)
+    max_transient_retries: int = Field(ge=0)
+    backoff_seconds: float = Field(ge=0)
     api_key_env: str
-    json_mode: bool
-    max_parse_retries: int = Field(ge=0)
     rate_limit: RateLimitConfig
     call_log: str
 
 
-class GraphConfig(_Base):
-    nodes: list[str]
-    max_iterations: int = Field(gt=0)
-    early_stop_on_no_improvement: bool
+class BudgetConfig(_Base):
+    max_llm_calls_per_goal: int = Field(gt=0, le=6)
+    max_spec_repairs: int = Field(ge=0)
+    max_explainer_regenerations: int = Field(ge=0)
 
 
 class PlannerConfig(_Base):
-    max_objectives: int = Field(gt=0)
-    default_objective: str
+    max_objective_terms: int = Field(gt=0)
+    max_constraints: int = Field(gt=0)
 
 
 class ExplorerConfig(_Base):
-    proposals_per_iteration: int = Field(gt=0)
-    surrogate_screen_top_k: int = Field(gt=0)
-    perturbation_scale: float = Field(gt=0)
+    variant: str
+    optimiser: Literal["tpe", "random", "cmaes"]
+    budget: int = Field(gt=0)
+    k: int = Field(gt=0)
+    min_distance: float = Field(ge=0)
+    verify_reps: int = Field(gt=1)
+    max_rounds: int = Field(ge=0)
+    margin_std: float = Field(ge=0)
+    seed: int
 
 
 class EvaluatorConfig(_Base):
-    twin_replications: int = Field(gt=0)
+    reps: int = Field(gt=1)
+    stream: Literal["reeval"]
     confidence_level: float = Field(gt=0.0, lt=1.0)
-    objective: str
-    tie_break: str
 
 
 class CriticConfig(_Base):
-    enforce_constraints: bool
-    min_effect_size: float = Field(ge=0)
-    require_non_overlapping_ci: bool
+    """Fixed thresholds, written before the agent tests. No LLM decides a verdict."""
+
+    weak_kpis: list[str]
+    novelty_threshold: float = Field(gt=0)
+    feasibility_restoration_counts_as_improvement: bool
+    max_retries: int = Field(ge=0, le=1)
+    retry_margin_increment_std: float = Field(gt=0)
 
 
 class ExplainerConfig(_Base):
     max_words: int = Field(gt=0)
-    cite_kpis: bool
-
-
-class MemoryConfig(_Base):
-    backend: Literal["duckdb", "memory"]
-    path: str
-    max_episodes: int = Field(gt=0)
 
 
 class AgentConfig(_Base):
     llm: LLMConfig
-    graph: GraphConfig
+    budget: BudgetConfig
     planner: PlannerConfig
     explorer: ExplorerConfig
     evaluator: EvaluatorConfig
     critic: CriticConfig
     explainer: ExplainerConfig
-    memory: MemoryConfig
+    run_log: str
+
+    @model_validator(mode="after")
+    def _budget_covers_the_worst_case(self) -> AgentConfig:
+        worst = (1 + self.budget.max_spec_repairs) + (1 + self.budget.max_explainer_regenerations)
+        if worst > self.budget.max_llm_calls_per_goal:
+            raise ValueError(
+                f"worst-case LLM calls per goal ({worst}) exceed the cap "
+                f"({self.budget.max_llm_calls_per_goal})"
+            )
+        return self
 
 
 class BenchmarkDesignConfig(_Base):
