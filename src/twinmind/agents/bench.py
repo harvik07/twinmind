@@ -73,6 +73,7 @@ class TwinOnlyOutcome:
     evaluations: int
     restarts: int
     seconds: float
+    note: str = ""
 
 
 def twin_only_timeboxed(
@@ -88,8 +89,29 @@ def twin_only_timeboxed(
         from twinmind.optim.optimisers import cmaes_search
 
         search = cmaes_search
+    from twinmind.optim.contracts import SpecError
+    from twinmind.optim.optimisers import free_dimensions
+
     started = clock()
     wrapper = TimeBudgetEvaluator(evaluator, deadline=started + seconds, clock=clock)
+    try:
+        free_dimensions(spec)
+    except SpecError:
+        # Nothing to search: the only admissible plan is the current one. It is
+        # evaluated once on the search stream so "recommended" (feasible on the
+        # arm's own search stream) still has an answer. ObjectiveSpec refuses
+        # such a goal, so this is a guard, not a path the benchmark takes.
+        base = spec.base_scenario()
+        kpis = wrapper.evaluate([base])[0]
+        return TwinOnlyOutcome(
+            scenario=base,
+            search_kpis=kpis,
+            feasible_on_search=bool(spec.feasible(kpis)),
+            evaluations=1,
+            restarts=0,
+            seconds=clock() - started,
+            note="no free dimensions: the current policy is the only plan",
+        )
     restarts = 0
     while clock() < wrapper.deadline:
         before = len(wrapper.points)

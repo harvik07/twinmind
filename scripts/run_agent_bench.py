@@ -109,6 +109,24 @@ def cell_done(path: Path) -> bool:
         return False
 
 
+def preregistration_base_hash(path: Path = PREREG) -> str | None:
+    """Hash of the pre-registration's ORIGINAL text: everything before the first
+    appended "## Amendment" section.
+
+    Amendments are append-only, so appending one leaves this hash -- and the
+    manifest of a run already under way -- unchanged, while any edit to the
+    original text changes it and makes a resume refuse.
+    """
+    if not path.exists():
+        return None
+    data = path.read_bytes()
+    marker = data.find(b"\n## Amendment")
+    base = data if marker < 0 else data[: marker + 1]
+    # Drop the "---" rule and blank lines an amendment is introduced with, so
+    # the original file and "original + amendment" hash the same.
+    return _sha(base.rstrip(b" \r\n-") + b"\n")
+
+
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()[:16]
 
@@ -128,7 +146,7 @@ def build_manifest(args: argparse.Namespace) -> dict[str, Any]:
         "critic": agent.critic.model_dump(),
     }
     return {
-        "preregistration_hash": _sha(PREREG.read_bytes()) if PREREG.exists() else None,
+        "preregistration_hash": preregistration_base_hash(),
         "goals_hash": bench_goals_hash(),
         "agent_config_hash": _sha(json.dumps(behaviour, sort_keys=True).encode()),
         "twin_config_hash": _sha(
@@ -215,6 +233,7 @@ def _twin_only_cell(task: dict[str, Any]) -> dict[str, Any]:
         "search_kpis": outcome.search_kpis,
         "evaluations": outcome.evaluations,
         "restarts": outcome.restarts,
+        "note": outcome.note,
         "search_seconds": outcome.seconds,
         "budget_seconds": task["budget_seconds"],
         "twin_runs_search": int(search.cost.twin_runs),
@@ -305,6 +324,14 @@ def run_benchmark(args: argparse.Namespace) -> int:
         workers,
     )
     _estimate(pending_agent, pending_twin, workers)
+    if args.dry_run:
+        for task in [*pending_twin, *pending_agent]:
+            logger.info("outstanding: %s", cell_name(task["goal"], task["arm"], task["seed"]))
+        logger.info(
+            "dry run: %d outstanding cell(s); nothing started",
+            len(pending_twin) + len(pending_agent),
+        )
+        return 0
 
     deadline = time.monotonic() + args.max_hours * 3600 if args.max_hours else None
     finished: queue.Queue[dict[str, Any]] = queue.Queue()
@@ -523,6 +550,7 @@ def main() -> int:
     parser.add_argument("--audit", action="store_true", help="Run the NL audit (LLM).")
     parser.add_argument("--audit-cap", type=int, default=AUDIT_CALL_CAP)
     parser.add_argument("--force-new-manifest", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="List outstanding cells and exit.")
     args = parser.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")

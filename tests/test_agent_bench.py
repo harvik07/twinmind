@@ -155,6 +155,86 @@ def test_best_point_is_feasibility_first() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Amendment A.1: CMA-ES on goals with one (or no) free dimension
+# --------------------------------------------------------------------------- #
+class FlatEvaluator:
+    """A no-room objective: nothing the lever does changes any KPI."""
+
+    def __init__(self, clock: Clock) -> None:
+        self.clock = clock
+
+    def evaluate(self, scenarios: Any) -> list[dict[str, float]]:
+        out = []
+        for _ in scenarios:
+            self.clock.now += 0.01
+            out.append({"profit": 1000.0, "stockout_probability": 0.1})
+        return out
+
+    @property
+    def cost(self) -> Any:
+        return None
+
+
+def _one_dim() -> ObjectiveSpec:
+    return ObjectiveSpec(name="n", objective={"profit": 1.0}, free_dims=("pm_interval_M5",))
+
+
+def test_negative_control_pycma_raises_in_one_dimension() -> None:
+    """The library bug itself: a 1-D bounded run whose std crosses the cap raises.
+
+    Seed 1007 with x0 0.5, sigma 0.25 and bounds [0, 1] -- exactly what
+    cmaes_search builds for seed 1006 -- crosses pycma's automatic maxstd of
+    1/3 at its first tell, on a flat objective. The OLD cmaes_search called
+    tell unguarded and so raised this straight out of the twin_only arm.
+    """
+    import cma
+
+    es = cma.CMAEvolutionStrategy([0.5], 0.25, {"seed": 1007, "bounds": [0.0, 1.0], "verbose": -9})
+    points = es.ask()
+    with pytest.raises(ValueError, match="dimension needed"):
+        es.tell(points, [1.0] * len(points))
+
+
+def test_cmaes_search_survives_the_one_dimensional_std_limit() -> None:
+    """Same seed through cmaes_search (seed 1006 -> pycma seed 1007): no raise,
+    and the batch evaluated before the failed tell is kept."""
+    from twinmind.optim.optimisers import cmaes_search
+
+    clock = Clock()
+    found = cmaes_search(_one_dim(), FlatEvaluator(clock), 10**6, seed=1006)
+    assert found, "the evaluated batch survives"
+
+
+def test_twin_only_on_a_one_dimensional_flat_goal_uses_its_whole_budget() -> None:
+    """The N01-N03 shape: one free dimension, flat objective, many restarts."""
+    clock = Clock()
+    outcome = twin_only_timeboxed(_one_dim(), FlatEvaluator(clock), 30.0, 1, clock=clock)
+    assert outcome.evaluations > 100 and outcome.restarts > 10
+    assert outcome.scenario is not None and outcome.feasible_on_search
+    assert clock.now >= 30.0
+
+
+def test_twin_only_with_zero_free_dimensions_evaluates_the_only_plan() -> None:
+    """ObjectiveSpec refuses such a goal, so build one past it, as a guard test."""
+    from twinmind.optim.contracts import SpecError
+
+    with pytest.raises(SpecError):
+        ObjectiveSpec(
+            name="z",
+            objective={"profit": 1.0},
+            free_dims=("pm_interval_M5",),
+            fixed={"pm_interval_M5": 200.0},
+        )
+    spec = _one_dim()
+    object.__setattr__(spec, "free_dims", ())
+    clock = Clock()
+    outcome = twin_only_timeboxed(spec, FlatEvaluator(clock), 30.0, 1, clock=clock)
+    assert outcome.evaluations == 1 and outcome.restarts == 0
+    assert outcome.scenario == spec.base_scenario()
+    assert "no free dimensions" in outcome.note
+
+
+# --------------------------------------------------------------------------- #
 # The agent arm on a gold spec: no LLM, and the no-critic arm comes for free
 # --------------------------------------------------------------------------- #
 def test_run_on_spec_makes_no_llm_call_and_records_the_pre_critic_choice() -> None:
@@ -215,6 +295,18 @@ def test_cells_are_atomic_and_only_successes_count(tmp_path: Any) -> None:
     runner.write_atomic({"ok": True}, path)
     assert runner.cell_done(path)
     assert not list(tmp_path.glob("*.tmp.json"))
+
+
+def test_appending_an_amendment_keeps_the_manifest_hash_but_edits_do_not(tmp_path: Any) -> None:
+    runner = _runner()
+    original = "# Pre-registration\n\n## Hypotheses\n\nB1 ...\n"
+    path = tmp_path / "prereg.md"
+    path.write_text(original, encoding="utf-8")
+    before = runner.preregistration_base_hash(path)
+    path.write_text(original + "\n## Amendment A.1 — fix\n\nWhat changed.\n", encoding="utf-8")
+    assert runner.preregistration_base_hash(path) == before
+    path.write_text(original.replace("B1", "B9") + "\n## Amendment A.1\n", encoding="utf-8")
+    assert runner.preregistration_base_hash(path) != before
 
 
 def test_the_manifest_is_invalidated_by_the_preregistration_and_goals() -> None:
