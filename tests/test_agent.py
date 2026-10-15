@@ -142,10 +142,13 @@ def spec_reply(**overrides: Any) -> str:
 
 
 def grounded_explainer(messages: Any) -> str:
-    """An honest fake explainer: cites one number straight from the facts."""
+    """An honest fake explainer: cites one number and quotes the critic's reason."""
     facts = json.loads(messages[1]["content"])
     profit = next(r for r in facts["kpi_table"] if r["kpi"] == "profit")
-    return f"Profit would be about {profit['plan']} under this plan."
+    return (
+        f"Profit would be about {profit['plan']} under this plan. "
+        f"Verdict: {facts['recommendation_reason']}."
+    )
 
 
 def run(

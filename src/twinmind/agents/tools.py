@@ -320,8 +320,17 @@ def build_facts(
     flags: Sequence[dict[str, Any]],
     closest: Sequence[dict[str, Any]],
     recommended: bool,
+    recommendation_reason: str = "",
 ) -> dict[str, Any]:
-    """The ONLY input the explainer sees. Every number is pre-rounded."""
+    """The ONLY input the explainer sees. Every number is pre-rounded.
+
+    Each KPI row carries ``better_when`` ("higher" or "lower") and its signed
+    ``delta`` (plan minus current), so a direction word in the prose can be
+    checked against the sign. ``recommendation_reason`` is the critic's, from a
+    closed set; the explainer must state it verbatim.
+    """
+    from twinmind.optim.contracts import HIGHER_IS_BETTER
+
     current = spec.base_scenario().model_dump()
     changes = []
     for dim in SCENARIO_DIMS:
@@ -334,6 +343,8 @@ def build_facts(
         table.append(
             {
                 "kpi": kpi,
+                "better_when": "higher" if kpi in HIGHER_IS_BETTER else "lower",
+                "delta": _round_sig(row["diff"]["mean"]),
                 "plan": _round_sig(row["plan"]["mean"]),
                 "plan_ci95": [
                     _round_sig(row["plan"]["ci_low"]),
@@ -344,12 +355,11 @@ def build_facts(
                     _round_sig(row["baseline"]["ci_low"]),
                     _round_sig(row["baseline"]["ci_high"]),
                 ],
-                "change": _round_sig(row["diff"]["mean"]),
-                "change_ci95": [
+                "delta_ci95": [
                     _round_sig(row["diff"]["ci_low"]),
                     _round_sig(row["diff"]["ci_high"]),
                 ],
-                "change_pct": _round_sig(100.0 * row["diff"]["mean"] / base) if base else None,
+                "delta_pct": _round_sig(100.0 * row["diff"]["mean"] / base) if base else None,
             }
         )
     objective = evaluation["objective"]
@@ -359,6 +369,7 @@ def build_facts(
         "sense": spec.sense,
         "constraints": [c.to_dict() for c in spec.constraints],
         "recommended": recommended,
+        "recommendation_reason": recommendation_reason,
         "feasible": evaluation["feasible_point"],
         "robustly_feasible": evaluation["feasible_robust"],
         "plan_changes": changes,
@@ -433,6 +444,145 @@ def ungrounded_numbers(text: str, facts: dict[str, Any]) -> list[str]:
     return bad
 
 
+#: KPI mentions in prose. Decision dimensions are anchors too, so a direction
+#: word next to "safety stock" is not pinned on a KPI further away.
+_KPI_ALIASES: dict[str, str] = {
+    "profit": r"\bprofits?\b",
+    "units_produced": r"\bunits produced\b|\boutput\b|\bunits\b",
+    "oee": r"\boee\b|\boverall equipment effectiveness\b",
+    "unit_cost": r"\bunit[- ]cost\b|\bcost per unit\b",
+    "stockout_probability": r"\bstock-?outs?\b",
+    "downtime_hours": r"\bdowntime\b",
+    "unplanned_failures": r"\bfailures?\b|\bbreakdowns?\b",
+    "on_time_delivery_rate": r"\bon[- ]time\b|\bservice level\b",
+}
+_DIM_ANCHOR = re.compile(
+    r"\b(?:safety stock|reorder point|order quantity|pm interval\w*|pm_interval\w*|"
+    r"preventive[- ]maintenance intervals?|speed set-?points?|speed_setpoint\w*|"
+    r"throughput multiplier|throughput_multiplier|overtime|shifts?|shift_count|"
+    r"supplier\w*|price\w*)\b"
+)
+_UP = re.compile(
+    r"\b(?:increas(?:e|es|ed|ing)|ris(?:e|es|ing|en)|rose|grow(?:s|n|ing)?|grew|"
+    r"climb(?:s|ed|ing)?|higher|gain(?:s|ed)?)\b"
+)
+_DOWN = re.compile(
+    r"\b(?:decreas(?:e|es|ed|ing)|fall(?:s|en|ing)?|fell|drop(?:s|ped|ping)?|"
+    r"declin(?:e|es|ed|ing)|reduc(?:e|es|ed|ing|tion)|lower(?:s|ed|ing)?|cut(?:s)?)\b"
+)
+#: Phrases whose direction words describe a level or a convention, not a change.
+_NOT_A_CHANGE = re.compile(
+    r"\b(?:higher|lower) (?:is better|than)\b|\blower bound\b|\bhigher-is-better\b"
+)
+
+#: Conditional wording: a direction word after these describes a possibility.
+_HYPOTHETICAL = re.compile(r"\b(?:if|should|would|could|might|may|unless|in case)\b")
+
+#: Keywords that mark each reason category in a "because ..." sentence.
+_REASON_CATEGORIES: dict[str, str] = {
+    "improves": r"maximi[sz]|minimi[sz]|improv\w* (?:the )?objective|"
+    r"(?:higher|more|increas\w*) profit",
+    "restores": r"restor\w*|brings? \w+ (?:back )?within|fix\w* the",
+    "no_improvement": r"no improvement|does not (?:beat|improve)|doesn't (?:beat|improve)",
+    "no_feasible": r"no feasible|infeasible",
+}
+_REASON_MARKER = re.compile(r"\b(?:because|since|due to|as it|reason)\b")
+
+
+def _normalise(text: str) -> str:
+    """Lower-case, typographic spaces and comparison signs folded to ASCII."""
+    text = text.replace(" ", " ").replace(" ", " ").replace("‑", "-")
+    text = text.replace("≤", "<=").replace("≥", ">=").replace("−", "-")
+    return re.sub(r"\s+", " ", text.lower())
+
+
+def _reason_category(reason: str) -> str | None:
+    lowered = reason.lower()
+    if lowered.startswith("no feasible"):
+        return "no_feasible"
+    if lowered.startswith("no improvement"):
+        return "no_improvement"
+    if lowered.startswith("restores"):
+        return "restores"
+    if lowered.startswith("improves"):
+        return "improves"
+    return None
+
+
+def direction_errors(text: str, facts: dict[str, Any]) -> list[str]:
+    """Direction words tied to a KPI that contradict the sign of its delta.
+
+    Per sentence, each increase/decrease word is attributed to the nearest
+    anchor (a KPI or a decision dimension); a word attributed to a KPI must
+    agree with that KPI's signed ``delta`` in the facts.
+    """
+    deltas = {row["kpi"]: float(row["delta"]) for row in facts.get("kpi_table", [])}
+    errors = []
+    for sentence in re.split(r"(?<=[.!?;])\s+|\n+", _normalise(text)):
+        cleaned = _NOT_A_CHANGE.sub(" ", sentence)
+        anchors: list[tuple[int, str | None]] = []
+        for name, alias in _KPI_ALIASES.items():
+            anchors += [(m.start(), name) for m in re.finditer(alias, cleaned)]
+        anchors += [(m.start(), None) for m in _DIM_ANCHOR.finditer(cleaned)]
+        if not anchors:
+            continue
+        for word, sign in ((_UP, 1), (_DOWN, -1)):
+            for match in word.finditer(cleaned):
+                # "monitor in case failures rise" is a hypothetical, not a claim
+                # about this plan's delta.
+                if _HYPOTHETICAL.search(cleaned[max(0, match.start() - 60) : match.start()]):
+                    continue
+                _, kpi = min(anchors, key=lambda a: abs(a[0] - match.start()))
+                if kpi is None or kpi not in deltas:
+                    continue
+                delta = deltas[kpi]
+                if delta == 0 or (delta > 0) != (sign > 0):
+                    errors.append(
+                        f"'{match.group(0)}' for {kpi}, whose delta is {fmt(delta)}"
+                        f" ({sentence.strip()[:80]})"
+                    )
+    return errors
+
+
+def reason_errors(text: str, facts: dict[str, Any]) -> list[str]:
+    """The stated reason must be the critic's ``recommendation_reason``, verbatim,
+    and no reason sentence may claim a different category of reason."""
+    reason = str(facts.get("recommendation_reason") or "")
+    if not reason:
+        return []
+    normalised = _normalise(text)
+    errors = []
+    if _normalise(reason) not in normalised:
+        errors.append(f"the reason {reason!r} is not stated")
+    actual = _reason_category(reason)
+    for sentence in re.split(r"(?<=[.!?;])\s+|\n+", normalised):
+        if not _REASON_MARKER.search(sentence) or _normalise(reason) in sentence:
+            continue
+        claimed = {
+            name for name, pattern in _REASON_CATEGORIES.items() if re.search(pattern, sentence)
+        }
+        if claimed and actual not in claimed:
+            errors.append(
+                f"claims {sorted(claimed)} as the reason, but it is {actual!r}"
+                f" ({sentence.strip()[:80]})"
+            )
+    return errors
+
+
+def audit_explanation(text: str, facts: dict[str, Any]) -> dict[str, list[str]]:
+    """Numbers, directions and the stated reason. Empty lists everywhere = pass."""
+    return {
+        "ungrounded_numbers": ungrounded_numbers(text, facts),
+        "direction_errors": direction_errors(text, facts),
+        "reason_errors": reason_errors(text, facts),
+    }
+
+
+def audit_passes(audit: dict[str, list[str]]) -> bool:
+    """True when no check found anything."""
+    return not any(audit.values())
+
+
 def fmt(x: float) -> str:
     """A plain decimal, never scientific notation (which the grounding check
     would misread as two numbers)."""
@@ -447,6 +597,8 @@ def template_explanation(facts: dict[str, Any]) -> str:
         "This plan is recommended." if facts["recommended"] else "This plan is NOT recommended."
     )
     lines.append(f"Goal {facts['goal']}: {verdict}")
+    if facts.get("recommendation_reason"):
+        lines.append(f"Reason: {facts['recommendation_reason']}.")
     if facts["plan_changes"]:
         changes = "; ".join(
             f"{c['dimension']} {fmt(c['current'])} -> {fmt(c['plan'])}"
