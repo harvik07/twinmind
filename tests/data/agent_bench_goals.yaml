@@ -1,0 +1,277 @@
+# The Prompt 9 agent benchmark: 20 NEW goals, natural language plus a gold
+# ObjectiveSpec. Pre-registered in reports/preregistration_agent_bench.md.
+#
+# Contexts 8-19 only: T1 blocks no dev, core or reserve goal uses, inside the
+# agent's dev-only guard. The agent's optimiser variant was chosen on the 8
+# core goals; nothing here reuses them.
+#
+# category:
+#   feasible              -- a feasible plan exists (checked on the twin before
+#                            pre-registration; see the goal check results)
+#   infeasible            -- infeasible by design
+#   no_room               -- the only free levers cannot move the objective, so
+#                            the current policy is (near-)optimal
+#   ambiguous_answerable  -- vague wording with one reasonable reading (gold)
+#
+# gold.free_dims: null means "all controllable dimensions".
+# Thresholds were set from the current policy's KPI levels on each context
+# (search stream, 10 reps), before any optimisation on these goals.
+
+goals:
+  # ------------------------------------------------------------ feasible --
+  - id: G01
+    category: feasible
+    context_id: 8
+    text: Maximise profit while keeping unplanned failures to at most one over the month.
+    gold:
+      name: bench_profit_failures_cap
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: [{kpi: unplanned_failures, op: "<=", threshold: 1.0}]
+      free_dims: null
+      fixed: {}
+
+  - id: G02
+    category: feasible
+    context_id: 9
+    text: Produce as many units as you can, with total downtime no more than 14 hours.
+    gold:
+      name: bench_units_downtime_cap
+      objective: {units_produced: 1.0}
+      sense: maximise
+      constraints: [{kpi: downtime_hours, op: "<=", threshold: 14.0}]
+      free_dims: null
+      fixed: {}
+
+  - id: G03
+    category: feasible
+    context_id: 10
+    text: Get the cost per unit as low as possible while still delivering at least 80% of orders on time.
+    gold:
+      name: bench_min_cost_service
+      objective: {unit_cost: 1.0}
+      sense: minimise
+      constraints: [{kpi: on_time_delivery_rate, op: ">=", threshold: 0.8}]
+      free_dims: null
+      fixed: {}
+
+  - id: G04
+    category: feasible
+    context_id: 11
+    text: Only adjust the machine speed setpoints to maximise profit, keeping downtime within 18 hours.
+    gold:
+      name: bench_speed_only_downtime
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: [{kpi: downtime_hours, op: "<=", threshold: 18.0}]
+      free_dims: [speed_setpoint_M1, speed_setpoint_M2, speed_setpoint_M3, speed_setpoint_M4, speed_setpoint_M5]
+      fixed: {}
+
+  - id: G05
+    category: feasible
+    context_id: 12
+    text: If we switch to supplier S1, what is the most profitable plan with stockout probability at 30% or less?
+    gold:
+      name: bench_premium_supplier_profit
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: [{kpi: stockout_probability, op: "<=", threshold: 0.3}]
+      free_dims: null
+      fixed: {supplier_choice: 1.0}
+
+  - id: G06
+    category: feasible
+    context_id: 13
+    text: Suppose we raise prices by 10%. Maximise profit.
+    gold:
+      name: bench_price_rise_profit
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: []
+      free_dims: null
+      fixed: {price_multiplier: 1.1}
+
+  - id: G07
+    category: feasible
+    context_id: 14
+    text: Maximise profit and on-time delivery together, counting each 0.01 of on-time delivery as worth £5,000.
+    gold:
+      name: bench_weighted_profit_service
+      objective: {profit: 1.0, on_time_delivery_rate: 500000.0}
+      sense: maximise
+      constraints: []
+      free_dims: null
+      fixed: {}
+
+  - id: G08
+    category: feasible
+    context_id: 15
+    text: >-
+      Change only the inventory policy (reorder point, order quantity, safety
+      stock) to maximise profit, keeping stockout probability at or below 0.30.
+    gold:
+      name: bench_inventory_only_profit
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: [{kpi: stockout_probability, op: "<=", threshold: 0.3}]
+      free_dims: [reorder_point, order_quantity, safety_stock]
+      fixed: {}
+
+  - id: G09
+    category: feasible
+    context_id: 16
+    text: Maximise OEE with no more than 1.5 unplanned failures expected.
+    gold:
+      name: bench_oee_failures_cap
+      objective: {oee: 1.0}
+      sense: maximise
+      constraints: [{kpi: unplanned_failures, op: "<=", threshold: 1.5}]
+      free_dims: null
+      fixed: {}
+
+  - id: G10
+    category: feasible
+    context_id: 17
+    text: Minimise machine downtime while keeping profit at £200,000 or more.
+    gold:
+      name: bench_min_downtime_profit_floor
+      objective: {downtime_hours: 1.0}
+      sense: minimise
+      constraints: [{kpi: profit, op: ">=", threshold: 200000.0}]
+      free_dims: null
+      fixed: {}
+
+  # G11 was written as feasible and RELABELLED infeasible before
+  # pre-registration: the goal check found no feasible plan (the offshore
+  # supplier's 21-day lead time leaves on-time delivery below 0.70 even for the
+  # current policy).
+  - id: G11
+    category: infeasible
+    context_id: 18
+    text: Using the low-cost offshore supplier S2, maximise units produced with on-time delivery of at least 0.70.
+    gold:
+      name: bench_offshore_units_service
+      objective: {units_produced: 1.0}
+      sense: maximise
+      constraints: [{kpi: on_time_delivery_rate, op: ">=", threshold: 0.7}]
+      free_dims: null
+      fixed: {supplier_choice: 2.0}
+
+  - id: G12
+    category: feasible
+    context_id: 19
+    text: >-
+      Only change shifts, overtime and the throughput multiplier to maximise
+      profit, with stockout probability no higher than 0.35.
+    gold:
+      name: bench_labour_only_profit
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: [{kpi: stockout_probability, op: "<=", threshold: 0.35}]
+      free_dims: [shift_count, overtime_hours, throughput_multiplier]
+      fixed: {}
+
+  # ---------------------------------------------------------- infeasible --
+  - id: I01
+    category: infeasible
+    context_id: 8
+    text: Maximise profit with on-time delivery of at least 99% and a stockout probability of no more than 1%.
+    gold:
+      name: bench_infeasible_service
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints:
+        - {kpi: on_time_delivery_rate, op: ">=", threshold: 0.99}
+        - {kpi: stockout_probability, op: "<=", threshold: 0.01}
+      free_dims: null
+      fixed: {}
+
+  - id: I02
+    category: infeasible
+    context_id: 10
+    text: Maximise units produced while making at least £3 million profit.
+    gold:
+      name: bench_infeasible_profit_floor
+      objective: {units_produced: 1.0}
+      sense: maximise
+      constraints: [{kpi: profit, op: ">=", threshold: 3000000.0}]
+      free_dims: null
+      fixed: {}
+
+  - id: I03
+    category: infeasible
+    context_id: 14
+    text: Maximise profit with the unit cost held at £12 or below.
+    gold:
+      name: bench_infeasible_unit_cost
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: [{kpi: unit_cost, op: "<=", threshold: 12.0}]
+      free_dims: null
+      fixed: {}
+
+  # ------------------------------------------------------------ no room --
+  # N01 and N02 were redesigned before pre-registration: the first versions
+  # ("maximise OEE changing only safety stock", "minimise downtime changing only
+  # the reorder point") failed the goal check -- both levers moved their
+  # objective significantly (OEE +0.040, downtime -6.8 h), so they had room.
+  - id: N01
+    category: no_room
+    context_id: 9
+    text: Maximise profit by changing only the preventive-maintenance interval of M5.
+    gold:
+      name: bench_profit_pm_m5_only
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: []
+      free_dims: [pm_interval_M5]
+      fixed: {}
+
+  - id: N02
+    category: no_room
+    context_id: 9
+    text: Maximise on-time delivery by changing only the preventive-maintenance interval of M4.
+    gold:
+      name: bench_service_pm_m4_only
+      objective: {on_time_delivery_rate: 1.0}
+      sense: maximise
+      constraints: []
+      free_dims: [pm_interval_M4]
+      fixed: {}
+
+  - id: N03
+    category: no_room
+    context_id: 13
+    text: Maximise on-time delivery by changing only the preventive-maintenance interval of M5.
+    gold:
+      name: bench_service_pm_m5_only
+      objective: {on_time_delivery_rate: 1.0}
+      sense: maximise
+      constraints: []
+      free_dims: [pm_interval_M5]
+      fixed: {}
+
+  # ------------------------------------------------ ambiguous, answerable --
+  - id: AA1
+    category: ambiguous_answerable
+    context_id: 15
+    text: Squeeze more money out of the line, but don't let more than about a quarter of days end in a stockout.
+    gold:
+      name: bench_profit_quarter_stockout
+      objective: {profit: 1.0}
+      sense: maximise
+      constraints: [{kpi: stockout_probability, op: "<=", threshold: 0.25}]
+      free_dims: null
+      fixed: {}
+
+  - id: AA2
+    category: ambiguous_answerable
+    context_id: 16
+    text: Get more product out the door; we can live with up to a day of downtime over the month.
+    gold:
+      name: bench_units_day_of_downtime
+      objective: {units_produced: 1.0}
+      sense: maximise
+      constraints: [{kpi: downtime_hours, op: "<=", threshold: 24.0}]
+      free_dims: null
+      fixed: {}
