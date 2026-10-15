@@ -1,0 +1,37 @@
+# The optimisation benchmark's run design: WHICH held-out cells are run and
+# analysed. Amendment 2 in reports/preregistration_optim.md.
+#
+# Kept apart from configs/goals/ on purpose: the goal specs (and so the goals
+# hash in the results manifest) are unchanged, and every existing cell stays
+# valid. This file's hash goes into the manifest as `design_hash`, so a resume
+# under a different design is refused rather than mixed.
+#
+# Decided from runtime and goal structure only. No held-out objective value had
+# been looked at when it was written.
+
+amendment: 2
+dated: "2026-10-14"
+
+# Every goal family stays represented; the most redundant goal of a family is
+# moved to the reserve. The two goals that already had completed cells are kept.
+core_goals:
+  - held_failures_cap              # unplanned_failures cap (weakest surrogate KPI)
+  - held_infeasible_profit_floor   # infeasible by design (H4)
+  - held_inventory_only            # frozen dims, 3 free; the only grid-applicable goal
+  - held_max_profit_service        # profit under on-time + stockout constraints
+  - held_weighted_units_cost       # weighted multi-objective
+  - held_pm_only                   # frozen dims, 5 free (PM intervals)
+  - held_premium_supplier_service  # supplier what-if; the ONLY downtime_hours constraint
+  - held_min_unit_cost             # minimise sense
+
+# In the library, never run, never analysed. Not a pool to draw from later.
+reserve_goals:
+  - held_max_profit                # plain profit; nearest kept: held_max_profit_service
+  - held_offshore_supplier         # supplier what-if; kept: held_premium_supplier_service
+  - held_price_cut                 # price what-if, unconstrained
+  - held_speed_only                # frozen dims, 5 free; kept: held_pm_only
+
+# Optimiser seeds per method. Seed 3 is excluded by rule for every method.
+seeds:
+  best_known: [1]
+  default: [1, 2]

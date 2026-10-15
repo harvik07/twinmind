@@ -1,0 +1,17 @@
+name: held_speed_only
+split: held_out
+context_id: 26
+objective:
+  profit: 1.0
+free_dims:
+- speed_setpoint_M1
+- speed_setpoint_M2
+- speed_setpoint_M3
+- speed_setpoint_M4
+- speed_setpoint_M5
+constraints:
+- kpi: unplanned_failures
+  op: <=
+  threshold: 2.0
+notes: 'Frozen dimensions: only the five speed setpoints. Speed buys throughput and
+  costs scrap and wear, so this is the sharpest trade-off in the model.'

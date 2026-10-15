@@ -477,11 +477,27 @@ class AgentConfig(_Base):
     memory: MemoryConfig
 
 
+class BenchmarkDesignConfig(_Base):
+    """``configs/benchmark_design.yaml``: which held-out benchmark cells exist.
+
+    Amendment 2 of reports/preregistration_optim.md. Cross-checks that need the
+    goal library (core + reserve partition it exactly) live in
+    :class:`twinmind.optim.design.BenchmarkDesign`.
+    """
+
+    amendment: int = Field(gt=0)
+    dated: str
+    core_goals: list[str] = Field(min_length=1)
+    reserve_goals: list[str]
+    seeds: dict[str, list[int]]
+
+
 CONFIG_MODELS: dict[str, type[BaseModel]] = {
     "data": DataConfig,
     "twin": TwinConfig,
     "models": ModelsConfig,
     "agent": AgentConfig,
+    "benchmark_design": BenchmarkDesignConfig,
 }
 
 

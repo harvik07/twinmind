@@ -1,0 +1,10 @@
+name: dev_downtime_cap
+split: dev
+context_id: 6
+objective:
+  units_produced: 1.0
+constraints:
+- kpi: downtime_hours
+  op: <=
+  threshold: 12.0
+notes: Throughput under a downtime cap.

@@ -1,0 +1,11 @@
+name: held_min_unit_cost
+split: held_out
+context_id: 24
+objective:
+  unit_cost: 1.0
+sense: minimise
+constraints:
+- kpi: on_time_delivery_rate
+  op: '>='
+  threshold: 0.85
+notes: Minimise goal.

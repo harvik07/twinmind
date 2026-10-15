@@ -1,0 +1,15 @@
+name: held_inventory_only
+split: held_out
+context_id: 27
+objective:
+  profit: 1.0
+free_dims:
+- reorder_point
+- order_quantity
+- safety_stock
+constraints:
+- kpi: stockout_probability
+  op: <=
+  threshold: 0.1
+notes: Only the three (s, Q) dimensions move -- three free controllables, so this
+  is one of the few goals where grid search actually applies.

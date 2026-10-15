@@ -1,0 +1,16 @@
+name: held_infeasible_profit_floor
+split: held_out
+context_id: 32
+objective:
+  profit: 1.0
+constraints:
+- kpi: profit
+  op: '>='
+  threshold: 2000000.0
+- kpi: stockout_probability
+  op: <=
+  threshold: 0.02
+infeasible_by_design: true
+notes: INFEASIBLE BY DESIGN. The landscape search over 500 Sobol scenarios found a
+  best profit of about GBP 493,000, so a GBP 2,000,000 floor is roughly 4x anything
+  achievable. Must return status=infeasible_unverified.

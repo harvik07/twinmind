@@ -1,0 +1,13 @@
+name: dev_offshore_supplier
+split: dev
+context_id: 5
+objective:
+  profit: 1.0
+fixed:
+  supplier_choice: 2
+constraints:
+- kpi: stockout_probability
+  op: <=
+  threshold: 0.15
+notes: 'Exogenous what-if: forced onto the low-cost offshore supplier with a 21-day
+  lead time. The optimiser must re-plan inventory around it.'

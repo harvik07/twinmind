@@ -1,0 +1,13 @@
+name: dev_max_profit_service
+split: dev
+context_id: 1
+objective:
+  profit: 1.0
+constraints:
+- kpi: on_time_delivery_rate
+  op: '>='
+  threshold: 0.9
+- kpi: stockout_probability
+  op: <=
+  threshold: 0.1
+notes: Profit under the service constraints from twin.yaml.

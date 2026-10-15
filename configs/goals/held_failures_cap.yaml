@@ -1,0 +1,11 @@
+name: held_failures_cap
+split: held_out
+context_id: 31
+objective:
+  profit: 1.0
+constraints:
+- kpi: unplanned_failures
+  op: <=
+  threshold: 0.5
+notes: 'Hard constraint on the KPI the surrogate predicts WORST (R2 0.733). Included
+  deliberately: if the surrogate-first method has a weak spot, it should show here.'

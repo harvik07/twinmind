@@ -1,0 +1,13 @@
+name: held_max_profit_service
+split: held_out
+context_id: 21
+objective:
+  profit: 1.0
+constraints:
+- kpi: on_time_delivery_rate
+  op: '>='
+  threshold: 0.9
+- kpi: stockout_probability
+  op: <=
+  threshold: 0.1
+notes: Profit under the twin.yaml service constraints.
