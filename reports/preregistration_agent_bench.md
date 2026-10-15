@@ -128,3 +128,47 @@ agent's optimiser was chosen on the core goals; the agent runs a reduced
 interactive budget; the LLM is a free-tier model (`openai/gpt-oss-20b`) with
 8,000 tokens per minute and 1,000 requests per day; all three no-room goals are
 PM-interval levers.
+
+---
+
+## Amendment A.1 — twin_only on one-dimensional goals
+
+**Dated 2026-10-15.** Appended; the text above is unchanged (commit
+`97a265d`, blob `fb0867b61c46efb7fafd0a1d8b31709e4da297cb`). The run manifest
+hashes only the text above this section, so the run's manifest still matches.
+
+**What failed.** The main run wrote 74 of 80 cells. All 6 failures were
+`twin_only` on N01, N02 and N03, both seeds, each with
+`ValueError: not yet initialized (dimension needed)`. The agent arm succeeded
+on those goals.
+
+**Root cause, from the code alone.** N01–N03 are the only goals with exactly
+one free dimension (every other goal has 3 to 16). With `bounds=[0, 1]`, pycma
+4.5.0 caps each coordinate's standard deviation at a third of the range; when
+a std crosses that cap, `_stds_into_limits` calls `DiagonalDecoding.set_i`,
+which treats a size-1 scaling vector as "not yet initialized" — and in one
+dimension an initialised vector is size 1 too — so it raises (pycma
+`transformations.py` line 772, reached from `strategy.tell` in
+`cmaes_search`). In two or more dimensions the cap is simply applied. The
+no-room goals' flat objectives make CMA-ES stop after an iteration or two, so
+the arm restarts it hundreds of times within its wall-clock budget, and any
+seed whose step crosses the cap (seed 1007 does, at its first iteration)
+crashes the cell.
+
+**The pre-registration was silent** on CMA-ES failing to run. **Decision** (a
+decision, not a fact): treat pycma's one-dimensional std-limit error as the end
+of that CMA-ES run — every point already evaluated is kept — and restart with a
+new seed under the pre-registered restart rule, so the arm still spends its full
+wall-clock on CMA-ES. Behaviour in two or more dimensions is unchanged: the
+error cannot occur there, and no completed cell is affected. A guard was also
+added for a goal with zero free dimensions (which `ObjectiveSpec` refuses): the
+current policy, evaluated once, is the arm's plan.
+
+**No outcome was inspected before the fix.** The diagnosis used the code, the
+gold specs and offline reproductions with a fake flat evaluator; no result file
+for N01–N03, and no outcome of any goal, was opened. Before the change, the
+sha256 of all 74 completed cells and the manifest was recorded; after it they
+are verified byte-identical.
+
+**Only the 6 failed cells are re-run**; the 74 completed cells are skipped by
+the runner's resume logic and are not re-run.
