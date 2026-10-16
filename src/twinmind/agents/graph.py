@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import operator
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -285,6 +286,36 @@ def run_agent(goal_text: str, context_id: int, deps: AgentDeps) -> AgentResult:
         {"goal_text": goal_text, "context_id": context_id},
         {"recursion_limit": 25},
     )
+    return _assemble(goal_text, context_id, state, budget, deps, started, twin_before)
+
+
+def run_agent_streaming(
+    goal_text: str,
+    context_id: int,
+    deps: AgentDeps,
+    on_step: Callable[[str, int, int], None] | None = None,
+) -> AgentResult:
+    """:func:`run_agent`, reporting each node as it finishes.
+
+    ``on_step(node, llm_calls_used, llm_call_cap)`` is called after every node,
+    so a UI can show progress and the LLM budget live. The result and the
+    run-log line are the same as :func:`run_agent`'s.
+    """
+    _check_dev(context_id)
+    started = time.perf_counter()
+    twin_before = int(getattr(deps.toolkit, "twin_runs", 0))
+    budget = CallBudget(deps.llm, deps.config.budget.max_llm_calls_per_goal)
+    state: AgentState = {}
+    for mode, chunk in build_graph(deps, budget).stream(
+        {"goal_text": goal_text, "context_id": context_id},
+        {"recursion_limit": 25},
+        stream_mode=["updates", "values"],
+    ):
+        if mode == "values":
+            state = chunk
+        elif on_step is not None:
+            for node in chunk:
+                on_step(str(node), budget.used, budget.max_calls)
     return _assemble(goal_text, context_id, state, budget, deps, started, twin_before)
 
 

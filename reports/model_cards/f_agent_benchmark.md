@@ -339,7 +339,8 @@ in section 3's post-hoc reading:
   `\bdowntime\b`-style aliases cannot match before an underscore, so v1 never
   checked these.
 
-v2 also refuses "optimal", "guaranteed" and "proven". v1 is untouched, so the
+v2 also refuses the three overclaiming words the dashboard never shows
+(`FORBIDDEN_WORDS` in that module). v1 is untouched, so the
 benchmark remains reproducible.
 
 The comma carry-over, list rule and snake_case names were added in Prompt 10

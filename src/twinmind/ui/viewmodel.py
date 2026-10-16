@@ -98,10 +98,11 @@ def format_value(kpi: str, value: float | None) -> str:
     unit, decimals = KPI_FORMAT[kpi]
     if unit == "fraction 0-1":
         return f"{100.0 * value:.1f}%"
+    sign = "−" if value < 0 else ""
     if unit == "GBP":
-        return f"£{value:,.0f}"
+        return f"{sign}£{abs(value):,.0f}"
     if unit == "GBP per unit":
-        return f"£{value:,.2f}"
+        return f"{sign}£{abs(value):,.2f}"
     return f"{value:,.{decimals}f}" + {"hours": " h", "units": "", "failures": ""}.get(unit, "")
 
 
@@ -331,6 +332,37 @@ def estimate_table(means: dict[str, float]) -> list[KPIRow]:
             )
         )
     return rows
+
+
+def twin_table(
+    means: dict[str, float],
+    lows: dict[str, float],
+    highs: dict[str, float],
+    n_reps: int,
+) -> list[KPIRow]:
+    """A what-if plan run on the twin: means WITH 95% CIs, labelled with the
+    number of replications. At least 2: one run has no interval, and a twin
+    number is never shown without one."""
+    if n_reps < 2:
+        raise ValueError("a twin-verified number needs at least 2 replications for its CI")
+    label = VERIFIED_LABEL.format(n=n_reps)
+    return [
+        KPIRow(
+            kpi=kpi,
+            name=KPI_DISPLAY[kpi],
+            source_label=label,
+            value=format_value(kpi, float(means[kpi])),
+            value_ci=format_ci(kpi, float(lows[kpi]), float(highs[kpi])),
+            baseline=None,
+            baseline_ci=None,
+            change=None,
+            change_ci=None,
+            better_when="higher" if kpi in HIGHER_IS_BETTER else "lower",
+            improved=None,
+            badge=WEAK_KPI_BADGE if kpi in WEAK_KPIS else None,
+        )
+        for kpi in KPI_NAMES
+    ]
 
 
 def flags_plain(result: AgentResult) -> list[FlagView]:

@@ -61,6 +61,8 @@ MODULES = [
     "twinmind.agents.bench",
     "twinmind.agents.bench_goals",
     "twinmind.ui.viewmodel",
+    "twinmind.ui.services",
+    "twinmind.ui.components",
     "twinmind.utils.peak_memory",
     "twinmind.agents.critic",
     "twinmind.agents.explainer",

@@ -230,6 +230,7 @@ def test_run_status_reports_cost_and_retries() -> None:
 # --------------------------------------------------------------------------- #
 def test_values_are_plain_decimals_with_units() -> None:
     assert vm.format_value("profit", 256813.6) == "£256,814"
+    assert vm.format_value("profit", -243182.4) == "−£243,182"
     assert vm.format_value("stockout_probability", 0.2321) == "23.2%"
     assert vm.format_value("downtime_hours", 10.2) == "10.2 h"
     assert vm.format_delta("on_time_delivery_rate", -1.208e-05) == "−0.0 pp"
