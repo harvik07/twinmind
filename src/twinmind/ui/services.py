@@ -421,6 +421,17 @@ B5_NOTE = (
 )
 
 
+#: How to read the explanation-checker evidence; shown under Limitations.
+CHECKER_CAVEATS = (
+    "Checker v2 was changed until it had zero v1-only misses on the same mutation set it "
+    "is scored on, so its catch rates are development results, not independent validation.",
+    "I01 seed 1 passed checker v1 and is counted inside B5's 35/40, but fails v2 with a real "
+    "direction error. v1 also rejected correct texts, so B5's count is neither a lower nor "
+    "an upper bound on explanation quality.",
+    "B5's verdict is unchanged: FAIL, 35/40.",
+)
+
+
 @dataclass(frozen=True)
 class BenchRow:
     """One pre-registered hypothesis and its result, PASS or FAIL alike."""

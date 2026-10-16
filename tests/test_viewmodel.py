@@ -226,6 +226,78 @@ def test_run_status_reports_cost_and_retries() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Side effects: KPIs outside the goal made worse beyond noise
+# --------------------------------------------------------------------------- #
+def _with(result: AgentResult, **changes: Any) -> AgentResult:
+    return AgentResult.from_dict({**result.to_dict(), **changes})
+
+
+def test_side_effects_fire_on_g09_including_profit() -> None:
+    effects = vm.side_effects(_result("G09"))
+    texts = [e.text for e in effects]
+    assert "Side effect: Profit is worse than the current policy (£344,569 → −£243,182)" in texts
+    assert {e.kpi for e in effects} == {
+        "units_produced",
+        "unit_cost",
+        "profit",
+        "stockout_probability",
+        "on_time_delivery_rate",
+    }
+    assert {e.source_label for e in effects} == {"verified on twin (30 reps)"}
+
+
+def test_g07_lists_only_its_measured_oee_drop() -> None:
+    """G07 is the clean demo goal, yet the fixed rule fires on it: OEE (not in
+    the goal) falls 73.3% -> 70.6% and the change's CI excludes zero. The rule
+    was not tuned to hide this."""
+    effects = vm.side_effects(_result("G07"))
+    assert [e.text for e in effects] == [
+        "Side effect: OEE is worse than the current policy (73.3% → 70.6%)"
+    ]
+
+
+def test_no_side_effect_when_the_interval_includes_no_change() -> None:
+    result = _result("G07")
+    evaluation = json.loads(json.dumps(result.baseline_comparison))
+    evaluation["kpis"]["oee"]["diff"]["ci_high"] = 0.001  # straddles zero
+    assert vm.side_effects(_with(result, baseline_comparison=evaluation)) == []
+
+
+def test_a_goal_kpi_is_never_listed_as_a_side_effect() -> None:
+    result = _result("G09")
+    spec = json.loads(json.dumps(result.spec))
+    spec["constraints"].append({"kpi": "profit", "op": ">=", "threshold": -1e9})
+    effects = vm.side_effects(_with(result, spec=spec))
+    assert "profit" not in {e.kpi for e in effects}
+    assert not {"oee", "unplanned_failures"} & {e.kpi for e in effects}
+
+
+def test_side_effects_need_twin_numbers() -> None:
+    assert vm.side_effects(_with(_result("G09"), baseline_comparison=None)) == []
+
+
+# --------------------------------------------------------------------------- #
+# Explanation check wording
+# --------------------------------------------------------------------------- #
+def test_explanation_check_text_never_says_verified() -> None:
+    texts = [vm.EXPLANATION_CHECK, *vm.EXPLANATION_CHECK_GAPS]
+    for mode in ("llm", "template", None):
+        for replayed in (False, True):
+            texts.append(vm.explanation_source(mode, replayed=replayed) or "")
+    for entry in _entries():
+        result = AgentResult.from_dict(entry["result"])
+        for replayed in (False, True):
+            texts.append(vm.recommendation_card(result, replayed=replayed).explanation_source or "")
+    assert all("verif" not in t.lower() for t in texts), texts
+    assert vm.EXPLANATION_CHECK in vm.explanation_source("llm") or ""
+
+
+def test_the_check_gaps_name_what_is_not_caught() -> None:
+    gaps = " ".join(vm.EXPLANATION_CHECK_GAPS).lower()
+    assert "negation" in gaps and "plan changes" in gaps and "kpi swaps" in gaps
+
+
+# --------------------------------------------------------------------------- #
 # Formatting and isolation
 # --------------------------------------------------------------------------- #
 def test_values_are_plain_decimals_with_units() -> None:

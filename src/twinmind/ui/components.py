@@ -142,7 +142,7 @@ def result(res: AgentResult, *, replayed: bool, provenance: str | None = None) -
     """Card, KPI table, flags, options, coverage, explanation, run status."""
     if replayed:
         replay_banner(provenance)
-    card = vm.recommendation_card(res)
+    card = vm.recommendation_card(res, replayed=replayed)
     icon = TONE_ICON.get(card.tone, "")
     st.markdown(f"#### {icon} {card.status_label}")
     st.markdown(f"> {card.goal_text}")
@@ -163,6 +163,15 @@ def result(res: AgentResult, *, replayed: bool, provenance: str | None = None) -
     rows = vm.kpi_table(res)
     if rows:
         st.markdown("##### Plan against the current policy")
+        effects = vm.side_effects(res)
+        if effects:
+            st.warning(
+                "\n".join(f"- {e.text}" for e in effects)
+                + f"\n\n{effects[0].source_label}: the 95% interval of each change excludes "
+                "the current policy's value, in the unfavourable direction. These KPIs are "
+                "not part of the goal.",
+                icon="⚠️",
+            )
         kpi_table(rows, with_baseline=True)
 
     flags = vm.flags_plain(res)
@@ -183,8 +192,10 @@ def result(res: AgentResult, *, replayed: bool, provenance: str | None = None) -
     if card.explanation:
         st.markdown("##### Explanation")
         st.markdown(card.explanation)
-        source = (res.trace or {}).get("explanation", {}).get("source")
-        st.caption(source if (replayed and source) else (card.explanation_source or ""))
+        if card.explanation_source:
+            st.caption(card.explanation_source)
+        with st.expander("What this check does not catch"):
+            st.markdown("\n".join(f"- {gap}" for gap in vm.EXPLANATION_CHECK_GAPS))
 
     status = vm.run_status(res)
     if replayed:

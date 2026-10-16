@@ -414,3 +414,15 @@ What neither checker catches, plainly:
 These gaps are why the dashboard shows the twin's KPI table, with intervals,
 beside every explanation: the table is the record, and the explanation is a
 reading of it.
+
+**How to read these numbers.**
+
+- **(a) Development results, not validation.** v2 was changed until its
+  v1-only misses were zero **on this same mutation set**, so the catch rates
+  above measure the set it was tuned on. They are not an independent
+  validation of v2.
+- **(b) B5's count is no bound.** I01 seed 1 passed v1 and is counted inside
+  B5's 35/40, but fails v2 with a real direction error; and v1 also rejected
+  correct texts (the false flags in section 3). So 35/40 is neither a lower nor
+  an upper bound on explanation quality.
+- **(c) B5's verdict is unchanged: FAIL, 35/40.**

@@ -59,6 +59,10 @@ if mutation.exists():
 # Limitations
 # --------------------------------------------------------------------------- #
 st.subheader("Limitations: where results underperformed the spec")
+st.markdown(
+    "**Reading the explanation-checker evidence**\n\n"
+    + "\n".join(f"- {caveat}" for caveat in sv.CHECKER_CAVEATS)
+)
 for title, body in sv.underperformed_sections():
     with st.expander(title):
         st.markdown(body)

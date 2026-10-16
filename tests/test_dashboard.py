@@ -180,6 +180,45 @@ def test_no_app_source_or_cached_text_uses_a_forbidden_word() -> None:
         vm.assert_no_overclaim(path.read_text(encoding="utf-8"))
 
 
+def test_side_effects_render_for_g09_and_name_profit() -> None:
+    at = _replay(_app(), "G09")
+    effects = [str(w.value) for w in at.warning if "Side effect:" in str(w.value)]
+    assert len(effects) == 1
+    assert "Side effect: Profit is worse than the current policy" in effects[0]
+    assert "verified on twin (30 reps)" in effects[0]
+
+
+def test_g07_renders_only_its_oee_side_effect() -> None:
+    at = _replay(_app(), "G07")
+    effects = [str(w.value) for w in at.warning if "Side effect:" in str(w.value)]
+    assert len(effects) == 1 and effects[0].count("Side effect:") == 1
+    assert "Side effect: OEE is worse" in effects[0]
+
+
+@pytest.mark.parametrize("goal_id", ["G07", "G01", "I01", "N01", "AA1", "G09"])
+def test_explanation_checks_are_never_called_verified(goal_id: str) -> None:
+    at = _replay(_app(), goal_id)
+    checks = [str(c.value) for c in at.caption if vm.EXPLANATION_CHECK in str(c.value)]
+    assert len(checks) == 1 and "verif" not in checks[0].lower()
+    (gaps,) = [e for e in at.expander if e.label == "What this check does not catch"]
+    gap_text = " ".join(str(m.value) for m in gaps.markdown)
+    assert "Negation" in gap_text and "plan changes" in gap_text and "KPI swaps" in gap_text
+    assert "verif" not in gap_text.lower()
+
+
+def test_the_evidence_page_states_the_checker_caveats() -> None:
+    at = _app()
+    at.switch_page("views/evidence.py").run()
+    text = " ".join(str(m.value) for m in at.markdown)
+    for caveat in sv.CHECKER_CAVEATS:
+        assert caveat in text
+    card = (PROJECT_ROOT / "reports" / "model_cards" / "f_agent_benchmark.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Development results, not validation" in card
+    assert "neither a lower nor" in card and "verdict is unchanged: FAIL, 35/40" in card
+
+
 def test_the_evidence_page_shows_both_fails_and_the_b5_note() -> None:
     at = _app()
     at.switch_page("views/evidence.py").run()

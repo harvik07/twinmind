@@ -76,6 +76,35 @@ STATUS_TEXT: dict[str, tuple[str, str]] = {
 }
 
 
+#: What an explanation's check result may say. Never "verified": that word is
+#: reserved for twin numbers, and the check is far weaker than the twin.
+EXPLANATION_CHECK = "passed an automated check of numbers and KPI directions"
+EXPLANATION_CHECK_GAPS = (
+    "Negation: “profit does not rise” when it rose passes the check.",
+    "Claims about plan changes: a wrong direction for a lever (“safety stock falls” "
+    "when it rose) is not checked.",
+    "KPI swaps where both KPIs moved the same way: a number or direction attached to the "
+    "wrong KPI passes if that KPI moved the same way.",
+)
+
+
+def explanation_source(mode: str | None, *, replayed: bool = False) -> str | None:
+    """How an explanation was produced and checked, without the word "verified"."""
+    if mode == "llm" and replayed:
+        return (
+            "Written by the language model during the benchmark; it "
+            f"{EXPLANATION_CHECK} (re-run offline with checker v2)."
+        )
+    if mode == "llm":
+        return f"Written by the language model from the twin's numbers; it {EXPLANATION_CHECK}."
+    if mode == "template":
+        return (
+            "Generated from a fixed template, because the model's text did not pass the "
+            "automated check of numbers and KPI directions."
+        )
+    return None
+
+
 class OverclaimError(ValueError):
     """UI text used a word the dashboard must never use."""
 
@@ -231,7 +260,7 @@ def plan_changes(result: AgentResult) -> list[str]:
     return out
 
 
-def recommendation_card(result: AgentResult) -> RecommendationCard:
+def recommendation_card(result: AgentResult, *, replayed: bool = False) -> RecommendationCard:
     """The headline card for a result of any status."""
     label, tone = STATUS_TEXT[result.status]
     recommended = bool(result.plan and result.plan.get("recommended"))
@@ -247,12 +276,7 @@ def recommendation_card(result: AgentResult) -> RecommendationCard:
     else:
         headline = "A plan was found but is not recommended."
     n_reps = (result.baseline_comparison or {}).get("n_reps")
-    if result.explanation_mode == "llm":
-        source = "Written by the language model from the verified facts, then checked."
-    elif result.explanation_mode == "template":
-        source = "Generated from a fixed template (the model's text did not pass the checks)."
-    else:
-        source = None
+    source = explanation_source(result.explanation_mode, replayed=replayed)
     card = RecommendationCard(
         goal_text=result.goal_text,
         status=result.status,
@@ -332,6 +356,56 @@ def estimate_table(means: dict[str, float]) -> list[KPIRow]:
             )
         )
     return rows
+
+
+@dataclass(frozen=True)
+class SideEffectView:
+    """A KPI outside the goal that the plan made measurably worse."""
+
+    kpi: str
+    text: str
+    source_label: str  # always VERIFIED_LABEL: only twin intervals can trigger it
+
+
+def goal_kpis(result: AgentResult) -> set[str]:
+    """KPIs named in the goal's objective or constraints."""
+    spec = result.spec or {}
+    return set(spec.get("objective", {})) | {c["kpi"] for c in spec.get("constraints", [])}
+
+
+def side_effects(result: AgentResult) -> list[SideEffectView]:
+    """KPIs NOT in the goal whose verified change is unfavourable beyond noise.
+
+    The rule, fixed before looking at any result: a KPI outside the objective
+    and constraints is listed when the 95% CI of its paired change (plan minus
+    current policy, on the twin) lies entirely on the unfavourable side of zero
+    -- i.e. the interval excludes the baseline in the bad direction. Computed
+    from the twin's KPI table only; an estimate never triggers it.
+    """
+    evaluation = result.baseline_comparison
+    if not evaluation or result.plan is None:
+        return []
+    label = VERIFIED_LABEL.format(n=evaluation["n_reps"])
+    in_goal = goal_kpis(result)
+    out = []
+    for kpi in KPI_NAMES:
+        if kpi in in_goal:
+            continue
+        row = evaluation["kpis"][kpi]
+        low, high = float(row["diff"]["ci_low"]), float(row["diff"]["ci_high"])
+        worse = high < 0 if kpi in HIGHER_IS_BETTER else low > 0
+        if worse:
+            before = format_value(kpi, row["baseline"]["mean"])
+            after = format_value(kpi, row["plan"]["mean"])
+            out.append(
+                SideEffectView(
+                    kpi=kpi,
+                    text=f"Side effect: {KPI_DISPLAY[kpi]} is worse than the current policy "
+                    f"({before} → {after})",
+                    source_label=label,
+                )
+            )
+    return out
 
 
 def twin_table(

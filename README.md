@@ -100,7 +100,7 @@ closest replayed goal is shown instead, labelled as a replay.
 
 | Page | What it shows |
 |---|---|
-| **Ask** | A goal → objective, constraints, the plan, a KPI table against the current policy (verified on the twin, 30 reps, with 95% CIs), critic flags in plain English, closest-achievable options for infeasible goals, training-coverage band, and the checked explanation. |
+| **Ask** | A goal → objective, constraints, the plan, any **side effects** (a KPI outside the goal whose verified change is worse beyond its 95% interval), a KPI table against the current policy (verified on the twin, 30 reps, with 95% CIs), critic flags in plain English, closest-achievable options for infeasible goals, training-coverage band, and the explanation, which has passed an automated check of numbers and KPI directions (with what that check does not catch). |
 | **What-if** | 16 levers. The surrogate's **estimate** (means only, never an interval) plus a novelty band; then **Verify on twin**: at most 10 replications under a 60 s cap, with the measured seconds. |
 | **Evidence** | B1–B5 with both FAILs, the model cards, the figures, and every "Underperformed the spec" section. |
 | **History** | Every dashboard event, with live runs and replays labelled differently, plus the agent's own run log. |
