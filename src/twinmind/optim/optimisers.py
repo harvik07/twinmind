@@ -428,10 +428,24 @@ def cmaes_search(
         found.add(batch)
         # CMA-ES minimises, so the sign is flipped; infeasible points get the
         # same lexicographic treatment as everywhere else.
-        strategy.tell(
-            points,
-            [(-c.score if c.feasible else 1e12 + c.violation) for c in batch],
-        )
+        try:
+            strategy.tell(
+                points,
+                [(-c.score if c.feasible else 1e12 + c.violation) for c in batch],
+            )
+        except ValueError as error:
+            # pycma 4.x, ONE dimension only: with bounds it caps each std at a
+            # third of the range, and when a std crosses that cap
+            # `_stds_into_limits` calls `DiagonalDecoding.set_i`, which treats a
+            # size-1 scaling vector as "not yet initialized" -- in 1-D an
+            # initialised vector is size 1 too -- and raises. In 2+ dimensions
+            # the cap is simply applied. The run ends here, like a stop
+            # condition; this batch is already counted in `found`, and a caller
+            # that restarts (the agent benchmark's twin_only arm) restarts.
+            if len(free) == 1 and "dimension needed" in str(error):
+                logger.debug("cmaes: pycma 1-D std-limit error; ending this run: %s", error)
+                break
+            raise
     return found.result()
 
 

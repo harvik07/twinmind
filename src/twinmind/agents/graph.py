@@ -71,7 +71,9 @@ class AgentState(TypedDict, total=False):
     novelty: float
     flags: list[dict[str, Any]]
     recommended: bool
+    recommendation_reason: str
     closest: list[dict[str, Any]]
+    seed: int
     explanation: str
     explanation_mode: str
     explanation_record: dict[str, Any]
@@ -79,6 +81,7 @@ class AgentState(TypedDict, total=False):
     surrogate_evals: Annotated[int, operator.add]
     nodes_run: Annotated[list[str], operator.add]
     critic_actions: Annotated[list[str], operator.add]
+    history: Annotated[list[dict[str, Any]], operator.add]
 
 
 @dataclass
@@ -91,8 +94,13 @@ class AgentDeps:
     run_log: Path | None = None
 
 
-def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
-    """Compile the LangGraph state machine for one goal."""
+def build_graph(deps: AgentDeps, budget: CallBudget, *, explain_plan: bool = True) -> Any:
+    """Compile the LangGraph state machine for one goal.
+
+    A state that already holds a ``spec`` starts at the explorer (the benchmark
+    runs on gold specs). ``explain_plan=False`` ends at the critic, so a run
+    makes no LLM call at all.
+    """
     from langgraph.graph import END, START, StateGraph
 
     cfg = deps.config
@@ -122,7 +130,9 @@ def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
     def explorer(state: AgentState) -> dict[str, Any]:
         spec = state["spec"]
         exploration = deps.toolkit.explore(
-            spec, state["margin_std"], cfg.explorer.seed + state["retries_used"]
+            spec,
+            state["margin_std"],
+            state.get("seed", cfg.explorer.seed) + state["retries_used"],
         )
         return {
             "nodes_run": ["explorer"],
@@ -135,10 +145,22 @@ def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
 
     def evaluator(state: AgentState) -> dict[str, Any]:
         scenario = state["chosen"]["scenario"]
+        evaluation = deps.toolkit.evaluate(state["spec"], scenario)
+        novelty = deps.toolkit.novelty(scenario)
         return {
             "nodes_run": ["evaluator"],
-            "evaluation": deps.toolkit.evaluate(state["spec"], scenario),
-            "novelty": deps.toolkit.novelty(scenario),
+            "evaluation": evaluation,
+            "novelty": novelty,
+            # Every evaluated plan, in order. The first is what the explorer
+            # chose before the critic had any say.
+            "history": [
+                {
+                    "chosen": state["chosen"],
+                    "evaluation": evaluation,
+                    "novelty": novelty,
+                    "exploration_status": state["exploration_status"],
+                }
+            ],
         }
 
     def critic(state: AgentState) -> dict[str, Any]:
@@ -157,6 +179,7 @@ def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
             "critic_actions": [verdict.action],
             "flags": verdict.flags,
             "recommended": verdict.recommended,
+            "recommendation_reason": verdict.recommendation_reason,
         }
         if verdict.action == "swap":
             update["chosen"] = verdict.swap_to
@@ -180,6 +203,7 @@ def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
             state["flags"],
             state["closest"],
             state["recommended"],
+            state["recommendation_reason"],
         )
         result = explain(
             facts, budget, cfg.budget.max_explainer_regenerations, cfg.explainer.max_words
@@ -192,6 +216,7 @@ def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
                 "attempts": result.attempts,
                 "ungrounded": result.ungrounded,
                 "fallback_reason": result.fallback_reason,
+                "audits": result.audits,
                 "facts": facts,
             },
         }
@@ -205,7 +230,11 @@ def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
         ("explainer", explainer),
     ):
         graph.add_node(name, node)
-    graph.add_edge(START, "planner")
+    graph.add_conditional_edges(
+        START,
+        lambda s: "explorer" if s.get("spec") is not None else "planner",
+        {"explorer": "explorer", "planner": "planner"},
+    )
     graph.add_conditional_edges(
         "planner",
         lambda s: "explorer" if s["outcome_kind"] == "spec" else "end",
@@ -216,9 +245,9 @@ def build_graph(deps: AgentDeps, budget: CallBudget) -> Any:
     graph.add_conditional_edges(
         "critic",
         lambda s: {"swap": "evaluator", "explore_again": "explorer"}.get(
-            s["critic_actions"][-1], "explainer"
+            s["critic_actions"][-1], "explainer" if explain_plan else "end"
         ),
-        {"evaluator": "evaluator", "explorer": "explorer", "explainer": "explainer"},
+        {"evaluator": "evaluator", "explorer": "explorer", "explainer": "explainer", "end": END},
     )
     graph.add_edge("explainer", END)
     return graph.compile()
@@ -239,19 +268,63 @@ def _status(state: AgentState) -> str:
 
 def run_agent(goal_text: str, context_id: int, deps: AgentDeps) -> AgentResult:
     """Run one goal end to end. Never raises for a bad goal; returns a status."""
+    _check_dev(context_id)
+    started = time.perf_counter()
+    twin_before = int(getattr(deps.toolkit, "twin_runs", 0))
+    budget = CallBudget(deps.llm, deps.config.budget.max_llm_calls_per_goal)
+    state: AgentState = build_graph(deps, budget).invoke(
+        {"goal_text": goal_text, "context_id": context_id},
+        {"recursion_limit": 25},
+    )
+    return _assemble(goal_text, context_id, state, budget, deps, started, twin_before)
+
+
+def run_on_spec(
+    spec: ObjectiveSpec, deps: AgentDeps, seed: int, *, explain_plan: bool = False
+) -> AgentResult:
+    """The graph from the explorer on, on a GIVEN spec -- the benchmark's agent arm.
+
+    Optimisation is isolated from parsing: no planner. With ``explain_plan``
+    False (the default) no LLM is called; ``trace["history"]`` holds every
+    evaluated plan, the first being the explorer's choice before the critic.
+    """
+    _check_dev(spec.context_id)
+    started = time.perf_counter()
+    twin_before = int(getattr(deps.toolkit, "twin_runs", 0))
+    budget = CallBudget(deps.llm, deps.config.budget.max_llm_calls_per_goal)
+    initial: AgentState = {
+        "goal_text": spec.name,
+        "context_id": spec.context_id,
+        "spec": spec,
+        "outcome_kind": "spec",
+        "margin_std": deps.config.explorer.margin_std,
+        "retries_used": 0,
+        "candidates": [],
+        "seed": seed,
+    }
+    state: AgentState = build_graph(deps, budget, explain_plan=explain_plan).invoke(
+        initial, {"recursion_limit": 25}
+    )
+    return _assemble(spec.name, spec.context_id, state, budget, deps, started, twin_before)
+
+
+def _check_dev(context_id: int) -> None:
     if context_id not in DEV_CONTEXTS:
         raise ValueError(
             f"context {context_id} is not a dev context {DEV_CONTEXTS}; the agent only "
             "runs on dev contexts, so no held-out result is produced here"
         )
-    started = time.perf_counter()
-    twin_before = int(getattr(deps.toolkit, "twin_runs", 0))
-    budget = CallBudget(deps.llm, deps.config.budget.max_llm_calls_per_goal)
-    graph = build_graph(deps, budget)
-    state: AgentState = graph.invoke(
-        {"goal_text": goal_text, "context_id": context_id},
-        {"recursion_limit": 25},
-    )
+
+
+def _assemble(
+    goal_text: str,
+    context_id: int,
+    state: AgentState,
+    budget: CallBudget,
+    deps: AgentDeps,
+    started: float,
+    twin_before: int,
+) -> AgentResult:
     status = _status(state)
     spec = state.get("spec")
     chosen = state.get("chosen")
@@ -271,6 +344,21 @@ def run_agent(goal_text: str, context_id: int, deps: AgentDeps) -> AgentResult:
         "surrogate_evals": state.get("surrogate_evals", 0),
         "explorer_seconds": state.get("explorer_seconds", 0.0),
         "wall_seconds": time.perf_counter() - started,
+        "history": [
+            {
+                "scenario": h["chosen"]["scenario"],
+                "verification": {
+                    "mean": h["chosen"]["verification_mean"],
+                    "sem": h["chosen"]["verification_sem"],
+                    "feasible_robust": h["chosen"]["feasible_robust"],
+                },
+                "status": h["chosen"].get("status"),
+                "exploration_status": h["exploration_status"],
+                "evaluation": h["evaluation"],
+                "novelty": h["novelty"],
+            }
+            for h in state.get("history", [])
+        ],
         "explanation": {
             k: v for k, v in (state.get("explanation_record") or {}).items() if k != "facts"
         },
@@ -280,6 +368,7 @@ def run_agent(goal_text: str, context_id: int, deps: AgentDeps) -> AgentResult:
         plan = {
             "scenario": chosen["scenario"],
             "recommended": bool(state.get("recommended", False)),
+            "recommendation_reason": state.get("recommendation_reason", ""),
             "verification": {
                 "mean": chosen["verification_mean"],
                 "sem": chosen["verification_sem"],

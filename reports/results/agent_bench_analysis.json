@@ -1,0 +1,2922 @@
+{
+ "reference": {
+  "G01": 381879.43037986517,
+  "G02": 38936.2,
+  "G03": -22.17785237549475,
+  "G04": 409564.06275179423,
+  "G05": 392163.8719694928,
+  "G06": 397145.65801690303,
+  "G07": 848230.8805554193,
+  "G08": 365724.9680782177,
+  "G09": 0.952196980546347,
+  "G10": 0.0,
+  "G11": null,
+  "G12": 302541.16118461976,
+  "I01": null,
+  "I02": null,
+  "I03": null,
+  "N01": 410454.03446474957,
+  "N02": 0.8655585334501276,
+  "N03": 0.8017858891155016,
+  "AA1": 374600.08904318424,
+  "AA2": 39994.03333333333
+ },
+ "gaps": {
+  "G01": {
+   "agent": 0.0642803293127187,
+   "agent_nocritic": 0.09249992148376378,
+   "twin_only": 0.6535122839458471
+  },
+  "G02": {
+   "agent": 0.4270205510100605,
+   "agent_nocritic": 0.25280545006083643,
+   "twin_only": 0.10869226022053773
+  },
+  "G03": {
+   "agent": 0.017456864781946704,
+   "agent_nocritic": 0.017456864781946704,
+   "twin_only": 0.5430371740660852
+  },
+  "G04": {
+   "agent": 0.9617546962750594,
+   "agent_nocritic": 0.9617546962750594,
+   "twin_only": 0.7220103054978451
+  },
+  "G05": {
+   "agent": 0.15627129832693912,
+   "agent_nocritic": 0.15627129832693912,
+   "twin_only": 0.3142189243892599
+  },
+  "G06": {
+   "agent": 0.15684330049756198,
+   "agent_nocritic": 0.15684330049756198,
+   "twin_only": 0.6528041595760093
+  },
+  "G07": {
+   "agent": 0.03694072379974678,
+   "agent_nocritic": 0.03694072379974678,
+   "twin_only": 0.8208756209565478
+  },
+  "G08": {
+   "agent": 0.17391069038954554,
+   "agent_nocritic": 0.17391069038954554,
+   "twin_only": 0.5319890547282992
+  },
+  "G09": {
+   "agent": 0.00478718203776721,
+   "agent_nocritic": 0.00478718203776721,
+   "twin_only": 0.05232463205286202
+  },
+  "G10": {
+   "agent": 0.0028739885796636023,
+   "agent_nocritic": 0.0028739885796636023,
+   "twin_only": 0.5028739885796636
+  },
+  "G12": {
+   "agent": 0.40129697048707835,
+   "agent_nocritic": 0.40129697048707835,
+   "twin_only": 1.2415469886395942
+  },
+  "AA1": {
+   "agent": 0.13781871182864175,
+   "agent_nocritic": 0.13781871182864175,
+   "twin_only": 0.7040365655728338
+  },
+  "AA2": {
+   "agent": 0.003370259595443884,
+   "agent_nocritic": 0.003370259595443884,
+   "twin_only": 0.054802343635953585
+  }
+ },
+ "unstable_denominators_posthoc": [
+  {
+   "goal": "G04",
+   "seed": 1,
+   "denominator": 22681.3219595626,
+   "baseline_ci_half_width": 19145.78272249864,
+   "ratio": 1.1846641262103779,
+   "excluded_by_rule": false
+  },
+  {
+   "goal": "G04",
+   "seed": 2,
+   "denominator": 0.0,
+   "baseline_ci_half_width": 24579.75463716162,
+   "ratio": 0.0,
+   "excluded_by_rule": true
+  },
+  {
+   "goal": "G07",
+   "seed": 2,
+   "denominator": 46242.030470077414,
+   "baseline_ci_half_width": 31638.412787146983,
+   "ratio": 1.4615787075406992,
+   "excluded_by_rule": false
+  },
+  {
+   "goal": "G08",
+   "seed": 2,
+   "denominator": 38578.98195838666,
+   "baseline_ci_half_width": 23483.791206962953,
+   "ratio": 1.642791899246148,
+   "excluded_by_rule": false
+  },
+  {
+   "goal": "G12",
+   "seed": 2,
+   "denominator": 31506.993115952937,
+   "baseline_ci_half_width": 23995.323104748153,
+   "ratio": 1.3130472541842284,
+   "excluded_by_rule": false
+  }
+ ],
+ "B1": {
+  "mean": -0.3352383642260896,
+  "ci95": [
+   -0.5202201880573885,
+   -0.14052514370165714
+  ],
+  "n": 13,
+  "verdict": "PASS",
+  "superiority": true,
+  "agent_mean_gap": 0.19574042822478258,
+  "twin_only_mean_gap": 0.5309787924508722,
+  "agent_nocritic_mean_gap": 0.18451000447261495,
+  "gap_goals": [
+   "G01",
+   "G02",
+   "G03",
+   "G04",
+   "G05",
+   "G06",
+   "G07",
+   "G08",
+   "G09",
+   "G10",
+   "G12",
+   "AA1",
+   "AA2"
+  ]
+ },
+ "B2": {
+  "agent": {
+   "robust": 22,
+   "recommended": 23,
+   "rate": 0.9565217391304348
+  },
+  "twin_only": {
+   "robust": 31,
+   "recommended": 32,
+   "rate": 0.96875
+  },
+  "agent_nocritic": {
+   "robust": 29,
+   "recommended": 32,
+   "rate": 0.90625
+  },
+  "verdict": "FAIL"
+ },
+ "B3": {
+  "agent": {
+   "count": 1,
+   "cells": [
+    {
+     "goal": "G01",
+     "seed": 1,
+     "robust": false,
+     "beats": true
+    }
+   ]
+  },
+  "agent_nocritic": {
+   "count": 12,
+   "cells": [
+    {
+     "goal": "G01",
+     "seed": 1,
+     "robust": false,
+     "beats": true
+    },
+    {
+     "goal": "G02",
+     "seed": 2,
+     "robust": false,
+     "beats": true
+    },
+    {
+     "goal": "G04",
+     "seed": 1,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "G04",
+     "seed": 2,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "G10",
+     "seed": 2,
+     "robust": false,
+     "beats": true
+    },
+    {
+     "goal": "G12",
+     "seed": 2,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "N01",
+     "seed": 1,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "N01",
+     "seed": 2,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "N02",
+     "seed": 1,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "N02",
+     "seed": 2,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "N03",
+     "seed": 1,
+     "robust": true,
+     "beats": false
+    },
+    {
+     "goal": "N03",
+     "seed": 2,
+     "robust": true,
+     "beats": false
+    }
+   ]
+  },
+  "verdict": "PASS"
+ },
+ "B4": {
+  "infeasible": {
+   "G11": {
+    "1": {
+     "status": "infeasible",
+     "options": 1
+    },
+    "2": {
+     "status": "infeasible",
+     "options": 1
+    }
+   },
+   "I01": {
+    "1": {
+     "status": "infeasible",
+     "options": 2
+    },
+    "2": {
+     "status": "infeasible",
+     "options": 2
+    }
+   },
+   "I02": {
+    "1": {
+     "status": "infeasible",
+     "options": 1
+    },
+    "2": {
+     "status": "infeasible",
+     "options": 1
+    }
+   },
+   "I03": {
+    "1": {
+     "status": "infeasible",
+     "options": 1
+    },
+    "2": {
+     "status": "infeasible",
+     "options": 1
+    }
+   }
+  },
+  "infeasible_ok": {
+   "G11": true,
+   "I01": true,
+   "I02": true,
+   "I03": true
+  },
+  "no_room": {
+   "N01": {
+    "1": {
+     "flagged": true,
+     "recommended": false
+    },
+    "2": {
+     "flagged": true,
+     "recommended": false
+    }
+   },
+   "N02": {
+    "1": {
+     "flagged": true,
+     "recommended": false
+    },
+    "2": {
+     "flagged": true,
+     "recommended": false
+    }
+   },
+   "N03": {
+    "1": {
+     "flagged": true,
+     "recommended": false
+    },
+    "2": {
+     "flagged": true,
+     "recommended": false
+    }
+   }
+  },
+  "no_room_ok": {
+   "N01": true,
+   "N02": true,
+   "N03": true
+  },
+  "verdict": "PASS",
+  "free_dims": {
+   "N01": [
+    "pm_interval_M5"
+   ],
+   "N02": [
+    "pm_interval_M4"
+   ],
+   "N03": [
+    "pm_interval_M5"
+   ]
+  }
+ },
+ "B5": {
+  "planner_spec_match": {
+   "hits": 20,
+   "n": 20,
+   "rate": 1.0
+  },
+  "planner_kinds": {
+   "spec": 20,
+   "clarify": 0,
+   "refuse": 0,
+   "invalid": 0
+  },
+  "planner_failures": {},
+  "explainer": {
+   "n": 40,
+   "first_attempt_pass": 30,
+   "llm_text_pass_within_two_attempts": 35,
+   "pass_including_template": 40,
+   "criterion": "llm_text_pass_within_two_attempts (template fallback counts as a failure)"
+  },
+  "calls_used": 70,
+  "call_cap": 120,
+  "planner_clause": "PASS",
+  "explainer_clause": "FAIL",
+  "verdict": "FAIL"
+ },
+ "explainer_failures_posthoc": [
+  {
+   "cell": "AA2__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for profit, whose delta is -292100 (the manager should consider the trade-offs: higher units produced and on-time de)"
+  },
+  {
+   "cell": "AA2__agent__seed2",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'fall' for downtime_hours, whose delta is 5.361 (downtime hours fall from 14.69 to 20.05, a delta of 5.361.)"
+  },
+  {
+   "cell": "G01__agent__seed2",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for oee, whose delta is -0.009269 (oee falls from 0.6982 to 0.689, a decrease of \u20130.009269, which is worse when hig)"
+  },
+  {
+   "cell": "G02__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'fall' for downtime_hours, whose delta is 1.362 (downtime hours fall from 10.66 to 12.02?)"
+  },
+  {
+   "cell": "G02__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'lower' for downtime_hours, whose delta is 1.362 (actually the delta is 1.362, so downtime hours increase, which is lower?)"
+  },
+  {
+   "cell": "G02__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'lower' for downtime_hours, whose delta is 1.362 (the better_when is lower, but the delta is positive, so downtime hours increase,)"
+  },
+  {
+   "cell": "G02__agent__seed2",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for profit, whose delta is -49380 (the manager should consider the trade-offs: higher production, oee, and on-time )"
+  },
+  {
+   "cell": "G03__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for oee, whose delta is -0.08811 (oee falls from 0.7416 to 0.6535, a decrease of \u20130.08811, which is worse when hig)"
+  },
+  {
+   "cell": "G03__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for profit, whose delta is -34200 (profit falls from 377100.0 to 342900.0, a decrease of \u201334200.0, which is worse w)"
+  },
+  {
+   "cell": "G03__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'lower' for unplanned_failures, whose delta is 0.6667 (unplanned failures rise from 0.2667 to 0.9333, an increase of 0.6667, which is w)"
+  },
+  {
+   "cell": "G03__agent__seed2",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'increasing' for stockout_probability, whose delta is -0.04321 (these adjustments collectively lower unit cost and stockout probability while in)"
+  },
+  {
+   "cell": "G03__agent__seed2",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'increase' for profit, whose delta is -53090 (these adjustments collectively lower unit cost and stockout probability while in)"
+  },
+  {
+   "cell": "G04__agent__seed2",
+   "kind": "direction_errors",
+   "mode": "llm",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'lower' for on_time_delivery_rate, whose delta is 0.003175 (this adjustment would raise units produced from 24640.0 to 25560.0, a delta of 9)"
+  },
+  {
+   "cell": "G10__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for units_produced, whose delta is -862 (**units produced** fall to 21730.0 from 22590.0, a negative delta of \u2013862.0, whi)"
+  },
+  {
+   "cell": "G10__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for oee, whose delta is -0.125 (**oee** falls to 0.5655 from 0.6905, a negative delta of \u20130.125, which is worse )"
+  },
+  {
+   "cell": "G10__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'lower' for stockout_probability, whose delta is 0.02593 (**stockout probability** rises to 0.2753 from 0.2494, a positive delta of 0.0259)"
+  },
+  {
+   "cell": "G10__agent__seed1",
+   "kind": "direction_errors",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "'higher' for on_time_delivery_rate, whose delta is -0.01426 (**on-time delivery rate** falls to 0.7696 from 0.7839, a negative delta of \u20130.01)"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "1.208"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "05"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "1.208"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "05"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "3.678"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "05"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "1.262"
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "kind": "ungrounded_numbers",
+   "mode": "template",
+   "exact_zero_delta": false,
+   "negation_false_flag": false,
+   "item": "05"
+  }
+ ],
+ "twin_only_effort": {
+  "G01": {
+   "evaluations": [
+    168,
+    156
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G02": {
+   "evaluations": [
+    132,
+    180
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G03": {
+   "evaluations": [
+    108,
+    96
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G04": {
+   "evaluations": [
+    72,
+    72
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G05": {
+   "evaluations": [
+    96,
+    96
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G06": {
+   "evaluations": [
+    108,
+    108
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G07": {
+   "evaluations": [
+    96,
+    96
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G08": {
+   "evaluations": [
+    77,
+    70
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G09": {
+   "evaluations": [
+    96,
+    84
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G10": {
+   "evaluations": [
+    96,
+    180
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G11": {
+   "evaluations": [
+    264,
+    276
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "G12": {
+   "evaluations": [
+    70,
+    77
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "I01": {
+   "evaluations": [
+    168,
+    168
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "I02": {
+   "evaluations": [
+    180,
+    192
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "I03": {
+   "evaluations": [
+    180,
+    192
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "N01": {
+   "evaluations": [
+    64,
+    64
+   ],
+   "restarts": [
+    9,
+    11
+   ]
+  },
+  "N02": {
+   "evaluations": [
+    64,
+    64
+   ],
+   "restarts": [
+    14,
+    16
+   ]
+  },
+  "N03": {
+   "evaluations": [
+    64,
+    64
+   ],
+   "restarts": [
+    16,
+    16
+   ]
+  },
+  "AA1": {
+   "evaluations": [
+    96,
+    96
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  },
+  "AA2": {
+   "evaluations": [
+    108,
+    108
+   ],
+   "restarts": [
+    0,
+    0
+   ]
+  }
+ },
+ "agent_flags": {
+  "G01": {
+   "1": [
+    "weak_kpi_constraint",
+    "not_robustly_feasible"
+   ],
+   "2": [
+    "weak_kpi_constraint"
+   ]
+  },
+  "G02": {
+   "1": [
+    "weak_kpi_constraint"
+   ],
+   "2": [
+    "weak_kpi_constraint"
+   ]
+  },
+  "G03": {
+   "1": [],
+   "2": []
+  },
+  "G04": {
+   "1": [
+    "weak_kpi_constraint",
+    "no_improvement"
+   ],
+   "2": [
+    "weak_kpi_constraint",
+    "no_improvement"
+   ]
+  },
+  "G05": {
+   "1": [],
+   "2": []
+  },
+  "G06": {
+   "1": [],
+   "2": []
+  },
+  "G07": {
+   "1": [],
+   "2": []
+  },
+  "G08": {
+   "1": [],
+   "2": []
+  },
+  "G09": {
+   "1": [
+    "weak_kpi_constraint",
+    "novel_plan"
+   ],
+   "2": [
+    "weak_kpi_constraint"
+   ]
+  },
+  "G10": {
+   "1": [],
+   "2": []
+  },
+  "G11": {
+   "1": [
+    "not_robustly_feasible",
+    "novel_plan",
+    "infeasible_unverified"
+   ],
+   "2": [
+    "not_robustly_feasible",
+    "novel_plan",
+    "infeasible_unverified"
+   ]
+  },
+  "G12": {
+   "1": [],
+   "2": [
+    "no_improvement"
+   ]
+  },
+  "I01": {
+   "1": [
+    "not_robustly_feasible",
+    "no_improvement",
+    "infeasible_unverified"
+   ],
+   "2": [
+    "not_robustly_feasible",
+    "no_improvement",
+    "infeasible_unverified"
+   ]
+  },
+  "I02": {
+   "1": [
+    "not_robustly_feasible",
+    "infeasible_unverified"
+   ],
+   "2": [
+    "not_robustly_feasible",
+    "infeasible_unverified"
+   ]
+  },
+  "I03": {
+   "1": [
+    "not_robustly_feasible",
+    "no_improvement",
+    "infeasible_unverified"
+   ],
+   "2": [
+    "not_robustly_feasible",
+    "no_improvement",
+    "infeasible_unverified"
+   ]
+  },
+  "N01": {
+   "1": [
+    "no_improvement"
+   ],
+   "2": [
+    "no_improvement"
+   ]
+  },
+  "N02": {
+   "1": [
+    "no_improvement"
+   ],
+   "2": [
+    "no_improvement"
+   ]
+  },
+  "N03": {
+   "1": [
+    "no_improvement"
+   ],
+   "2": [
+    "no_improvement"
+   ]
+  },
+  "AA1": {
+   "1": [],
+   "2": []
+  },
+  "AA2": {
+   "1": [
+    "weak_kpi_constraint"
+   ],
+   "2": [
+    "weak_kpi_constraint"
+   ]
+  }
+ },
+ "categories": {
+  "G01": "feasible",
+  "G02": "feasible",
+  "G03": "feasible",
+  "G04": "feasible",
+  "G05": "feasible",
+  "G06": "feasible",
+  "G07": "feasible",
+  "G08": "feasible",
+  "G09": "feasible",
+  "G10": "feasible",
+  "G11": "infeasible",
+  "G12": "feasible",
+  "I01": "infeasible",
+  "I02": "infeasible",
+  "I03": "infeasible",
+  "N01": "no_room",
+  "N02": "no_room",
+  "N03": "no_room",
+  "AA1": "ambiguous_answerable",
+  "AA2": "ambiguous_answerable"
+ },
+ "wall_seconds": {
+  "G01": {
+   "1": 96.10601399999999,
+   "2": 93.2897644
+  },
+  "G02": {
+   "1": 115.18235469999999,
+   "2": 166.1489062
+  },
+  "G03": {
+   "1": 86.54223280000002,
+   "2": 81.22799569999995
+  },
+  "G04": {
+   "1": 52.821404099999995,
+   "2": 53.770402700000034
+  },
+  "G05": {
+   "1": 68.13833410000001,
+   "2": 70.15816110000003
+  },
+  "G06": {
+   "1": 63.72405619999995,
+   "2": 62.879532900000015
+  },
+  "G07": {
+   "1": 70.14626140000001,
+   "2": 68.62309870000001
+  },
+  "G08": {
+   "1": 49.197186399999964,
+   "2": 49.509604999999965
+  },
+  "G09": {
+   "1": 48.82712880000008,
+   "2": 48.028950699999996
+  },
+  "G10": {
+   "1": 62.45938309999997,
+   "2": 115.14290089999997
+  },
+  "G11": {
+   "1": 94.95068739999999,
+   "2": 94.35627799999997
+  },
+  "G12": {
+   "1": 47.29321070000003,
+   "2": 50.67853450000007
+  },
+  "I01": {
+   "1": 151.52326729999993,
+   "2": 152.1620074
+  },
+  "I02": {
+   "1": 130.62149180000006,
+   "2": 131.97403889999998
+  },
+  "I03": {
+   "1": 150.95418619999998,
+   "2": 151.6578859000001
+  },
+  "N01": {
+   "1": 48.20789300000001,
+   "2": 48.181251700000075
+  },
+  "N02": {
+   "1": 48.21880839999994,
+   "2": 48.94655469999998
+  },
+  "N03": {
+   "1": 46.27162150000004,
+   "2": 46.203220699999974
+  },
+  "AA1": {
+   "1": 67.9717336000001,
+   "2": 66.36538940000014
+  },
+  "AA2": {
+   "1": 88.0848711000001,
+   "2": 84.69285800000011
+  }
+ },
+ "per_cell": {
+  "G01__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint",
+     "not_robustly_feasible"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 96.10601399999999,
+    "critic_actions": [
+     "swap",
+     "accept"
+    ],
+    "objective": 381879.43037986517,
+    "feasible": true,
+    "robust": false,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 377132.4106134354,
+    "feasible": true,
+    "robust": false,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 101.65699999999993,
+    "evaluations": 168,
+    "restarts": 0,
+    "objective": 346620.18643177697,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 297770.84834123985,
+    "objective_ci": [
+     278297.8459716576,
+     317243.8507108221
+    ],
+    "feasible": false
+   }
+  },
+  "G01__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 93.2897644,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 373750.9557778597,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 373750.9557778597,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 98.81200000000013,
+    "evaluations": 156,
+    "restarts": 0,
+    "objective": 325745.85108213814,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 318652.66498433443,
+    "objective_ci": [
+     292424.3352400971,
+     344880.9947285718
+    ],
+    "feasible": false
+   }
+  },
+  "G02__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 115.18235469999999,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 34646.566666666666,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 34646.566666666666,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 119.31299999999987,
+    "evaluations": 132,
+    "restarts": 0,
+    "objective": 35824.666666666664,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 24622.7,
+    "objective_ci": [
+     24013.868334042996,
+     25231.531665957005
+    ],
+    "feasible": true
+   }
+  },
+  "G02__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 166.1489062,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 31087.2,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 36020.6,
+    "feasible": true,
+    "robust": false,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 167.29700000000003,
+    "evaluations": 180,
+    "restarts": 0,
+    "objective": 38936.2,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 24777.266666666666,
+    "objective_ci": [
+     24156.18757021452,
+     25398.345763118814
+    ],
+    "feasible": true
+   }
+  },
+  "G03__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 86.54223280000002,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": -22.20720777178458,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": -22.20720777178458,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 94.9219999999998,
+    "evaluations": 108,
+    "restarts": 0,
+    "objective": -22.17785237549475,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": -25.691349788038668,
+    "objective_ci": [
+     -26.295711104866264,
+     -25.086988471211072
+    ],
+    "feasible": true
+   }
+  },
+  "G03__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 81.22799569999995,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": -22.26995697708156,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": -22.26995697708156,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 81.65599999999995,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": -25.944319416963687,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": -25.645816652476803,
+    "objective_ci": [
+     -26.518229709988827,
+     -24.77340359496478
+    ],
+    "feasible": true
+   }
+  },
+  "G04__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint",
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 52.821404099999995,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 387750.1948394583,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 387750.1948394583,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 56.46900000000005,
+    "evaluations": 72,
+    "restarts": 0,
+    "objective": 393187.91455467546,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 386882.74079223163,
+    "objective_ci": [
+     367736.958069733,
+     406028.5235147303
+    ],
+    "feasible": true
+   }
+  },
+  "G04__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint",
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 53.770402700000034,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 402552.295944733,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 402552.295944733,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 54.437999999999874,
+    "evaluations": 72,
+    "restarts": 0,
+    "objective": 405659.7691837133,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 409564.06275179423,
+    "objective_ci": [
+     384984.3081146326,
+     434143.81738895585
+    ],
+    "feasible": true
+   }
+  },
+  "G05__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 68.13833410000001,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 349839.38482183067,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 349839.38482183067,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 76.26600000000008,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": 355891.34784507775,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 256743.9720877051,
+    "objective_ci": [
+     230875.5839942001,
+     282612.3601812101
+    ],
+    "feasible": true
+   }
+  },
+  "G05__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 70.15816110000003,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 392163.8719694928,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 392163.8719694928,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 71.89099999999985,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": 352016.1470657195,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 280823.5288717799,
+    "objective_ci": [
+     255008.237068796,
+     306638.8206747638
+    ],
+    "feasible": true
+   }
+  },
+  "G06__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 63.72405619999995,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 371530.3799136189,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 371530.3799136189,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 69.14099999999985,
+    "evaluations": 108,
+    "restarts": 0,
+    "objective": 304806.0100402289,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 315486.83669006446,
+    "objective_ci": [
+     295435.2215545883,
+     335538.45182554063
+    ],
+    "feasible": true
+   }
+  },
+  "G06__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 62.879532900000015,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 397145.65801690303,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 397145.65801690303,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 71.56299999999987,
+    "evaluations": 108,
+    "restarts": 0,
+    "objective": 385142.9072761127,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 328484.01167726633,
+    "objective_ci": [
+     312224.1146810552,
+     344743.9086734775
+    ],
+    "feasible": true
+   }
+  },
+  "G07__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 70.14626140000001,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 848230.8805554193,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 848230.8805554193,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 75.0150000000001,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": 782987.6668850293,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 788635.1987969704,
+    "objective_ci": [
+     765071.8075207706,
+     812198.5900731703
+    ],
+    "feasible": true
+   }
+  },
+  "G07__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 68.62309870000001,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 844814.45240435,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 844814.45240435,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 68.7650000000001,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": 822937.0850668622,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 801988.8500853418,
+    "objective_ci": [
+     770350.4372981949,
+     833627.2628724888
+    ],
+    "feasible": true
+   }
+  },
+  "G08__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 49.197186399999964,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 349144.109966737,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 349144.109966737,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 51.2650000000001,
+    "evaluations": 77,
+    "restarts": 0,
+    "objective": 333078.6731798138,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 318054.35601192963,
+    "objective_ci": [
+     298798.7062930691,
+     337310.00573079014
+    ],
+    "feasible": true
+   }
+  },
+  "G08__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 49.509604999999965,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 365724.9680782177,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 365724.9680782177,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 51.906999999999925,
+    "evaluations": 70,
+    "restarts": 0,
+    "objective": 351097.84398867306,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 327145.98611983104,
+    "objective_ci": [
+     303662.1949128681,
+     350629.777326794
+    ],
+    "feasible": true
+   }
+  },
+  "G09__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint",
+     "novel_plan"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 48.82712880000008,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 0.9500207151991593,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 0.9500207151991593,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 49.78099999999995,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": 0.9459760240516012,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 0.7248956861712155,
+    "objective_ci": [
+     0.7062676040876994,
+     0.7435237682547315
+    ],
+    "feasible": true
+   }
+  },
+  "G09__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 48.028950699999996,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 0.952196980546347,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 0.952196980546347,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 48.922000000000025,
+    "evaluations": 84,
+    "restarts": 0,
+    "objective": 0.9341379613712817,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 0.7185155189762645,
+    "objective_ci": [
+     0.6985688436763868,
+     0.7384621942761422
+    ],
+    "feasible": true
+   }
+  },
+  "G10__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 62.45938309999997,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": -0.05,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": -0.05,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 67.5,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": -0.05,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": -8.69871236681331,
+    "objective_ci": [
+     -9.165492668495896,
+     -8.231932065130726
+    ],
+    "feasible": true
+   }
+  },
+  "G10__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 115.14290089999997,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 0.0,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 0.0,
+    "feasible": true,
+    "robust": false,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 117.48400000000015,
+    "evaluations": 180,
+    "restarts": 0,
+    "objective": -0.05,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "baseline": {
+    "objective": -8.698905658984877,
+    "objective_ci": [
+     -9.215380230389382,
+     -8.182431087580373
+    ],
+    "feasible": true
+   }
+  },
+  "G11__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "novel_plan",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "on_time_delivery_rate >= 0.7",
+      "kpi": "on_time_delivery_rate",
+      "op": ">=",
+      "threshold": 0.7,
+      "closest_achievable": 0.38754730613888955,
+      "source": "verified candidate (search stream)",
+      "option": "relax to on_time_delivery_rate >= 0.388",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 94.95068739999999,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 14274.833333333334,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 13658.5,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 97.8119999999999,
+    "evaluations": 264,
+    "restarts": 0,
+    "objective": 14371.666666666666,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 8794.866666666667,
+    "objective_ci": [
+     7415.870798211279,
+     10173.862535122054
+    ],
+    "feasible": false
+   }
+  },
+  "G11__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "novel_plan",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "on_time_delivery_rate >= 0.7",
+      "kpi": "on_time_delivery_rate",
+      "op": ">=",
+      "threshold": 0.7,
+      "closest_achievable": 0.38714620549356416,
+      "source": "verified candidate (search stream)",
+      "option": "relax to on_time_delivery_rate >= 0.387",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 94.35627799999997,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 14525.833333333334,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 14328.166666666666,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 98.53099999999995,
+    "evaluations": 276,
+    "restarts": 0,
+    "objective": 12397.466666666667,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 8572.2,
+    "objective_ci": [
+     7540.213910180213,
+     9604.186089819788
+    ],
+    "feasible": false
+   }
+  },
+  "G12__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 47.29321070000003,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 302541.16118461976,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 302541.16118461976,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 52.53099999999995,
+    "evaluations": 70,
+    "restarts": 0,
+    "objective": 240369.5977130364,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 259260.720499468,
+    "objective_ci": [
+     239294.99408841706,
+     279226.4469105189
+    ],
+    "feasible": true
+   }
+  },
+  "G12__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 50.67853450000007,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 277253.83941144147,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 277253.83941144147,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 52.062000000000126,
+    "evaluations": 77,
+    "restarts": 0,
+    "objective": 269565.55715970934,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 271034.1680686668,
+    "objective_ci": [
+     247038.84496391867,
+     295029.491173415
+    ],
+    "feasible": true
+   }
+  },
+  "I01__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "no_improvement",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "on_time_delivery_rate >= 0.99",
+      "kpi": "on_time_delivery_rate",
+      "op": ">=",
+      "threshold": 0.99,
+      "closest_achievable": 0.8464243217810873,
+      "source": "verified candidate (search stream)",
+      "option": "relax to on_time_delivery_rate >= 0.846",
+      "note": "an option for you to decide on, not a decision"
+     },
+     {
+      "constraint": "stockout_probability <= 0.01",
+      "kpi": "stockout_probability",
+      "op": "<=",
+      "threshold": 0.01,
+      "closest_achievable": 0.18148148148148147,
+      "source": "verified candidate (search stream)",
+      "option": "relax to stockout_probability <= 0.181",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 151.52326729999993,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 121448.59383711088,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 93963.58572383445,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 157.26499999999987,
+    "evaluations": 168,
+    "restarts": 0,
+    "objective": 105382.85516826827,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 297770.84834123985,
+    "objective_ci": [
+     278297.8459716576,
+     317243.8507108221
+    ],
+    "feasible": false
+   }
+  },
+  "I01__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "no_improvement",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "on_time_delivery_rate >= 0.99",
+      "kpi": "on_time_delivery_rate",
+      "op": ">=",
+      "threshold": 0.99,
+      "closest_achievable": 0.8481118852400094,
+      "source": "verified candidate (search stream)",
+      "option": "relax to on_time_delivery_rate >= 0.848",
+      "note": "an option for you to decide on, not a decision"
+     },
+     {
+      "constraint": "stockout_probability <= 0.01",
+      "kpi": "stockout_probability",
+      "op": "<=",
+      "threshold": 0.01,
+      "closest_achievable": 0.18024691358024691,
+      "source": "re-evaluated plan (30 reps)",
+      "option": "relax to stockout_probability <= 0.18",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 152.1620074,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 133332.42428901498,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 75594.70237628318,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 160.15599999999995,
+    "evaluations": 168,
+    "restarts": 0,
+    "objective": 36629.244545772,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 318652.66498433443,
+    "objective_ci": [
+     292424.3352400971,
+     344880.9947285718
+    ],
+    "feasible": false
+   }
+  },
+  "I02__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "profit >= 3e+06",
+      "kpi": "profit",
+      "op": ">=",
+      "threshold": 3000000.0,
+      "closest_achievable": 465060.9686959364,
+      "source": "verified candidate (search stream)",
+      "option": "relax to profit >= 465000",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 130.62149180000006,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 25453.9,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 25583.1,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 139.40699999999993,
+    "evaluations": 180,
+    "restarts": 0,
+    "objective": 25556.033333333333,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 24403.4,
+    "objective_ci": [
+     23820.952885845745,
+     24985.847114154258
+    ],
+    "feasible": false
+   }
+  },
+  "I02__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "profit >= 3e+06",
+      "kpi": "profit",
+      "op": ">=",
+      "threshold": 3000000.0,
+      "closest_achievable": 465060.9686959364,
+      "source": "verified candidate (search stream)",
+      "option": "relax to profit >= 465000",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 131.97403889999998,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 25165.133333333335,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 25875.833333333332,
+    "feasible": false,
+    "robust": false,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 137.17200000000003,
+    "evaluations": 192,
+    "restarts": 0,
+    "objective": 24368.066666666666,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 24477.833333333332,
+    "objective_ci": [
+     23862.064816368358,
+     25093.601850298306
+    ],
+    "feasible": false
+   }
+  },
+  "I03__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "no_improvement",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "unit_cost <= 12",
+      "kpi": "unit_cost",
+      "op": "<=",
+      "threshold": 12.0,
+      "closest_achievable": 22.156149753066234,
+      "source": "verified candidate (search stream)",
+      "option": "relax to unit_cost <= 22.2",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 150.95418619999998,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 257949.31982139952,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 275096.0500675142,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 154.64100000000008,
+    "evaluations": 180,
+    "restarts": 0,
+    "objective": 263432.3941341329,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 363270.7662365424,
+    "objective_ci": [
+     343941.8026348854,
+     382599.72983819933
+    ],
+    "feasible": false
+   }
+  },
+  "I03__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "infeasible",
+    "flags": [
+     "not_robustly_feasible",
+     "no_improvement",
+     "infeasible_unverified"
+    ],
+    "closest": [
+     {
+      "constraint": "unit_cost <= 12",
+      "kpi": "unit_cost",
+      "op": "<=",
+      "threshold": 12.0,
+      "closest_achievable": 22.12516053467232,
+      "source": "verified candidate (search stream)",
+      "option": "relax to unit_cost <= 22.1",
+      "note": "an option for you to decide on, not a decision"
+     }
+    ],
+    "reason": "no feasible plan was found",
+    "wall_seconds": 151.6578859000001,
+    "critic_actions": [
+     "explore_again",
+     "accept"
+    ],
+    "objective": 325733.0001088341,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": false,
+    "objective": 294372.92103433266,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": false,
+    "wall_seconds": 159.9369999999999,
+    "evaluations": 192,
+    "restarts": 0,
+    "objective": 332942.9457212482,
+    "feasible": false,
+    "robust": false,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 380209.4701560503,
+    "objective_ci": [
+     357234.89716918307,
+     403184.0431429175
+    ],
+    "feasible": false
+   }
+  },
+  "N01__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 48.20789300000001,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 389230.4814324321,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 389230.4814324321,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 50.71899999999732,
+    "evaluations": 64,
+    "restarts": 9,
+    "objective": 389230.4814324321,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 389230.4814324321,
+    "objective_ci": [
+     371085.037417351,
+     407375.9254475132
+    ],
+    "feasible": true
+   }
+  },
+  "N01__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 48.181251700000075,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 410454.03446474957,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 410454.03446474957,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 49.56199999999808,
+    "evaluations": 64,
+    "restarts": 11,
+    "objective": 410454.03446474957,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 410454.03446474957,
+    "objective_ci": [
+     386760.57268639345,
+     434147.4962431057
+    ],
+    "feasible": true
+   }
+  },
+  "N02__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 48.21880839999994,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 0.865546455783076,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 0.865546455783076,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 50.75,
+    "evaluations": 64,
+    "restarts": 14,
+    "objective": 0.8655585334501276,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 0.8655585334501276,
+    "objective_ci": [
+     0.8509759525767869,
+     0.8801411143234682
+    ],
+    "feasible": true
+   }
+  },
+  "N02__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 48.94655469999998,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 0.8584354555648976,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 0.8584354555648976,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 50.11000000000058,
+    "evaluations": 64,
+    "restarts": 16,
+    "objective": 0.8585431181515617,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 0.8585431181515617,
+    "objective_ci": [
+     0.8384304477274298,
+     0.8786557885756936
+    ],
+    "feasible": true
+   }
+  },
+  "N03__seed1": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 46.27162150000004,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 0.8017858891155016,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 0.8017858891155016,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 46.42199999999866,
+    "evaluations": 64,
+    "restarts": 16,
+    "objective": 0.8017858891155016,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 0.8017858891155016,
+    "objective_ci": [
+     0.7889557228313548,
+     0.8146160553996484
+    ],
+    "feasible": true
+   }
+  },
+  "N03__seed2": {
+   "agent": {
+    "recommended": false,
+    "status": "ok",
+    "flags": [
+     "no_improvement"
+    ],
+    "closest": [],
+    "reason": "no improvement over current policy",
+    "wall_seconds": 46.203220699999974,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 0.7950500344216489,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 0.7950500344216489,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 46.40699999999924,
+    "evaluations": 64,
+    "restarts": 16,
+    "objective": 0.7950500344216489,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 0.7950500344216489,
+    "objective_ci": [
+     0.7746934206966339,
+     0.8154066481466639
+    ],
+    "feasible": true
+   }
+  },
+  "AA1__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 67.9717336000001,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 359013.96887163667,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 359013.96887163667,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 76.0619999999999,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": 336455.24255632644,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 318054.35601192963,
+    "objective_ci": [
+     298798.7062930691,
+     337310.00573079014
+    ],
+    "feasible": true
+   }
+  },
+  "AA1__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 66.36538940000014,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 374600.08904318424,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 374600.08904318424,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 70.92200000000003,
+    "evaluations": 96,
+    "restarts": 0,
+    "objective": 339793.02008204925,
+    "feasible": true,
+    "robust": true,
+    "beats": false
+   },
+   "baseline": {
+    "objective": 327145.98611983104,
+    "objective_ci": [
+     303662.1949128681,
+     350629.777326794
+    ],
+    "feasible": true
+   }
+  },
+  "AA2__seed1": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 88.0848711000001,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 39886.23333333333,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 39886.23333333333,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 100.21900000000005,
+    "evaluations": 108,
+    "restarts": 0,
+    "objective": 39041.7,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 24001.2,
+    "objective_ci": [
+     23394.081768434116,
+     24608.318231565885
+    ],
+    "feasible": true
+   }
+  },
+  "AA2__seed2": {
+   "agent": {
+    "recommended": true,
+    "status": "ok",
+    "flags": [
+     "weak_kpi_constraint"
+    ],
+    "closest": [],
+    "reason": "improves the objective over the current policy",
+    "wall_seconds": 84.69285800000011,
+    "critic_actions": [
+     "accept"
+    ],
+    "objective": 39994.03333333333,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "agent_nocritic": {
+    "recommended": true,
+    "objective": 39994.03333333333,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "twin_only": {
+    "recommended": true,
+    "wall_seconds": 88.38999999999987,
+    "evaluations": 108,
+    "restarts": 0,
+    "objective": 39187.2,
+    "feasible": true,
+    "robust": true,
+    "beats": true
+   },
+   "baseline": {
+    "objective": 23875.8,
+    "objective_ci": [
+     23223.78275895532,
+     24527.81724104468
+    ],
+    "feasible": true
+   }
+  }
+ }
+}

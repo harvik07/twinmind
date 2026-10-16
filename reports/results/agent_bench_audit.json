@@ -1,0 +1,1299 @@
+{
+ "planner": {
+  "G01": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_with_failure_limit",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "unplanned_failures",
+      "op": "<=",
+      "threshold": 1.0,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 8,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G02": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "max_units_with_downtime_limit",
+    "objective": {
+     "units_produced": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "downtime_hours",
+      "op": "<=",
+      "threshold": 14.0,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 9,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G03": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "min_unit_cost_with_delivery",
+    "objective": {
+     "unit_cost": 1.0
+    },
+    "sense": "minimise",
+    "constraints": [
+     {
+      "kpi": "on_time_delivery_rate",
+      "op": ">=",
+      "threshold": 0.8,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 10,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G04": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_with_downtime_limit",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "downtime_hours",
+      "op": "<=",
+      "threshold": 18.0,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5"
+    ],
+    "fixed": {},
+    "context_id": 11,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G05": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "max_profit_with_stockout_limit",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "stockout_probability",
+      "op": "<=",
+      "threshold": 0.3,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {
+     "supplier_choice": 1.0
+    },
+    "context_id": 12,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G06": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximize_profit",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {
+     "price_multiplier": 1.1
+    },
+    "context_id": 13,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G07": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_and_on_time",
+    "objective": {
+     "profit": 1.0,
+     "on_time_delivery_rate": 500000.0
+    },
+    "sense": "maximise",
+    "constraints": [],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 14,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G08": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_with_stockout_limit",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "stockout_probability",
+      "op": "<=",
+      "threshold": 0.3,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 15,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G09": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_oee_with_failure_limit",
+    "objective": {
+     "oee": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "unplanned_failures",
+      "op": "<=",
+      "threshold": 1.5,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 16,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G10": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "minimise_downtime_with_profit_constraint",
+    "objective": {
+     "downtime_hours": 1.0
+    },
+    "sense": "minimise",
+    "constraints": [
+     {
+      "kpi": "profit",
+      "op": ">=",
+      "threshold": 200000.0,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 17,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G11": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "max_units_with_delivery",
+    "objective": {
+     "units_produced": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "on_time_delivery_rate",
+      "op": ">=",
+      "threshold": 0.7,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {
+     "supplier_choice": 2.0
+    },
+    "context_id": 18,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "G12": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_with_stockout_limit",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "stockout_probability",
+      "op": "<=",
+      "threshold": 0.35,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "shift_count",
+     "overtime_hours",
+     "throughput_multiplier"
+    ],
+    "fixed": {},
+    "context_id": 19,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "I01": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_with_delivery_and_stockout",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "on_time_delivery_rate",
+      "op": ">=",
+      "threshold": 0.99,
+      "hard": true
+     },
+     {
+      "kpi": "stockout_probability",
+      "op": "<=",
+      "threshold": 0.01,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 8,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "I02": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "max_units_with_profit",
+    "objective": {
+     "units_produced": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "profit",
+      "op": ">=",
+      "threshold": 3000000.0,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 10,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "I03": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_with_cost_limit",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "unit_cost",
+      "op": "<=",
+      "threshold": 12.0,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 14,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "N01": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_profit_m5_pm",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [],
+    "free_dims": [
+     "pm_interval_M5"
+    ],
+    "fixed": {},
+    "context_id": 9,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "N02": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_on_time_delivery",
+    "objective": {
+     "on_time_delivery_rate": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [],
+    "free_dims": [
+     "pm_interval_M4"
+    ],
+    "fixed": {},
+    "context_id": 9,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "N03": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "maximise_on_time_delivery",
+    "objective": {
+     "on_time_delivery_rate": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [],
+    "free_dims": [
+     "pm_interval_M5"
+    ],
+    "fixed": {},
+    "context_id": 13,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "AA1": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "squeeze_money",
+    "objective": {
+     "profit": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "stockout_probability",
+      "op": "<=",
+      "threshold": 0.25,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 15,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  },
+  "AA2": {
+   "kind": "spec",
+   "match": true,
+   "reasons": [],
+   "calls": 1,
+   "spec": {
+    "name": "increase_units_with_downtime_limit",
+    "objective": {
+     "units_produced": 1.0
+    },
+    "sense": "maximise",
+    "constraints": [
+     {
+      "kpi": "downtime_hours",
+      "op": "<=",
+      "threshold": 24.0,
+      "hard": true
+     }
+    ],
+    "free_dims": [
+     "throughput_multiplier",
+     "shift_count",
+     "overtime_hours",
+     "pm_interval_M1",
+     "pm_interval_M2",
+     "pm_interval_M3",
+     "pm_interval_M4",
+     "pm_interval_M5",
+     "speed_setpoint_M1",
+     "speed_setpoint_M2",
+     "speed_setpoint_M3",
+     "speed_setpoint_M4",
+     "speed_setpoint_M5",
+     "reorder_point",
+     "order_quantity",
+     "safety_stock"
+    ],
+    "fixed": {},
+    "context_id": 16,
+    "infeasible_by_design": false,
+    "notes": ""
+   },
+   "question": null
+  }
+ },
+ "explainer": {
+  "AA1__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan increases units produced from 23580.0 to 23930.0, a rise of 352.3, which is better because higher is better.  \nOEE falls from 0.7148 to 0.6697, a decrease of \u20130.04514, which is worse because lower is worse.  \nUnit cost drops from 27.37 to 25.27, a decrease of \u20132.104, which is better because lower is better.  \nProfit rises from 318100.0 to 359000.0, an increase of 40960.0, which is better because higher is better.  \nStockout probability rises from 0.2185 to 0.221, an increase of 0.002469, which is worse because lower is better.  \nDowntime hours fall from 11.82 to 6.483, a decrease of \u20135.341, which is better because lower is better.  \nUnplanned failures fall from 1.233 to 1.1, a decrease of \u20130.1333, which is better because lower is better.  \nOn\u2011time delivery rate rises from 0.8229 to 0.8236, an increase of 0.0006486, which is better because higher is better.  \n\nThe recommendation reason is \u201cimproves the objective over the current policy\u201d.  \nThe plan is recommended.  \n\nAll constraints are satisfied: the stockout probability constraint (\u2264 0.25) is met.  \nThe plan is feasible, robustly feasible, and maximises the objective."
+  },
+  "AA1__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan increases units produced from 23600.0 to 24100.0, a rise of 504.2, which is better when higher.  \nOEE falls from 0.7139 to 0.6297, a decrease of \u20130.08422, which is lower and better when lower.  \nUnit cost drops from 27.53 to 25.44, a decrease of \u20132.092, better when lower.  \nProfit rises from 327100.0 to 374600.0, an increase of 47450.0, better when higher.  \nStockout probability stays at 0.2148, unchanged, so it remains within the hard constraint of \u22640.25.  \nDowntime hours fall from 12.63 to 5.467, a decrease of \u20137.161, better when lower.  \nUnplanned failures drop from 1.367 to 0.6, a decrease of \u20130.7667, better when lower.  \nOn\u2011time delivery rate rises from 0.8152 to 0.8237, an increase of 0.008439, better when higher.  \n\nAll KPI changes are within their confidence intervals, and the plan is feasible, robustly feasible, and maximises the objective. The recommendation reason is \u201cimproves the objective over the current policy\u201d. Therefore, the plan is recommended."
+  },
+  "AA2__agent__seed1": {
+   "mode": "template",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'higher' for profit, whose delta is -292100 (the manager should consider the trade-offs: higher units produced and on-time de)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": false,
+   "calls": 2,
+   "text": "Goal bench_units_day_of_downtime: This plan is recommended.\nReason: improves the objective over the current policy.\nChanges from the current policy: throughput_multiplier 1 -> 1.269; shift_count 2 -> 3; overtime_hours 0 -> 1.634; pm_interval_M1 168 -> 670.6; pm_interval_M2 168 -> 170; pm_interval_M3 120 -> 484.3; pm_interval_M4 168 -> 512.9; pm_interval_M5 240 -> 278.5; speed_setpoint_M1 1 -> 0.9482; speed_setpoint_M2 1 -> 0.9744; speed_setpoint_M3 1 -> 1.084; speed_setpoint_M4 1 -> 1.047; speed_setpoint_M5 1 -> 1.042; reorder_point 7000 -> 8998; order_quantity 6000 -> 9036; safety_stock 1500 -> 4000.\nObjective change vs current policy: 15890 (95% CI 15100 to 16670), over 30 paired replications.\n- units_produced: 39890 (CI 38730 to 41050) vs current 24000.\n- oee: 0.5575 (CI 0.5417 to 0.5732) vs current 0.7249.\n- unit_cost: 24.2 (CI 23.5 to 24.91) vs current 26.62.\n- profit: 52460 (CI 20450 to 84470) vs current 344600.\n- stockout_probability: 0.1519 (CI 0.1363 to 0.1674) vs current 0.1938.\n- downtime_hours: 15.82 (CI 14.25 to 17.39) vs current 13.32.\n- unplanned_failures: 2.633 (CI 2.26 to 3.007) vs current 1.033.\n- on_time_delivery_rate: 0.8679 (CI 0.8528 to 0.8829) vs current 0.84.\nFlag: constraint relies on a weakly predicted KPI (downtime_hours <= 24)"
+  },
+  "AA2__agent__seed2": {
+   "mode": "llm",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'fall' for downtime_hours, whose delta is 5.361 (downtime hours fall from 14.69 to 20.05, a delta of 5.361.)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 2,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \nThe objective is units produced, which rises from 23880.0 to 39990.0, a delta of 16120.0.  \nUnits produced is higher, which is better.  \n\nOEE falls from 0.7185 to 0.5608, a delta of \u20130.1578.  \nOEE is lower, which is worse.  \n\nUnit cost falls from 26.72 to 24.11, a delta of \u20132.617.  \nUnit cost is lower, which is better.  \n\nProfit falls from 357800.0 to 73040.0, a delta of \u2013284800.0.  \nProfit is lower, which is worse.  \n\nStockout probability falls from 0.2074 to 0.1506, a delta of \u20130.05679.  \nStockout probability is lower, which is better.  \n\nDowntime hours rise from 14.69 to 20.05, a delta of 5.361.  \nDowntime hours is higher, which is worse.  \n\nUnplanned failures rise from 1.233 to 2.567, a delta of 1.333.  \nUnplanned failures is higher, which is worse.  \n\nOn\u2011time delivery rate rises from 0.8308 to 0.8651, a delta of 0.03423.  \nOn\u2011time delivery rate is higher, which is better.  \n\nThe plan meets the hard constraint that downtime_hours \u2264 24.0, but a flag warns that this constraint relies on a weakly predicted KPI.  \nThe plan is feasible, robustly feasible, and the confidence level is 95\u202f%.  \nThe plan changes include increasing throughput_multiplier to 1.288, adding a third shift, adding 1.91 overtime hours, extending preventive maintenance intervals, adjusting speed setpoints, and raising reorder point, order quantity, and safety stock.  \n\nBecause the plan improves the objective but worsens several other KPIs, the manager should weigh the higher units produced against the lower OEE, profit, downtime, and unplanned failures."
+  },
+  "G01__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n**Key KPI changes**  \n- **units_produced** falls from 23210.0 to 23080.0, a decrease of \u2013134.0.  \n- **oee** rises from 0.6977 to 0.7146, an increase of 0.01696.  \n- **unit_cost** falls from 28.18 to 24.79, a decrease of \u20133.391.  \n- **profit** rises from 297800.0 to 381900.0, an increase of 84110.0.  \n- **stockout_probability** falls from 0.2309 to 0.2259, a decrease of \u20130.004938.  \n- **downtime_hours** falls from 15.12 to 8.788, a decrease of \u20136.329.  \n- **unplanned_failures** falls from 1.6 to 0.8667, a decrease of \u20130.7333.  \n- **on_time_delivery_rate** rises from 0.8128 to 0.815, an increase of 0.002173.  \n\n**Flags**  \n- The constraint \u201cunplanned_failures <= 1.0\u201d is weakly predicted.  \n- The plan\u2019s 95\u202f% interval is not wholly inside the feasible region, so it is not robustly feasible.  \n\n**Plan changes**  \n- Throughput multiplier increases from 1.0 to 1.277.  \n- Shift count decreases from 2.0 to 1.0.  \n- Overtime hours increase from 0.0 to 3.852.  \n- PM intervals for M1\u2013M5 change to 405.5, 548.9, 236.6, 415.0, 539.2.  \n- Speed setpoints for M1\u2013M5 adjust to 1.06, 0.9651, 1.035, 1.04, 0.9138.  \n- Reorder point drops from 7000.0 to 5403.0.  \n- Order quantity drops from 6000.0 to 3972.0.  \n- Safety stock rises from 1500.0 to 3261.0.  \n\nThe plan meets the profit objective but carries the noted feasibility and robustness concerns."
+  },
+  "G01__agent__seed2": {
+   "mode": "template",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'higher' for oee, whose delta is -0.009269 (oee falls from 0.6982 to 0.689, a decrease of \u20130.009269, which is worse when hig)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": false,
+   "calls": 2,
+   "text": "Goal bench_profit_failures_cap: This plan is recommended.\nReason: improves the objective over the current policy.\nChanges from the current policy: throughput_multiplier 1 -> 1.279; overtime_hours 0 -> 0.005148; pm_interval_M1 168 -> 546.3; pm_interval_M2 168 -> 500.4; pm_interval_M3 120 -> 185.1; pm_interval_M4 168 -> 71.24; pm_interval_M5 240 -> 467.3; speed_setpoint_M1 1 -> 0.8006; speed_setpoint_M2 1 -> 0.9585; speed_setpoint_M3 1 -> 0.8248; speed_setpoint_M4 1 -> 0.8873; speed_setpoint_M5 1 -> 0.9784; reorder_point 7000 -> 6412; order_quantity 6000 -> 2604; safety_stock 1500 -> 2111.\nObjective change vs current policy: 55100 (95% CI 25190 to 85010), over 30 paired replications.\n- units_produced: 23870 (CI 23390 to 24350) vs current 23300.\n- oee: 0.689 (CI 0.6751 to 0.7028) vs current 0.6982.\n- unit_cost: 25.3 (CI 24.7 to 25.91) vs current 27.8.\n- profit: 373800 (CI 350400 to 397100) vs current 318700.\n- stockout_probability: 0.216 (CI 0.1961 to 0.236) vs current 0.2309.\n- downtime_hours: 10.12 (CI 9.15 to 11.09) vs current 16.29.\n- unplanned_failures: 0.6667 (CI 0.3671 to 0.9662) vs current 1.8.\n- on_time_delivery_rate: 0.8162 (CI 0.8 to 0.8324) vs current 0.8059.\nFlag: constraint relies on a weakly predicted KPI (unplanned_failures <= 1)"
+  },
+  "G02__agent__seed1": {
+   "mode": "llm",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'fall' for downtime_hours, whose delta is 1.362 (downtime hours fall from 10.66 to 12.02?)",
+     "'lower' for downtime_hours, whose delta is 1.362 (actually the delta is 1.362, so downtime hours increase, which is lower?)",
+     "'lower' for downtime_hours, whose delta is 1.362 (the better_when is lower, but the delta is positive, so downtime hours increase,)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 2,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \nThe objective is to increase units produced. The plan raises units produced from 24620.0 to 34650.0, a delta of 10020.0, which is higher and therefore better.  \n\nThe plan also improves on\u2011time delivery rate, raising it from 0.8656 to 0.8947, a delta of 0.02914, which is higher and better.  \n\nStockout probability falls from 0.1741 to 0.1296, a delta of \u20130.04444, which is lower and better.  \n\nUnit cost falls from 25.33 to 22.26, a delta of \u20133.072, which is lower and better.  \n\nDowntime hours rise from 10.66 to 12.02, a delta of 1.362, which is higher and therefore worse.  \n\nUnplanned failures rise from 0.1333 to 1.667, a delta of 1.533, which is higher and therefore worse.  \n\nProfit falls from 389200.0 to 276100.0, a delta of \u2013113100.0, which is lower and therefore worse.  \n\nThe plan meets the hard constraint that downtime_hours \u2264 14.0, with a planned value of 12.02. However, a flag indicates the constraint relies on a weakly predicted KPI.  \n\nAll other plan changes are listed in the plan_changes section. The plan is feasible, robustly feasible, and the confidence level is 95%."
+  },
+  "G02__agent__seed2": {
+   "mode": "llm",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'higher' for profit, whose delta is -49380 (the manager should consider the trade-offs: higher production, oee, and on-time )"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 2,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \nThe objective is to increase units produced. The plan raises units produced from 24780.0 to 31090.0, a delta of 6310.0, which is higher and therefore better.  \n\nThe plan also improves OEE, raising it from 0.7535 to 0.7863, a delta of 0.03278, which is higher and better.  \nOn\u2011time delivery rate rises from 0.8585 to 0.8918, a delta of 0.03329, which is higher and better.  \n\nUnit cost falls from 24.94 to 22.74, a delta of \u20132.204, which is lower and better.  \nStockout probability falls from 0.1716 to 0.1272, a delta of \u20130.04444, which is lower and better.  \nDowntime hours fall from 10.56 to 5.519, a delta of \u20135.038, which is lower and better.  \n\nProfit falls from 410500.0 to 361100.0, a delta of \u201349380.0, which is lower and therefore worse.  \nUnplanned failures rise from 0.1333 to 0.1667, a delta of 0.03333, which is higher and therefore worse.  \n\nThe plan satisfies the hard constraint that downtime_hours \u2264 14.0, with a planned value of 5.519.  \nA flag warns that this constraint relies on a weakly predicted KPI: \u201cconstraint relies on a weakly predicted KPI (downtime_hours <= 14)\u201d.  \n\nThe plan is feasible, robustly feasible, and the confidence level is 95\u202f%.  \nThe plan changes include a throughput multiplier of 1.288, overtime hours of 0.9561, extended preventive maintenance intervals, adjusted speed setpoints, and revised inventory parameters (reorder point 8274.0, order quantity 5736.0, safety stock 3704.0)."
+  },
+  "G03__agent__seed1": {
+   "mode": "template",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'higher' for oee, whose delta is -0.08811 (oee falls from 0.7416 to 0.6535, a decrease of \u20130.08811, which is worse when hig)",
+     "'higher' for profit, whose delta is -34200 (profit falls from 377100.0 to 342900.0, a decrease of \u201334200.0, which is worse w)",
+     "'lower' for unplanned_failures, whose delta is 0.6667 (unplanned failures rise from 0.2667 to 0.9333, an increase of 0.6667, which is w)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": false,
+   "calls": 2,
+   "text": "Goal bench_min_cost_service: This plan is recommended.\nReason: improves the objective over the current policy.\nChanges from the current policy: throughput_multiplier 1 -> 1.289; overtime_hours 0 -> 2.684; pm_interval_M1 168 -> 631.2; pm_interval_M2 168 -> 495.3; pm_interval_M3 120 -> 359; pm_interval_M4 168 -> 603.1; pm_interval_M5 240 -> 316.4; speed_setpoint_M1 1 -> 0.8006; speed_setpoint_M2 1 -> 0.8893; speed_setpoint_M3 1 -> 0.983; speed_setpoint_M4 1 -> 0.8989; speed_setpoint_M5 1 -> 0.971; reorder_point 7000 -> 8242; order_quantity 6000 -> 3040; safety_stock 1500 -> 3332.\nObjective change vs current policy: 3.484 (95% CI 2.852 to 4.116), over 30 paired replications.\n- units_produced: 30920 (CI 30290 to 31550) vs current 24400.\n- oee: 0.6535 (CI 0.6405 to 0.6665) vs current 0.7416.\n- unit_cost: 22.21 (CI 21.87 to 22.54) vs current 25.69.\n- profit: 342900 (CI 322000 to 363800) vs current 377100.\n- stockout_probability: 0.1531 (CI 0.1437 to 0.1625) vs current 0.1852.\n- downtime_hours: 10.06 (CI 9.361 to 10.76) vs current 10.88.\n- unplanned_failures: 0.9333 (CI 0.6945 to 1.172) vs current 0.2667.\n- on_time_delivery_rate: 0.88 (CI 0.8701 to 0.89) vs current 0.8578."
+  },
+  "G03__agent__seed2": {
+   "mode": "llm",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'increasing' for stockout_probability, whose delta is -0.04321 (these adjustments collectively lower unit cost and stockout probability while in)",
+     "'increase' for profit, whose delta is -53090 (these adjustments collectively lower unit cost and stockout probability while in)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 2,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Units produced** rises from 24480.0 to 32020.0, a positive delta of 7544.0, so it is higher.  \n\n**OEE** falls from 0.7433 to 0.6989, a negative delta of \u20130.04449, so it is lower.  \n\n**Unit cost** falls from 25.65 to 22.27, a negative delta of \u20133.376, so it is lower.  \n\n**Profit** falls from 390700.0 to 337600.0, a negative delta of \u201353090.0, so it is lower.  \n\n**Stockout probability** falls from 0.1889 to 0.1457, a negative delta of \u20130.04321, so it is lower.  \n\n**Downtime hours** falls from 11.14 to 10.55, a negative delta of \u20130.5821, so it is lower.  \n\n**Unplanned failures** rises from 0.4333 to 0.7333, a positive delta of 0.3, so it is higher.  \n\n**On\u2011time delivery rate** rises from 0.8502 to 0.8778, a positive delta of 0.02753, so it is higher.  \n\nAll constraints are satisfied: the on\u2011time delivery rate is \u2265 0.8.  \n\nThe plan is feasible, robustly feasible, and the confidence level is 95\u202f%.  \n\nThe plan changes include a throughput multiplier of 1.289, overtime hours of 0.9639, extended preventive maintenance intervals (e.g., M1 from 168.0 to 420.8), adjusted speed setpoints (e.g., M3 from 1.0 to 1.094), and inventory adjustments (reorder point 8808.0, order quantity 3774.0, safety stock 2938.0).  \n\nThese adjustments collectively lower unit cost, stockout probability, OEE, profit, downtime hours, and unplanned failures, while increasing units produced, unplanned failures, and on\u2011time delivery rate. The manager should weigh these trade\u2011offs when deciding to adopt the plan."
+  },
+  "G04__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan proposes to increase the speed setpoints on machines M1, M2, and M3 to 1.083, 1.034, and 1.09 respectively, while reducing the setpoints on M4 and M5 to 0.9658 and 0.9522. This adjustment is intended to boost production, but the simulator shows no improvement over the current policy.\n\nKey performance indicators change as follows:\n\n- Units produced rise from 24640.0 to 25620.0, an increase of 980.8.  \n- OEE falls from 0.7441 to 0.7114, a decrease of \u20130.03278.  \n- Unit cost drops from 25.45 to 24.76, a decrease of \u20130.6845.  \n- Profit rises from 386900.0 to 387800.0, an increase of 867.5.  \n- Stockout probability falls from 0.1741 to 0.1642, a decrease of \u20130.009877.  \n- Downtime hours fall from 13.36 to 12.47, a decrease of \u20130.8959.  \n- Unplanned failures fall from 0.8333 to 0.5, a decrease of \u20130.3333.  \n- On\u2011time delivery rate rises from 0.8665 to 0.8721, an increase of 0.005667.\n\nThe plan meets the hard constraint that downtime_hours must be \u2264 18.0, but a flag indicates that this constraint relies on a weakly predicted KPI. Another flag states that there is no improvement over the current policy. Because the recommendation_reason is \u201cno improvement over current policy\u201d and the recommended flag is false, the plan is not recommended."
+  },
+  "G04__agent__seed2": {
+   "mode": "llm",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'lower' for on_time_delivery_rate, whose delta is 0.003175 (this adjustment would raise units produced from 24640.0 to 25560.0, a delta of 9)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 2,
+   "text": "The plan proposes to increase the speed setpoints on machines M1, M2, and M3 to 1.075, 1.023, and 1.088 respectively, while reducing the setpoints on M4 and M5 to 0.9608 and 0.9533. This adjustment would raise units produced from 24640.0 to 25560.0, a delta of 928.1, and raise the on\u2011time delivery rate from 0.8592 to 0.8624, a delta of 0.003175. However, the plan would also lower the overall OEE from 0.7424 to 0.712, lower the unit cost from 25.16 to 24.7, and decrease profit from 409600.0 to 402600.0, a drop of 7012.0. Stockout probability would fall from 0.1753 to 0.163, and downtime hours would fall from 14.17 to 11.91, meeting the hard constraint of downtime_hours \u2264 18.0. Unplanned failures would also fall from 0.9333 to 0.3667.\n\nThe recommendation reason is \u201cno improvement over current policy.\u201d The flags indicate a weak KPI constraint because the downtime constraint relies on a weakly predicted KPI, and that there is no improvement over the current policy. Because the plan does not improve the objective and actually reduces profit, the plan is not recommended."
+  },
+  "G05__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Units produced** fall from 27250.0 to 26140.0, a decrease of \u20131113.0.  \n**OEE** falls from 0.828 to 0.6878, a decrease of \u20130.1402.  \n**Unit cost** falls from 29.67 to 26.95, a decrease of \u20132.718.  \n**Profit** rises from 256700.0 to 349800.0, an increase of 93100.0.  \n**Stockout probability** rises from 0.1346 to 0.1568, an increase of 0.02222.  \n**Downtime hours** fall from 11.0 to 9.819, a decrease of \u20131.181.  \n**Unplanned failures** rise from 0.0 to 0.1, an increase of 0.1.  \n**On\u2011time delivery rate** falls from 0.911 to 0.9011, a decrease of \u20130.009812.  \n\nAll constraints are satisfied: the stockout probability is \u22640.3, and the plan is feasible, robustly feasible, and maximises profit.  \n\n**Flags**: none.  \n\n**Plan changes**:  \n- Throughput multiplier increases to 1.261.  \n- Overtime hours set to 0.7386.  \n- PM intervals are adjusted to 50.09, 432.6, 128.2, 368.0, 507.5.  \n- Speed setpoints become 0.9172, 0.9348, 0.8785, 1.051, 0.8781.  \n- Reorder point drops to 647.6, order quantity to 2055.0, safety stock to 3955.0.  \n\nThese adjustments collectively raise profit while keeping stockout probability within the allowed limit."
+  },
+  "G05__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Profit** rises, higher is better. The plan increases profit from 280800.0 to 392200.0, a delta of 111300.0.  \n\n**Units produced** falls, lower is better. Units produced drop from 27310.0 to 26980.0, a delta of \u2013332.9.  \n\n**OEE** falls, lower is better. OEE decreases from 0.8299 to 0.7009, a delta of \u20130.129.  \n\n**Unit cost** falls, lower is better. Unit cost reduces from 29.43 to 26.35, a delta of \u20133.085.  \n\n**Stockout probability** falls, lower is better. Stockout probability drops from 0.1432 to 0.1358, a delta of \u20130.007407.  \n\n**Downtime hours** falls, lower is better. Downtime hours reduce from 11.0 to 4.12, a delta of \u20136.88.  \n\n**Unplanned failures** rises, higher is worse. Unplanned failures increase from 0.0 to 0.03333, a delta of 0.03333.  \n\n**On\u2011time delivery rate** rises, higher is better. On\u2011time delivery rate improves from 0.9063 to 0.9204, a delta of 0.01407.  \n\nAll constraints are satisfied: the stockout probability constraint (\u2264\u202f0.3) is met, and the plan is feasible, robustly feasible, and maximises the objective.  \n\nThe plan changes include a throughput multiplier of 1.246, overtime hours of 1.655, extended preventive maintenance intervals (e.g., M1 from 168.0 to 236.2), reduced speed setpoints (e.g., M1 from 1.0 to 0.8668), and adjusted inventory parameters (reorder point 2416.0, order quantity 2863.0, safety stock 2042.0).  \n\nAll KPI changes and constraints are reported, and the recommendation is clear: adopt the plan."
+  },
+  "G06__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Units produced** fall from 23070.0 to 21780.0, a decrease of \u20131286.0.  \n**OEE** falls from 0.7022 to 0.6266, a decrease of \u20130.07558.  \n**Unit cost** falls from 27.45 to 26.08, a decrease of \u20131.373.  \n**Profit** rises from 315500.0 to 371500.0, an increase of 56040.0.  \n**Stockout probability** rises from 0.2049 to 0.2222, an increase of 0.01728.  \n**Downtime hours** fall from 10.26 to 4.528, a decrease of \u20135.737.  \n**Unplanned failures** fall from 0.1667 to 0.03333, a decrease of \u20130.1333.  \n**On\u2011time delivery rate** falls from 0.826 to 0.8182, a decrease of \u20130.007818.  \n\nAll KPI changes are reported exactly as in the data.  \n\nThe plan is feasible, robustly feasible, and the confidence level is 95\u202f%. No flags or constraints are present. The objective change is 56040.0, matching the profit increase. The plan changes include a throughput multiplier of 1.223, overtime of 0.4535 hours, adjusted preventive maintenance intervals, speed setpoints, reorder point 6238.0, order quantity 1788.0, and safety stock 1971.0.  \n\nBecause the plan is recommended, the manager should consider implementing these adjustments to achieve the higher profit while accepting the modest increases in stockout probability and on\u2011time delivery rate."
+  },
+  "G06__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Units produced** fall from 23080.0 to 21230.0, a decrease of 1844.0.  \n**OEE** falls from 0.7021 to 0.5959, a decrease of 0.1062.  \n**Unit cost** falls from 27.57 to 26.18, a decrease of 1.392.  \n**Profit** rises from 328500.0 to 397100.0, an increase of 68660.0.  \n**Stockout probability** rises from 0.2012 to 0.2222, an increase of 0.02099.  \n**Downtime hours** fall from 10.41 to 5.78, a decrease of 4.625.  \n**Unplanned failures** rise from 0.1667 to 0.6, an increase of 0.4333.  \n**On\u2011time delivery rate** falls from 0.8208 to 0.8112, a decrease of 0.009631.  \n\nAll KPI changes are within their 95\u202f% confidence intervals.  \n\n**Flags**: none.  \n\n**Constraints**: none.  \n\n**Closest achievable**: none.  \n\n**Plan changes**:  \n- Throughput multiplier increases from 1.0 to 1.173.  \n- Overtime hours increase from 0.0 to 0.1951.  \n- PM intervals shift: M1 from 168.0 to 550.7, M2 from 168.0 to 543.4, M3 from 120.0 to 531.5, M4 from 168.0 to 142.3, M5 from 240.0 to 502.2.  \n- Speed setpoints adjust: M1 from 1.0 to 0.8381, M2 from 1.0 to 0.8401, M3 from 1.0 to 0.9498, M4 from 1.0 to 1.017, M5 from 1.0 to 1.038.  \n- Inventory parameters change: reorder point from 7000.0 to 5121.0, order quantity from 6000.0 to 2321.0, safety stock from 1500.0 to 2118.0.  \n\nThe plan is feasible, robustly feasible, and maximises profit."
+  },
+  "G07__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Units produced** rises from 24210.0 to 25560.0, a delta of 1352.0, which is higher and therefore better.  \n\n**OEE** falls from 0.7332 to 0.706, a delta of \u20130.02726, which is lower and therefore worse.  \n\n**Unit cost** falls from 26.12 to 23.16, a delta of \u20132.966, which is lower and therefore better.  \n\n**Profit** rises from 363300.0 to 417100.0, a delta of 53850.0, which is higher and therefore better.  \n\n**Stockout probability** falls from 0.1877 to 0.1778, a delta of \u20130.009877, which is lower and therefore better.  \n\n**Downtime hours** falls from 12.21 to 7.79, a delta of \u20134.42, which is lower and therefore better.  \n\n**Unplanned failures** falls from 0.8667 to 0.7, a delta of \u20130.1667, which is lower and therefore better.  \n\n**On\u2011time delivery rate** rises from 0.8507 to 0.8622, a delta of 0.01149, which is higher and therefore better.  \n\nAll KPI changes are reported with their confidence intervals. The plan is feasible, robustly feasible, and the objective change is +59600.0. No flags are present."
+  },
+  "G07__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Units produced** rises from 24310.0 to 24990.0, a delta of 671.1, which is higher and therefore better.  \n\n**OEE** falls from 0.7362 to 0.656, a delta of \u20130.08012, which is lower and therefore worse.  \n\n**Unit cost** falls from 25.91 to 24.06, a delta of \u20131.858, which is lower and therefore better.  \n\n**Profit** rises from 380200.0 to 419200.0, a delta of 39010.0, which is higher and therefore better.  \n\n**Stockout probability** stays unchanged at 0.1901, a delta of 0.0, so it is neither better nor worse.  \n\n**Downtime hours** falls from 12.31 to 10.64, a delta of \u20131.669, which is lower and therefore better.  \n\n**Unplanned failures** falls from 0.8333 to 0.6333, a delta of \u20130.2, which is lower and therefore better.  \n\n**On\u2011time delivery rate** rises from 0.8436 to 0.8512, a delta of 0.007628, which is higher and therefore better.  \n\nAll constraints are satisfied, the plan is feasible, robustly feasible, and the confidence level is 95\u202f%. The plan changes include a throughput multiplier of 1.28, overtime of 0.3728 hours, adjusted preventive maintenance intervals, speed setpoints between 0.8627 and 0.9672, a reorder point of 6652.0, an order quantity of 2385.0, and safety stock of 2264.0.  \n\nThese adjustments collectively improve profit and key service metrics while reducing costs, downtime, and failures."
+  },
+  "G08__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \nThe objective is profit, which rises from 318100.0 to 349100.0, a delta of 31090.0.  \nUnits produced fall from 23580.0 to 23460.0, a delta of \u2013118.4.  \nOEE falls from 0.7148 to 0.7111, a delta of \u20130.003674.  \nUnit cost falls from 27.37 to 26.05, a delta of \u20131.32.  \nStockout probability rises from 0.2185 to 0.221, a delta of 0.002469.  \nDowntime hours rise from 11.82 to 11.9, a delta of 0.07285.  \nUnplanned failures rise from 1.233 to 1.267, a delta of 0.03333.  \nOn\u2011time delivery rate falls from 0.8229 to 0.8207, a delta of \u20130.002182.  \n\nThe plan meets the hard constraint that stockout probability must be \u22640.3.  \nAll KPIs are within their 95\u202f% confidence intervals, and the plan is robustly feasible with 30 replications.  \n\nBecause the plan increases profit while keeping stockout probability below the threshold, it is a viable option for the manager to consider."
+  },
+  "G08__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended. It improves the objective over the current policy.\n\nUnits produced fall from 23600.0 to 23510.0.  \nOEE falls from 0.7139 to 0.7125.  \nUnit cost falls from 27.53 to 26.14.  \nProfit rises from 327100.0 to 365700.0.  \nStockout probability falls from 0.2148 to 0.2123.  \nDowntime hours fall from 12.63 to 12.0.  \nUnplanned failures fall from 1.367 to 1.167.  \nOn\u2011time delivery rate rises from 0.8152 to 0.819.\n\nAll changes are within the 95\u202f% confidence intervals shown. The plan meets the hard constraint that stockout probability must be \u2264\u202f0.3. The plan is feasible, robustly feasible, and the objective change is +38580.0 with a 95\u202f% CI of [10110.0, 67050.0]. The recommendation reason is \u201cimproves the objective over the current policy\u201d."
+  },
+  "G09__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended. It improves the objective over the current policy, as stated in the recommendation_reason.  \n\n**KPI changes**  \n- Units produced falls from 24000.0 to 9608.0, a decrease.  \n- OEE rises from 0.7249 to 0.95, an increase.  \n- Unit cost rises from 26.62 to 70.32, an increase.  \n- Profit falls from 344600.0 to \u2013243200.0, a decrease.  \n- Stockout probability rises from 0.1938 to 0.9506, an increase.  \n- Downtime hours falls from 13.32 to 5.0, a decrease.  \n- Unplanned failures fall from 1.033 to 0.0, a decrease.  \n- On\u2011time delivery rate falls from 0.84 to 0.3707, a decrease.  \n\n**Flags**  \nThe plan has a weak_kpi_constraint flag because the constraint relies on a weakly predicted KPI (unplanned_failures\u202f\u2264\u202f1.5). It also has a novel_plan flag, indicating the plan novelty 1.053 is above the T1 95th percentile 0.987 and the surrogate is extrapolating.  \n\n**Constraints**  \nThe hard constraint unplanned_failures\u202f\u2264\u202f1.5 is satisfied, as the plan achieves 0.0.  \n\n**Plan changes**  \n- Throughput multiplier changes from 1.0 to 0.7.  \n- Shift count changes from 2.0 to 1.0.  \n- Overtime hours changes from 0.0 to 0.82.  \n- PM intervals and speed setpoints are adjusted across all five machines.  \n- Reorder point increases from 7000.0 to 8590.0.  \n- Order quantity decreases from 6000.0 to 4228.0.  \n- Safety stock increases from 1500.0 to 2549.0.  \n\nAll changes are feasible, robustly feasible, and the plan meets the confidence level of 95\u202f%."
+  },
+  "G09__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n**KPI changes**  \n- **units_produced** falls from 23880.0 to 10240.0, a decrease of 13640.0.  \n- **oee** rises from 0.7185 to 0.9522, an increase of 0.2337.  \n- **unit_cost** rises from 26.72 to 60.46, an increase of 33.74.  \n- **profit** falls from 357800.0 to \u2013158300.0, a decrease of 516100.0.  \n- **stockout_probability** rises from 0.2074 to 0.9704, an increase of 0.763.  \n- **downtime_hours** falls from 14.69 to 5.0, a decrease of 9.685.  \n- **unplanned_failures** falls from 1.233 to 0.0, a decrease of 1.233.  \n- **on_time_delivery_rate** falls from 0.8308 to 0.386, a decrease of 0.4448.  \n\n**Flags**  \nThe plan triggers a flag: \u201cconstraint relies on a weakly predicted KPI (unplanned_failures <= 1.5)\u201d.  \n\n**Constraints**  \nThe hard constraint \u201cunplanned_failures <= 1.5\u201d is satisfied, as the plan achieves 0.0 failures.  \n\n**Plan changes**  \n- Throughput multiplier reduced from 1.0 to 0.7266.  \n- Shift count reduced from 2.0 to 1.0.  \n- Overtime hours increased from 0.0 to 0.6592.  \n- Preventive maintenance intervals increased across all machines (M1: 168.0 \u2192 466.5, M2: 168.0 \u2192 568.5, M3: 120.0 \u2192 656.5, M4: 168.0 \u2192 426.6, M5: 240.0 \u2192 391.3).  \n- Speed setpoints lowered (M1: 1.0 \u2192 0.832, M2: 1.0 \u2192 1.025, M3: 1.0 \u2192 0.8347, M4: 1.0 \u2192 0.822, M5: 1.0 \u2192 0.8072).  \n- Reorder point increased from 7000.0 to 7119.0.  \n- Order quantity reduced from 6000.0 to 1717.0.  \n- Safety stock reduced from 1500.0 to 351.6.  \n\nAll changes are feasible, robustly feasible, and the confidence level is 95\u202f%. The objective of maximizing OEE is met with a 0.2337 improvement."
+  },
+  "G10__agent__seed1": {
+   "mode": "template",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'higher' for units_produced, whose delta is -862 (**units produced** fall to 21730.0 from 22590.0, a negative delta of \u2013862.0, whi)",
+     "'higher' for oee, whose delta is -0.125 (**oee** falls to 0.5655 from 0.6905, a negative delta of \u20130.125, which is worse )",
+     "'lower' for stockout_probability, whose delta is 0.02593 (**stockout probability** rises to 0.2753 from 0.2494, a positive delta of 0.0259)",
+     "'higher' for on_time_delivery_rate, whose delta is -0.01426 (**on-time delivery rate** falls to 0.7696 from 0.7839, a negative delta of \u20130.01)"
+    ],
+    "reason_errors": []
+   },
+   "llm_passed": false,
+   "calls": 2,
+   "text": "Goal bench_min_downtime_profit_floor: This plan is recommended.\nReason: improves the objective over the current policy.\nChanges from the current policy: throughput_multiplier 1 -> 1.287; overtime_hours 0 -> 2.31; pm_interval_M1 168 -> 461.7; pm_interval_M2 168 -> 513.7; pm_interval_M3 120 -> 719.3; pm_interval_M4 168 -> 392.6; pm_interval_M5 240 -> 624.1; speed_setpoint_M1 1 -> 0.8695; speed_setpoint_M2 1 -> 0.95; speed_setpoint_M3 1 -> 0.8155; speed_setpoint_M4 1 -> 0.8729; speed_setpoint_M5 1 -> 1.027; reorder_point 7000 -> 3766; order_quantity 6000 -> 4212; safety_stock 1500 -> 2527.\nObjective change vs current policy: 8.649 (95% CI 8.191 to 9.107), over 30 paired replications.\n- units_produced: 21730 (CI 21260 to 22210) vs current 22590.\n- oee: 0.5655 (CI 0.5532 to 0.5777) vs current 0.6905.\n- unit_cost: 27.58 (CI 26.96 to 28.21) vs current 29.12.\n- profit: 301000 (CI 282500 to 319600) vs current 260600.\n- stockout_probability: 0.2753 (CI 0.2477 to 0.3029) vs current 0.2494.\n- downtime_hours: 0.05 (CI -0.05226 to 0.1523) vs current 8.699.\n- unplanned_failures: 0 (CI 0 to 0) vs current 0.03333.\n- on_time_delivery_rate: 0.7696 (CI 0.7539 to 0.7854) vs current 0.7839."
+  },
+  "G10__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended because it \u201cimproves the objective over the current policy\u201d.  \n\n**Profit** rises to 317100.0 from 271900.0, a positive delta of 45150.0, which is better when higher.  \n**Units produced** falls to 21860.0 from 22660.0, a negative delta of \u2013801.9, which is lower when better.  \n**OEE** falls to 0.566 from 0.6925, a negative delta of \u20130.1265, lower when better.  \n**Unit cost** falls to 27.63 from 29.16, a negative delta of \u20131.527, lower when better.  \n**Stockout probability** rises to 0.2679 from 0.2531, a positive delta of 0.01481, higher when better.  \n**Downtime hours** fall to 0.0 from 8.699, a negative delta of \u20138.699, lower when better.  \n**Unplanned failures** fall to 0.0 from 0.06667, a negative delta of \u20130.06667, lower when better.  \n**On\u2011time delivery rate** falls to 0.7677 from 0.7778, a negative delta of \u20130.01014, lower when better.  \n\nAll constraints are satisfied: profit is \u2265 200000.0, the plan is feasible, robustly feasible, and the objective change is 8.699 hours of downtime reduction.  \n\n**Flags**: none.  \n\n**Plan changes**:  \n- Throughput multiplier increases to 1.289.  \n- Overtime hours increase to 1.677.  \n- PM intervals are extended: M1 to 564.0, M2 to 467.2, M3 to 450.8, M4 to 235.5, M5 to 522.3.  \n- Speed setpoints are adjusted: M1 to 0.8133, M2 to 0.873, M3 to 0.8475, M4 to 1.026, M5 to 0.8175.  \n- Inventory parameters change: reorder point to 2946.0, order quantity to 2957.0, safety stock to 3815.0.  \n\nThese options give the manager a clear view of how each adjustment impacts the KPIs and the overall objective."
+  },
+  "G11__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**. The recommendation reason is: \u201cno feasible plan was found\u201d.\n\n**Flags**  \n- *not_robustly_feasible*: the plan\u2019s 95\u202f% interval is not wholly inside the feasible region.  \n- *novel_plan*: plan novelty 1.087 is above the T1 95th percentile 0.987; the surrogate is extrapolating.  \n- *infeasible_unverified*: no shortlisted plan verified feasible on the twin.\n\n**KPI changes**  \n- *units_produced* rises to 14270.0 from 8795.0; the delta is 5480.0, which is higher and therefore better.  \n- *oee* falls to 0.2338 from 0.2727; the delta is \u20130.03895, which is lower and therefore worse.  \n- *unit_cost* falls to 78.26 from 94.18; the delta is \u201315.92, which is lower and therefore better.  \n- *profit* falls to \u2013314600.0 from \u2013260000.0; the delta is \u201354610.0, which is higher (less negative) and therefore better.  \n- *stockout_probability* falls to 0.6543 from 0.7333; the delta is \u20130.07901, which is lower and therefore better.  \n- *downtime_hours* rises to 7.225 from 2.234; the delta is 4.99, which is higher and therefore worse.  \n- *unplanned_failures* rises to 0.5333 from 0.2667; the delta is 0.2667, which is higher and therefore worse.  \n- *on_time_delivery_rate* rises to 0.3793 from 0.3095; the delta is 0.06979, which is higher and therefore better.\n\n**Closest achievable option**  \nThe simulator suggests relaxing the constraint to \u201con_time_delivery_rate\u202f\u2265\u202f0.388\u201d as an option for the manager to consider.\n\nBecause the plan is infeasible and not robustly feasible, it should not be adopted."
+  },
+  "G11__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**. The recommendation reason is \u201cno feasible plan was found\u201d.\n\n**Flags**  \n- The plan\u2019s 95\u202f% interval is not wholly inside the feasible region.  \n- Plan novelty 0.990 is above the T1 95th percentile 0.987; the surrogate is extrapolating.  \n- No shortlisted plan verified feasible on the twin.\n\n**KPI changes**  \n- Units produced rises to 14530.0 from 8572.0.  \n- OEE falls to 0.2068 from 0.2658.  \n- Unit cost falls to 72.25 from 90.03.  \n- Profit falls to \u2013352100.0 from \u2013266600.0.  \n- Stockout probability falls to 0.6704 from 0.7383.  \n- Downtime hours rises to 4.503 from 2.544.  \n- Unplanned failures rises to 0.6 from 0.2667.  \n- On\u2011time delivery rate rises to 0.3549 from 0.3031.\n\n**Constraints**  \nThe hard constraint \u201con_time_delivery_rate >= 0.7\u201d is not satisfied. The closest achievable option is to relax the constraint to \u201con_time_delivery_rate >= 0.387\u201d.\n\n**Plan changes**  \n- Throughput multiplier 1.289, shift count 3.0, overtime 1.492\u202fh.  \n- PM intervals increased (M1 484.6, M2 505.2, M3 450.7, M4 680.8, M5 247.5).  \n- Speed setpoints adjusted (M1 1.119, M2 1.059, M3 1.1, M4 1.02, M5 0.8156).  \n- Reorder point 8452.0, order quantity 9992.0, safety stock 3266.0.\n\n**Confidence**  \n95\u202f% confidence level, 30 replications, but the plan is not robustly feasible.\n\nGiven the infeasibility and the negative impact on profit, the plan should not be adopted."
+  },
+  "G12__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is recommended. It improves the objective over the current policy, as stated in the recommendation_reason.\n\n**KPI changes**\n\n- **units_produced** falls from 22610.0 to 22090.0.  \n- **oee** rises from 0.6884 to 0.6961.  \n- **unit_cost** falls from 29.19 to 27.6.  \n- **profit** rises from 259300.0 to 302500.0.  \n- **stockout_probability** rises from 0.2469 to 0.2543.  \n- **downtime_hours** falls from 10.08 to 5.042.  \n- **unplanned_failures** falls from 0.6667 to 0.1333.  \n- **on_time_delivery_rate** falls from 0.7846 to 0.7791.\n\n**Constraints**\n\nThe plan satisfies the hard constraint that stockout_probability must be \u2264 0.35.\n\n**Plan changes**\n\n- throughput_multiplier increases from 1.0 to 1.3.  \n- shift_count decreases from 2.0 to 1.0.  \n- overtime_hours increases from 0.0 to 4.0.\n\n**Flags**\n\nNo flags are present.\n\n**Confidence**\n\nThe confidence level is 95\u202f%. The plan is robustly feasible and feasible, with 30 replications.\n\n**Closest achievable**\n\nNo closest achievable options are provided."
+  },
+  "G12__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The simulator shows that the proposed plan does not improve the current policy. The recommendation reason is exactly \u201cno improvement over current policy\u201d.\n\nKey performance indicators:\n\n- Units produced rise from 22670.0 to 24630.0, an increase of 1963.0.  \n- OEE falls from 0.6905 to 0.653, a decrease of \u20130.03752.  \n- Unit cost falls from 29.22 to 27.22, a decrease of \u20132.004.  \n- Profit rises from 271000.0 to 277300.0, an increase of 6220.0.  \n- Stockout probability falls from 0.2531 to 0.2309, a decrease of \u20130.02222.  \n- Downtime hours fall from 9.979 to 7.996, a decrease of \u20131.983.  \n- Unplanned failures fall from 0.5667 to 0.1, a decrease of \u20130.4667.  \n- On\u2011time delivery rate rises from 0.7785 to 0.79, an increase of 0.01147.\n\nAll changes are within the 95\u202f% confidence intervals shown. The plan meets the hard constraint that stockout probability must be \u2264\u202f0.35. The plan is feasible and robustly feasible, with a confidence level of 95\u202f%. However, the flag \u201cno_improvement\u201d indicates that the plan does not provide any improvement over the current policy. Therefore, the plan is **not recommended**."
+  },
+  "I01__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**.  \nThe recommendation reason is: \u201cno feasible plan was found\u201d.\n\n**Flags**  \n- not_robustly_feasible: the plan\u2019s 95\u202f% interval is not wholly inside the feasible region.  \n- no_improvement: no improvement over current policy.  \n- infeasible_unverified: no shortlisted plan verified feasible on the twin.\n\n**KPI changes**  \n- units_produced rises to 29880.0 from 23210.0.  \n- oee falls to 0.6669 from 0.6977.  \n- unit_cost rises to 28.75 from 28.18.  \n- profit falls to 121400.0 from 297800.0.  \n- stockout_probability rises to 0.1901 from 0.2309.  \n- downtime_hours rises to 25.72 from 15.12.  \n- unplanned_failures rises to 3.6 from 1.6.  \n- on_time_delivery_rate rises to 0.8382 from 0.8128.\n\n**Closest achievable options**  \n- Relax on_time_delivery_rate to \u2265\u202f0.846 (instead of \u2265\u202f0.99).  \n- Relax stockout_probability to \u2264\u202f0.181 (instead of \u2264\u202f0.01).\n\nThese options are presented as alternatives for you to decide on, not as a decision."
+  },
+  "I01__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**.  \nThe recommendation reason is: \u201cno feasible plan was found\u201d.\n\n**Flags**  \n- not_robustly_feasible: the plan\u2019s 95\u202f% interval is not wholly inside the feasible region.  \n- no_improvement: no improvement over current policy.  \n- infeasible_unverified: no shortlisted plan verified feasible on the twin.\n\n**KPI changes**  \n- units_produced rises to 33020.0 from 23300.0.  \n- oee falls to 0.4859 from 0.6982.  \n- unit_cost falls to 26.53 from 27.8.  \n- profit falls to 133300.0 from 318700.0.  \n- stockout_probability falls to 0.1802 from 0.2309.  \n- downtime_hours rises to 23.77 from 16.29.  \n- unplanned_failures rises to 3.067 from 1.8.  \n- on_time_delivery_rate rises to 0.8404 from 0.8059.\n\n**Constraints**  \nThe hard constraints are on_time_delivery_rate\u202f\u2265\u202f0.99 and stockout_probability\u202f\u2264\u202f0.01.  \nThe plan does not satisfy them: on_time_delivery_rate is 0.8404 and stockout_probability is 0.1802.\n\n**Closest achievable options**  \n- Relax on_time_delivery_rate to \u2265\u202f0.8481.  \n- Relax stockout_probability to \u2264\u202f0.1802.\n\nThese options are presented as alternatives for you to decide on, not as a decision."
+  },
+  "I02__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**.  \nThe simulator found no feasible plan that satisfies the profit constraint of \u2265\u202f3000000.0, as stated in the recommendation reason: \u201cno feasible plan was found\u201d.  \n\n**KPI changes**  \n- **units_produced** rises from 24400.0 to 25450.0.  \n- **oee** falls from 0.7416 to 0.7091.  \n- **unit_cost** falls from 25.69 to 22.97.  \n- **profit** rises from 377100.0 to 432000.0.  \n- **stockout_probability** falls from 0.1852 to 0.1704.  \n- **downtime_hours** falls from 10.88 to 7.12.  \n- **unplanned_failures** stays at 0.2667.  \n- **on_time_delivery_rate** rises from 0.8578 to 0.8692.  \n\n**Flags**  \n- The plan\u2019s 95\u202f% interval is not wholly inside the feasible region.  \n- No shortlisted plan was verified feasible on the twin.  \n\n**Closest achievable option**  \nYou may relax the profit constraint to \u201cprofit\u202f\u2265\u202f465000\u201d to obtain a feasible plan with a profit of 465100.0.  \n\n**Plan changes**  \n- Throughput multiplier increased to 1.269.  \n- Overtime hours added 0.2162.  \n- PM intervals and speed setpoints adjusted across all machines.  \n- Reorder point lowered to 5684.0, order quantity to 2687.0, safety stock to 2992.0.  \n\nGiven the infeasibility and the flags, the current plan should not be adopted. Consider the relaxed profit constraint as an alternative for the manager to evaluate."
+  },
+  "I02__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**.  \nThe simulator found no feasible plan that satisfies the profit constraint of \u2265\u202f3000000.0, as indicated by the flag \u201cinfeasible_unverified\u201d and the message \u201cno feasible plan was found\u201d. The confidence interval for profit (412400.0\u202f\u2013\u202f468200.0) does not lie entirely within the feasible region, which is why the flag \u201cnot_robustly_feasible\u201d is present.\n\n**KPI changes**\n\n- **units_produced** rises to 25170.0 (delta\u202f687.3).  \n  *Better_when* is higher, so this is a positive change.  \n  \u201cno feasible plan was found\u201d\n\n- **oee** falls to 0.7224 (delta\u202f-0.02098).  \n  *Better_when* is higher, so this is a negative change.  \n  \u201cno feasible plan was found\u201d\n\n- **unit_cost** falls to 23.34 (delta\u202f-2.305).  \n  *Better_when* is lower, so this is a positive change.  \n  \u201cno feasible plan was found\u201d\n\n- **profit** rises to 440300.0 (delta\u202f49610.0).  \n  *Better_when* is higher, so this is a positive change.  \n  \u201cno feasible plan was found\u201d\n\n- **stockout_probability** falls to 0.1802 (delta\u202f-0.008642).  \n  *Better_when* is lower, so this is a positive change.  \n  \u201cno feasible plan was found\u201d\n\n- **downtime_hours** falls to 7.085 (delta\u202f-4.051).  \n  *Better_when* is lower, so this is a positive change.  \n  \u201cno feasible plan was found\u201d\n\n- **unplanned_failures** falls to 0.3333 (delta\u202f-0.1).  \n  *Better_when* is lower, so this is a positive change.  \n  \u201cno feasible plan was found\u201d\n\n- **on_time_delivery_rate** rises to 0.8578 (delta\u202f0.007577).  \n  *Better_when* is higher, so this is a positive change.  \n  \u201cno feasible plan was found\u201d\n\n**Flags**\n\n- \u201cnot_robustly_feasible\u201d: the 95\u202f% interval is not wholly inside the feasible region.  \n- \u201cinfeasible_unverified\u201d: no shortlisted plan was verified feasible on the twin.\n\n**Closest achievable option**\n\nThe simulator suggests an alternative: relax the profit constraint to \u201cprofit\u202f\u2265\u202f465000\u201d (closest_achievable\u202f465100.0). This is presented as an option for you to decide, not as a decision.\n\nGiven the lack of a feasible plan and the presence of these flags, the plan should not be adopted."
+  },
+  "I03__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**.  \nThe simulator found no feasible plan that satisfies the hard constraint \u201cunit_cost <= 12.0\u201d. The confidence interval for the plan\u2019s unit cost, [21.91, 22.93], exceeds the threshold, and the 95\u202f% interval is not wholly inside the feasible region. This is flagged as \u201cnot_robustly_feasible\u201d and \u201cinfeasible_unverified\u201d.  \nBecause the plan is infeasible, the recommendation reason is \u201cno feasible plan was found\u201d.  \n\n**KPI changes**  \n- **units_produced** rises to 34150.0 from 24210.0.  \n- **oee** falls to 0.6595 from 0.7332.  \n- **unit_cost** falls to 22.42 from 26.12.  \n- **profit** falls to 257900.0 from 363300.0.  \n- **stockout_probability** falls to 0.1506 from 0.1877.  \n- **downtime_hours** falls to 10.83 from 12.21.  \n- **unplanned_failures** rises to 1.1 from 0.8667.  \n- **on_time_delivery_rate** rises to 0.8747 from 0.8507.  \n\n**Flags**  \n- \u201cnot_robustly_feasible\u201d: the plan\u2019s 95\u202f% interval is not wholly inside the feasible region.  \n- \u201cno_improvement\u201d: no improvement over current policy.  \n- \u201cinfeasible_unverified\u201d: no shortlisted plan verified feasible on the twin.  \n\n**Closest achievable option**  \nThe simulator suggests an alternative: relax the unit cost constraint to \u201cunit_cost <= 22.2\u201d, which would make the plan feasible. This is presented as an option for you to decide."
+  },
+  "I03__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**.  \nThe simulator found no feasible plan that satisfies the hard constraint \u201cunit_cost <= 12.0\u201d. The plan\u2019s 95\u202f% interval is not wholly inside the feasible region, and no shortlisted plan was verified feasible on the twin. The recommendation reason is \u201cno feasible plan was found\u201d.\n\n**Flags**  \n- \u201cnot_robustly_feasible\u201d: the plan\u2019s 95\u202f% interval is not wholly inside the feasible region.  \n- \u201cno_improvement\u201d: no improvement over current policy.  \n- \u201cinfeasible_unverified\u201d: no shortlisted plan verified feasible on the twin.\n\n**KPI changes**  \n- units_produced rises to 32120.0 (delta 7807.0).  \n- oee falls to 0.6839 (delta -0.0522).  \n- unit_cost falls to 22.37 (delta -3.54).  \n- profit falls to 325700.0 (delta -54480.0).  \n- stockout_probability falls to 0.1506 (delta -0.03951).  \n- downtime_hours falls to 11.63 (delta -0.6829).  \n- unplanned_failures falls to 0.5333 (delta -0.3).  \n- on_time_delivery_rate rises to 0.8719 (delta 0.02834).\n\n**Closest achievable option**  \nThe only option that brings the plan closer to feasibility is to relax the unit_cost constraint to \u201cunit_cost <= 22.1\u201d, which would allow a unit_cost of 22.13. This is presented as an option for you to decide on, not as a decision."
+  },
+  "N01__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan proposes to change the production\u2011milling interval from 240.0 to 223.8. All key performance indicators remain unchanged: units produced stays at 24620.0, OEE at 0.7486, unit cost at 25.33, profit at 389200.0, stockout probability at 0.1741, downtime hours at 10.66, unplanned failures at 0.1333, and on\u2011time delivery rate at 0.8656. Because every KPI delta is 0.0, the plan does not improve any metric. The recommendation reason is \u201cno improvement over current policy.\u201d Therefore, the plan is not recommended. The flag \u201cno_improvement\u201d confirms that the policy offers no benefit."
+  },
+  "N01__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan does not improve any KPI compared with the current policy.  \nAll key performance indicators\u2014units produced (24780.0), OEE (0.7535), unit cost (24.94), profit (410500.0), stockout probability (0.1716), downtime hours (10.56), unplanned failures (0.1333), and on\u2011time delivery rate (0.8585)\u2014remain unchanged, with deltas of 0.0.  \n\nBecause the delta for every KPI is zero, none of the metrics rises, increases, falls, decreases, or changes in any direction. The recommendation reason is \u201cno improvement over current policy.\u201d  \n\nThe flag \u201cno_improvement\u201d confirms that the plan offers no benefit over the existing policy.  \n\nThe plan is therefore **not recommended**. It is feasible, robustly feasible, and respects all constraints, but it does not achieve any improvement in profit or other KPIs."
+  },
+  "N02__agent__seed1": {
+   "mode": "template",
+   "attempts": 2,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [
+     "1.208",
+     "05",
+     "1.208",
+     "05",
+     "3.678",
+     "05",
+     "1.262",
+     "05"
+    ],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": false,
+   "calls": 2,
+   "text": "Goal bench_service_pm_m4_only: This plan is NOT recommended.\nReason: no improvement over current policy.\nChanges from the current policy: pm_interval_M4 168 -> 75.14.\nObjective change vs current policy: -0.00001208 (95% CI -0.00003678 to 0.00001262), over 30 paired replications.\n- units_produced: 24610 (CI 24000 to 25220) vs current 24620.\n- oee: 0.7447 (CI 0.7273 to 0.762) vs current 0.7486.\n- unit_cost: 25.43 (CI 24.87 to 25.99) vs current 25.33.\n- profit: 387100 (CI 369100 to 405200) vs current 389200.\n- stockout_probability: 0.1741 (CI 0.1551 to 0.193) vs current 0.1741.\n- downtime_hours: 12.49 (CI 11.83 to 13.16) vs current 10.66.\n- unplanned_failures: 0.06667 (CI -0.02807 to 0.1614) vs current 0.1333.\n- on_time_delivery_rate: 0.8655 (CI 0.851 to 0.8801) vs current 0.8656.\nFlag: no improvement over current policy"
+  },
+  "N02__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan is **not recommended**.  \nThe simulator shows a flag: **no improvement over current policy**.  \nBecause the plan does not improve any KPI, the recommendation reason is \u201cno improvement over current policy\u201d.\n\n**KPI changes**\n\n- **units_produced** falls from 24780.0 to 24760.0.  \n- **oee** falls from 0.7535 to 0.7486.  \n- **unit_cost** rises from 24.94 to 25.06.  \n- **profit** falls from 410500.0 to 407600.0.  \n- **stockout_probability** rises from 0.1716 to 0.1728.  \n- **downtime_hours** rises from 10.56 to 12.81.  \n- **unplanned_failures** stays at 0.1333.  \n- **on_time_delivery_rate** falls from 0.8585 to 0.8584.\n\nAll changes are in the direction that is worse according to the \u201cbetter_when\u201d field.  \nThe plan also changes the maintenance interval for M4 from 168.0 to 75.98, but this adjustment does not offset the negative impacts on the KPIs.\n\nBecause the plan is not recommended, you should keep the current policy."
+  },
+  "N03__agent__seed1": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The simulator shows that the proposed plan does not change any key performance indicators.  \n- **Units produced** remains 23070.0 (CI 22480.0\u201323660.0).  \n- **OEE** stays 0.7022 (CI 0.6849\u20130.7195).  \n- **Unit cost** is unchanged at 28.25 (CI 27.57\u201328.93).  \n- **Profit** stays 287400.0 (CI 268000.0\u2013306800.0).  \n- **Stockout probability** remains 0.2284 (CI 0.2117\u20130.2451).  \n- **Downtime hours** stays 10.26 (CI 9.666\u201310.86).  \n- **Unplanned failures** remains 0.1667 (CI \u20130.005523\u20130.3389).  \n- **On\u2011time delivery rate** stays 0.8018 (CI 0.789\u20130.8146).  \n\nThe only change in the plan is the **pm_interval_M5** dimension, which is reduced from 240.0 to 160.7. Because every KPI delta is 0.0, the plan does not improve any metric. The recommendation reason is \u201cno improvement over current policy.\u201d  \n\n**Flag:** \u201cno_improvement\u201d \u2013 the plan offers no improvement over the current policy.  \n\nSince the plan is not recommended, you should not adopt it. The plan is feasible and robust, but it does not move any KPI in the desired direction."
+  },
+  "N03__agent__seed2": {
+   "mode": "llm",
+   "attempts": 1,
+   "first_attempt_audit": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "llm_passed": true,
+   "calls": 1,
+   "text": "The plan proposes changing the maintenance interval for M5 from 240.0 to 161.4. All key performance indicators\u2014units produced (23080.0), OEE (0.7021), unit cost (28.46), profit (295900.0), stockout probability (0.2321), downtime hours (10.41), unplanned failures (0.1667), and on\u2011time delivery rate (0.7951)\u2014remain unchanged, with deltas of 0.0. Because every KPI delta is zero, the plan does not improve any metric. The recommendation reason is \u201cno improvement over current policy.\u201d Therefore, the plan is not recommended. The flag \u201cno_improvement\u201d confirms that the policy offers no benefit."
+  }
+ },
+ "calls_used": 70,
+ "cap": 120
+}

@@ -44,6 +44,7 @@ class CriticVerdict:
     recommended: bool
     swap_to: dict[str, Any] | None = None
     notes: list[str] = field(default_factory=list)
+    recommendation_reason: str = ""
 
 
 def _flag(code: str, message: str, **detail: Any) -> dict[str, Any]:
@@ -116,6 +117,34 @@ def flags_for(
     return flags
 
 
+#: The closed set of reasons, so the explainer's stated reason can be checked.
+REASON_NO_FEASIBLE = "no feasible plan was found"
+REASON_IMPROVES = "improves the objective over the current policy"
+REASON_RESTORES = "restores {constraints} that the current policy breaks"
+
+
+def recommendation_reason(spec: ObjectiveSpec, evaluation: dict[str, Any], codes: set[str]) -> str:
+    """Why the plan is, or is not, recommended -- decided here, never by the LLM.
+
+    Precedence: no feasible plan; no improvement; a significant objective gain;
+    otherwise the plan restores constraints the baseline violates (the only
+    other way rule (d) lets a plan through).
+    """
+    if not evaluation["feasible_point"]:
+        return REASON_NO_FEASIBLE
+    if "no_improvement" in codes:
+        return NO_IMPROVEMENT
+    if evaluation["objective"]["diff"]["ci_low"] > 0:
+        return REASON_IMPROVES
+    base = {k: v["baseline"]["mean"] for k, v in evaluation["kpis"].items()}
+    broken = [
+        f"the {c.kpi} {c.op} {c.threshold:g} constraint"
+        for c in spec.constraints
+        if c.hard and not c.satisfied(base[c.kpi])
+    ]
+    return REASON_RESTORES.format(constraints=" and ".join(broken) or "feasibility")
+
+
 def critique(
     spec: ObjectiveSpec,
     evaluation: dict[str, Any],
@@ -142,6 +171,7 @@ def critique(
         and "no_improvement" not in codes
         and "infeasible_unverified" not in codes
     )
+    reason = recommendation_reason(spec, evaluation, codes)
     if not evaluation["feasible_robust"] and retries_used < config.max_retries:
         swap = best_robust_candidate(candidates, exclude=chosen)
         if swap is not None:
@@ -150,6 +180,7 @@ def critique(
                 "swap",
                 recommended,
                 swap_to=swap,
+                recommendation_reason=reason,
                 notes=["swapped to the best verified candidate with a robust verification CI"],
             )
         return CriticVerdict(
@@ -157,5 +188,6 @@ def critique(
             "explore_again",
             recommended,
             notes=["no robust verified candidate; one more explorer round, margin widened"],
+            recommendation_reason=reason,
         )
-    return CriticVerdict(flags, "accept", recommended)
+    return CriticVerdict(flags, "accept", recommended, recommendation_reason=reason)

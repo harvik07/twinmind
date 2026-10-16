@@ -1,0 +1,353 @@
+{
+  "G01": {
+    "category": "feasible",
+    "context_id": 8,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": false,
+    "baseline_feasible_point": false,
+    "objective_diff": 24185.207688663737,
+    "objective_diff_ci95": [
+      7733.344965811779,
+      40637.0704115157
+    ],
+    "constraint_margins": {
+      "unplanned_failures<=1": 0.06666666666666665
+    },
+    "label_confirmed": true,
+    "seconds": 15.823537499993108
+  },
+  "G02": {
+    "category": "feasible",
+    "context_id": 9,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 6791.4,
+    "objective_diff_ci95": [
+      5971.406933485255,
+      7611.3930665147445
+    ],
+    "constraint_margins": {
+      "downtime_hours<=14": 6.292705824685218
+    },
+    "label_confirmed": true,
+    "seconds": 19.683600799995475
+  },
+  "G03": {
+    "category": "feasible",
+    "context_id": 10,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 2.4111896468473786,
+    "objective_diff_ci95": [
+      1.576271870668482,
+      3.246107423026275
+    ],
+    "constraint_margins": {
+      "on_time_delivery_rate>=0.8": 0.07950785326553311
+    },
+    "label_confirmed": true,
+    "seconds": 18.849285000003874
+  },
+  "G04": {
+    "category": "feasible",
+    "context_id": 11,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": -1593.221377246175,
+    "objective_diff_ci95": [
+      -17624.42969721822,
+      14437.986942725869
+    ],
+    "constraint_margins": {
+      "downtime_hours<=18": 4.386870776051355
+    },
+    "label_confirmed": true,
+    "seconds": 16.844805900007486
+  },
+  "G05": {
+    "category": "feasible",
+    "context_id": 12,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 105817.39822334061,
+    "objective_diff_ci95": [
+      88054.78121621054,
+      123580.01523047069
+    ],
+    "constraint_margins": {
+      "stockout_probability<=0.3": 0.1358024691358025
+    },
+    "label_confirmed": true,
+    "seconds": 17.73317410000891
+  },
+  "G06": {
+    "category": "feasible",
+    "context_id": 13,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 86634.80452334444,
+    "objective_diff_ci95": [
+      69853.32746782026,
+      103416.28157886863
+    ],
+    "constraint_margins": {},
+    "label_confirmed": true,
+    "seconds": 14.000874499994097
+  },
+  "G07": {
+    "category": "feasible",
+    "context_id": 14,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 32986.88448812376,
+    "objective_diff_ci95": [
+      9561.434308922104,
+      56412.33466732541
+    ],
+    "constraint_margins": {},
+    "label_confirmed": true,
+    "seconds": 16.999012800006312
+  },
+  "G08": {
+    "category": "feasible",
+    "context_id": 15,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 35064.06605783682,
+    "objective_diff_ci95": [
+      15615.662506311182,
+      54512.46960936245
+    ],
+    "constraint_margins": {
+      "stockout_probability<=0.3": 0.07901234567901236
+    },
+    "label_confirmed": true,
+    "seconds": 15.96298850000312
+  },
+  "G09": {
+    "category": "feasible",
+    "context_id": 16,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 0.22043190873622143,
+    "objective_diff_ci95": [
+      0.2031782571845136,
+      0.23768556028792925
+    ],
+    "constraint_margins": {
+      "unplanned_failures<=1.5": 1.0333333333333332
+    },
+    "label_confirmed": true,
+    "seconds": 10.44405839999672
+  },
+  "G10": {
+    "category": "feasible",
+    "context_id": 17,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 8.69871236681331,
+    "objective_diff_ci95": [
+      8.231932065130726,
+      9.165492668495896
+    ],
+    "constraint_margins": {
+      "profit>=200000": 48890.91314771684
+    },
+    "label_confirmed": true,
+    "seconds": 13.405479699998978
+  },
+  "G11": {
+    "category": "infeasible",
+    "context_id": 18,
+    "exploration_status": "infeasible_unverified",
+    "feasible_point": false,
+    "feasible_robust": false,
+    "baseline_feasible_point": false,
+    "objective_diff": 4056.2,
+    "objective_diff_ci95": [
+      3322.7986928793684,
+      4789.601307120631
+    ],
+    "constraint_margins": {
+      "on_time_delivery_rate>=0.7": -0.3305600868398331
+    },
+    "label_confirmed": true,
+    "seconds": 12.061605599999893
+  },
+  "G12": {
+    "category": "feasible",
+    "context_id": 19,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 42922.76331405884,
+    "objective_diff_ci95": [
+      34194.612150456895,
+      51650.91447766078
+    ],
+    "constraint_margins": {
+      "stockout_probability<=0.35": 0.095679012345679
+    },
+    "label_confirmed": true,
+    "seconds": 16.46166409998841
+  },
+  "I01": {
+    "category": "infeasible",
+    "context_id": 8,
+    "exploration_status": "infeasible_unverified",
+    "feasible_point": false,
+    "feasible_robust": false,
+    "baseline_feasible_point": false,
+    "objective_diff": -189745.89296769098,
+    "objective_diff_ci95": [
+      -210326.16958450762,
+      -169165.61635087433
+    ],
+    "constraint_margins": {
+      "on_time_delivery_rate>=0.99": -0.1475391110370673,
+      "stockout_probability<=0.01": -0.17518518518518517
+    },
+    "label_confirmed": true,
+    "seconds": 30.930920300001162
+  },
+  "I02": {
+    "category": "infeasible",
+    "context_id": 10,
+    "exploration_status": "infeasible_unverified",
+    "feasible_point": false,
+    "feasible_robust": false,
+    "baseline_feasible_point": false,
+    "objective_diff": 61.13333333333333,
+    "objective_diff_ci95": [
+      -682.31179342518,
+      804.5784600918466
+    ],
+    "constraint_margins": {
+      "profit>=3e+06": -2583927.440117158
+    },
+    "label_confirmed": true,
+    "seconds": 25.225591800000984
+  },
+  "I03": {
+    "category": "infeasible",
+    "context_id": 14,
+    "exploration_status": "infeasible_unverified",
+    "feasible_point": false,
+    "feasible_robust": false,
+    "baseline_feasible_point": false,
+    "objective_diff": -102110.30134106583,
+    "objective_diff_ci95": [
+      -121159.52853303422,
+      -83061.07414909745
+    ],
+    "constraint_margins": {
+      "unit_cost<=12": -11.810706249543287
+    },
+    "label_confirmed": true,
+    "seconds": 29.48212839999178
+  },
+  "N01": {
+    "category": "no_room",
+    "context_id": 9,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 0.0,
+    "objective_diff_ci95": [
+      0.0,
+      0.0
+    ],
+    "constraint_margins": {},
+    "label_confirmed": true,
+    "seconds": 16.704041500008316
+  },
+  "N02": {
+    "category": "no_room",
+    "context_id": 9,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": -1.207766705165018e-05,
+    "objective_diff_ci95": [
+      -3.677926971349462e-05,
+      1.2623935610194263e-05
+    ],
+    "constraint_margins": {},
+    "label_confirmed": true,
+    "seconds": 12.401158799999394
+  },
+  "N03": {
+    "category": "no_room",
+    "context_id": 13,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 0.0,
+    "objective_diff_ci95": [
+      0.0,
+      0.0
+    ],
+    "constraint_margins": {},
+    "label_confirmed": true,
+    "seconds": 15.644250700002885
+  },
+  "AA1": {
+    "category": "ambiguous_answerable",
+    "context_id": 15,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 18750.091386764532,
+    "objective_diff_ci95": [
+      4414.414770460815,
+      33085.76800306825
+    ],
+    "constraint_margins": {
+      "stockout_probability<=0.25": 0.058641975308641986
+    },
+    "label_confirmed": true,
+    "seconds": 17.111332300002687
+  },
+  "AA2": {
+    "category": "ambiguous_answerable",
+    "context_id": 16,
+    "exploration_status": "ok",
+    "feasible_point": true,
+    "feasible_robust": true,
+    "baseline_feasible_point": true,
+    "objective_diff": 15619.533333333333,
+    "objective_diff_ci95": [
+      14719.09466107304,
+      16519.972005593627
+    ],
+    "constraint_margins": {
+      "downtime_hours<=24": 1.723706525560818
+    },
+    "label_confirmed": true,
+    "seconds": 22.511312100003124
+  }
+}

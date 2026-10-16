@@ -20,6 +20,7 @@ import argparse
 import json
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 from twinmind.agents.graph import groq_client
@@ -33,14 +34,15 @@ from twinmind.utils.logging import get_logger
 logger = get_logger("evaluate_planner")
 
 TOTAL_CALL_CAP = 45
-LEDGER = results_dir() / "planner_eval_ledger.json"
+#: The Prompt 8 evaluation's ledger. Its test split may never run again.
+ORIGINAL_LEDGER = results_dir() / "planner_eval_ledger.json"
 CONTEXT_ID = 0
 
 
-def _ledger() -> dict[str, Any]:
-    if LEDGER.exists():
-        return dict(json.loads(LEDGER.read_text(encoding="utf-8")))
-    return {"cap": TOTAL_CALL_CAP, "calls_used": 0, "runs": []}
+def _ledger(path: Path, cap: int) -> dict[str, Any]:
+    if path.exists():
+        return dict(json.loads(path.read_text(encoding="utf-8")))
+    return {"cap": cap, "calls_used": 0, "runs": []}
 
 
 def main() -> int:
@@ -49,11 +51,20 @@ def main() -> int:
     parser.add_argument(
         "--prompt-version", default="v1", help="Recorded with the results; see the card."
     )
+    parser.add_argument(
+        "--ledger",
+        default=ORIGINAL_LEDGER.name,
+        help="Call ledger in reports/results; a later check gets its own.",
+    )
+    parser.add_argument("--cap", type=int, default=TOTAL_CALL_CAP, help="Calls this ledger allows.")
+    parser.add_argument("--suffix", default="", help="Appended to the results file name.")
     args = parser.parse_args()
 
     config: Any = load_config("agent")
-    ledger = _ledger()
-    if any(r["split"] == args.split for r in ledger["runs"]) and args.split == "test":
+    ledger_path = results_dir() / args.ledger
+    ledger = _ledger(ledger_path, args.cap)
+    original = _ledger(ORIGINAL_LEDGER, TOTAL_CALL_CAP)
+    if args.split == "test" and any(r["split"] == "test" for r in original["runs"]):
         raise SystemExit("the test split has already been run; results stand as they fell")
     client = groq_client(config)
     items = [i for i in load_items() if i.split == args.split]
@@ -61,10 +72,10 @@ def main() -> int:
     rows = []
     started = time.perf_counter()
     for item in items:
-        remaining = TOTAL_CALL_CAP - ledger["calls_used"]
+        remaining = args.cap - ledger["calls_used"]
         if remaining <= 0:
             rows.append({**score_item(item, "not_run", None), "calls": 0, "note": "call cap"})
-            logger.warning("%s: not run, the 45-call cap is exhausted", item.id)
+            logger.warning("%s: not run, the %d-call cap is exhausted", item.id, args.cap)
             continue
         budget = CallBudget(client, min(per_item_max, remaining))
         outcome = plan_goal(
@@ -110,8 +121,8 @@ def main() -> int:
             "finished": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
     )
-    LEDGER.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8", newline="\n")
-    out = results_dir() / f"planner_eval_{args.split}.json"
+    ledger_path.write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8", newline="\n")
+    out = results_dir() / f"planner_eval_{args.split}{args.suffix}.json"
     out.write_text(
         json.dumps(
             {
@@ -144,7 +155,7 @@ def main() -> int:
         "calls this run %d, total %d of %d",
         rows and sum(r["calls"] for r in rows),
         ledger["calls_used"],
-        TOTAL_CALL_CAP,
+        args.cap,
     )
     return 0
 
