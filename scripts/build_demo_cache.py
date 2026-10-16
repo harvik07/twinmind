@@ -11,7 +11,7 @@ app/demo_cache/ as small JSON: candidates trimmed to the best five and the
 per-evaluation history dropped, with no data/ paths and nothing from .env.
 
 The cached explanations were produced by explainer v1 during the benchmark;
-all of them also pass checker v2 (reports/results/explanation_check_v2_offline.json).
+each one is re-checked here with checker v2 and the build refuses any that fails.
 """
 
 from __future__ import annotations
@@ -22,7 +22,10 @@ from typing import Any
 
 from twinmind.agents.bench_goals import load_bench_goals
 from twinmind.agents.contracts import AgentResult
-from twinmind.agents.explanation_v2 import forbidden_word_errors
+from twinmind.agents.critic import recommendation_reason
+from twinmind.agents.explanation_v2 import audit_v2, passes
+from twinmind.agents.tools import build_facts
+from twinmind.optim.contracts import ObjectiveSpec
 from twinmind.utils.logging import get_logger
 from twinmind.utils.paths import PROJECT_ROOT
 
@@ -31,8 +34,10 @@ CELLS = PROJECT_ROOT / "data" / "processed" / "agent_bench" / "full"
 AUDIT = PROJECT_ROOT / "reports" / "results" / "agent_bench_audit.json"
 OUT = PROJECT_ROOT / "app" / "demo_cache"
 
-#: (goal id, seed, role shown in the UI). Seed 1 throughout; every pick has an
-#: LLM-written explanation (none of the benchmark's 5 template fallbacks).
+#: (goal id, seed, role shown in the UI). Every pick has an LLM-written
+#: explanation (none of the benchmark's 5 template fallbacks) that passes
+#: checker v2. I01 uses seed 2: the seed-1 explanation says stockout
+#: probability rises when it fell -- an error v1 missed and v2 catches.
 PICKS = [
     ("G07", 1, "A clean feasible goal: no critic flag, accepted first time."),
     (
@@ -41,7 +46,7 @@ PICKS = [
         "The critic acted: it swapped plans, and the plan is still flagged as "
         "not robustly feasible.",
     ),
-    ("I01", 1, "An infeasible goal: no plan meets the constraints; closest-achievable options."),
+    ("I01", 2, "An infeasible goal: no plan meets the constraints; closest-achievable options."),
     ("N01", 1, "No room: the only lever cannot move the objective, so nothing is recommended."),
     ("AA1", 1, "Ambiguous wording with one reasonable reading."),
     (
@@ -63,8 +68,20 @@ def build_entry(
     explanation = audit["explainer"][key]
     if explanation["mode"] != "llm":
         raise ValueError(f"{key}: the demo cache uses LLM-written explanations only")
-    if forbidden_word_errors(explanation["text"]):
-        raise ValueError(f"{key}: explanation uses a forbidden word")
+    spec = ObjectiveSpec.from_dict(result["spec"])
+    evaluation = result["baseline_comparison"]
+    facts = build_facts(  # the v1 facts the benchmark explainer saw
+        spec,
+        result["plan"],
+        evaluation,
+        result["flags"],
+        result["closest_achievable"],
+        result["plan"]["recommended"],
+        recommendation_reason(spec, evaluation, {f["code"] for f in result["flags"]}),
+    )
+    audit = audit_v2(explanation["text"], facts)
+    if not passes(audit):
+        raise ValueError(f"{key}: explanation fails checker v2: {audit}")
     goal = goals[goal_id]
     result["goal_text"] = goal.text
     result["explanation"] = explanation["text"]

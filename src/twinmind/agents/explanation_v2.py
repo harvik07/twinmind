@@ -228,55 +228,117 @@ _CONVENTION = re.compile(
     r"|\b(?:higher|lower) than\b|\blower bound\b"
     r"|\b(?:when|if|where|as|since|because)\s+(?:a\s+)?(?:higher|lower)\b"
 )
+#: v1's KPI aliases plus each KPI's snake_case key. The facts are keyed by
+#: "downtime_hours", models copy it, and v1's "\bdowntime\b" cannot match before
+#: an underscore -- so "downtime_hours falls" was invisible to v1.
+_KPI_ALIASES_V2: dict[str, str] = {
+    kpi: rf"{alias}|\b{kpi}\b" for kpi, alias in _KPI_ALIASES.items()
+}
+#: v1's decision-dimension anchors plus the snake_case keys v1 misses.
+_DIM_ANCHOR_V2 = re.compile(
+    _DIM_ANCHOR.pattern + r"|\b(?:safety_stock|reorder_point|order_quantity|overtime_hours)\b"
+)
 _HYPOTHETICAL_V2 = re.compile(r"\b(?:if|should|would|could|might|may|unless|in case)\b")
-#: Clause boundaries: a direction word is only ever tied to a KPI in its clause.
-_CLAUSE = re.compile(r"[.!?;:,\n]|\bwhile\b|\bwhereas\b|\bbut\b")
+#: Sentence boundaries (v1's rule) and clause boundaries inside a sentence. A
+#: "." or "," inside a number ("0.7148", "23,930") is not a boundary.
+_SENTENCE = re.compile(r"(?<=[.!?;])\s+|\n+")
+_CLAUSE = re.compile(r"([.!?](?!\d)|,(?!\d)|[;:]|\bwhile\b|\bwhereas\b|\bbut\b)")
+#: Boundaries after which a clause has its own subject, so nothing carries over.
+_NEW_SUBJECT = {"while", "whereas", "but", ";", ".", "!", "?"}
 
 
-def _clauses(text: str) -> list[str]:
-    return [c for c in _CLAUSE.split(_normalise(text)) if c.strip()]
+def _sentence_clauses(text: str) -> list[list[tuple[str, bool]]]:
+    """Per sentence, ``(clause, continues_previous)`` pairs. A clause after a
+    comma or colon continues the previous one; after while/whereas/but or a
+    semicolon it starts afresh."""
+    out = []
+    for sentence in _SENTENCE.split(_normalise(text)):
+        parts = _CLAUSE.split(sentence)
+        clauses, continues = [], False
+        for i, part in enumerate(parts):
+            if i % 2:  # a delimiter
+                continues = part not in _NEW_SUBJECT
+            elif part.strip():
+                clauses.append((part, continues))
+        if clauses:
+            out.append(clauses)
+    return out
 
 
 def direction_errors_v2(text: str, facts: dict[str, Any]) -> list[str]:
     """Direction words that contradict the sign of the delta of the KPI they
-    describe -- attributed within the word's own clause only."""
+    describe.
+
+    A word is attributed within its own clause. A clause that names nothing
+    and follows a comma or colon ("..., a decrease of 0.04514") continues the
+    previous clause, so it inherits that clause's last-named KPI ("OEE falls
+    from 0.7148 to 0.6697, a decrease of ..."); after while/whereas/but or a
+    semicolon nothing is inherited. A word with nothing to inherit and nothing
+    named in its clause applies to the list that follows it ("reducing costs,
+    downtime, and failures"). Convention phrases are stripped first, so "which
+    is worse when higher is better" carries no direction. KPI keys written in
+    snake_case ("downtime_hours falls") are recognised.
+    """
     deltas = {row["kpi"]: float(row["delta"]) for row in facts.get("kpi_table", [])}
-    errors = []
-    for clause in _clauses(text):
-        cleaned = _CONVENTION.sub(" ", clause)
-        anchors: list[tuple[int, int, str | None]] = []
-        for name, alias in _KPI_ALIASES.items():
-            anchors += [(m.start(), m.end(), name) for m in re.finditer(alias, cleaned)]
-        anchors += [(m.start(), m.end(), None) for m in _DIM_ANCHOR.finditer(cleaned)]
-        if not anchors:
-            continue
-        for word, sign in ((_UP_V2, 1), (_DOWN_V2, -1)):
-            for match in word.finditer(cleaned):
-                if _HYPOTHETICAL_V2.search(cleaned[max(0, match.start() - 60) : match.start()]):
-                    continue
-                # Prefer what the word directly modifies: an anchor starting
-                # within two words to its right ("higher units produced",
-                # "increasing output"); otherwise the nearest anchor.
-                following = [
-                    a
-                    for a in anchors
-                    if a[0] >= match.end() and len(cleaned[match.end() : a[0]].split()) <= 2
-                ]
-                if following:
-                    kpi = min(following, key=lambda a: a[0])[2]
+    errors: list[str] = []
+
+    def check(word: str, sign: int, kpi: str | None, clause: str) -> None:
+        if kpi is None or kpi not in deltas:
+            return
+        delta = deltas[kpi]
+        if delta == 0 or (delta > 0) != (sign > 0):
+            errors.append(f"'{word}' for {kpi}, whose delta is {delta:g} ({clause.strip()[:100]})")
+
+    for clauses in _sentence_clauses(text):
+        # (anchor,) for the last anchor named earlier in the sentence; None if
+        # nothing has been named. The anchor itself is None for a decision dim.
+        carried: tuple[str | None] | None = None
+        pending: list[tuple[str, int]] = []  # subject-less words awaiting a list
+        for clause, continues in clauses:
+            if not continues:
+                carried, pending = None, []
+            cleaned = _CONVENTION.sub(" ", clause)
+            anchors: list[tuple[int, int, str | None]] = []
+            for name, alias in _KPI_ALIASES_V2.items():
+                anchors += [(m.start(), m.end(), name) for m in re.finditer(alias, cleaned)]
+            anchors += [(m.start(), m.end(), None) for m in _DIM_ANCHOR_V2.finditer(cleaned)]
+            words = [
+                (match, sign)
+                for word, sign in ((_UP_V2, 1), (_DOWN_V2, -1))
+                for match in word.finditer(cleaned)
+                if not _HYPOTHETICAL_V2.search(cleaned[max(0, match.start() - 60) : match.start()])
+            ]
+            if words:
+                pending = []
+            elif anchors:
+                # A bare list item after a subject-less direction word.
+                for _, _, kpi in anchors:
+                    for word_text, sign in pending:
+                        check(word_text, sign, kpi, clause)
+            for match, sign in words:
+                if anchors:
+                    # Prefer what the word directly modifies: an anchor starting
+                    # within two words to its right ("higher units produced",
+                    # "increasing output"); else the nearest.
+                    following = [
+                        a
+                        for a in anchors
+                        if a[0] >= match.end() and len(cleaned[match.end() : a[0]].split()) <= 2
+                    ]
+                    if following:
+                        kpi = min(following, key=lambda a: a[0])[2]
+                    else:
+                        kpi = min(
+                            anchors,
+                            key=lambda a: min(abs(a[0] - match.start()), abs(a[1] - match.start())),
+                        )[2]
+                    check(match.group(0), sign, kpi, clause)
+                elif carried is not None:
+                    check(match.group(0), sign, carried[0], clause)
                 else:
-                    kpi = min(
-                        anchors,
-                        key=lambda a: min(abs(a[0] - match.start()), abs(a[1] - match.start())),
-                    )[2]
-                if kpi is None or kpi not in deltas:
-                    continue
-                delta = deltas[kpi]
-                if delta == 0 or (delta > 0) != (sign > 0):
-                    errors.append(
-                        f"'{match.group(0)}' for {kpi}, whose delta is {delta:g}"
-                        f" ({clause.strip()[:100]})"
-                    )
+                    pending.append((match.group(0), sign))
+            if anchors:
+                carried = (max(anchors, key=lambda a: a[0])[2],)
     return errors
 
 

@@ -23,7 +23,7 @@
   {
    "id": "i01",
    "goal_id": "I01",
-   "seed": 1,
+   "seed": 2,
    "category": "infeasible",
    "role": "An infeasible goal: no plan meets the constraints; closest-achievable options.",
    "context_id": 8,

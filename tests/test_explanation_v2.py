@@ -183,6 +183,54 @@ def test_a_direction_word_describes_what_it_modifies(text: str, kpi: str | None)
         assert errors and kpi in errors[0]
 
 
+# --------------------------------------------------------------------------- #
+# Found by the post-benchmark mutation test (scripts/mutation_test_explanations.py):
+# corruptions v1 caught and the first v2 missed, and a real error both missed.
+# --------------------------------------------------------------------------- #
+AA1_S1 = _facts(units_produced=352.3, oee=-0.04514, profit=40960.0, downtime_hours=-5.341)
+G07_S2 = _facts(profit=39010.0, unit_cost=-1.858, downtime_hours=-1.669, unplanned_failures=-0.2)
+I01_S1 = _facts(stockout_probability=-0.04074, units_produced=6664.0)
+
+
+@pytest.mark.parametrize(
+    ("text", "facts"),
+    [
+        # A trailing ", a decrease of ..." clause continues the KPI before it.
+        ("OEE falls from 0.7148 to 0.6697, an increase of 0.04514.", AA1_S1),
+        ("Profit rises from 318100.0 to 359000.0, a decrease of 40960.0.", AA1_S1),
+        # A subject-less verb applies to the list that follows it.
+        (
+            "These adjustments collectively improve profit and key service metrics while "
+            "increasing costs, downtime, and failures.",
+            G07_S2,
+        ),
+    ],
+)
+def test_mutants_v1_caught_are_caught_by_v2(text: str, facts: dict[str, Any]) -> None:
+    assert direction_errors(text, facts), "negative control: v1 catches this mutant"
+    assert direction_errors_v2(text, facts)
+
+
+def test_nothing_carries_across_while() -> None:
+    """The real G07 s2 sentence: "reducing" must not inherit "profit"."""
+    text = (
+        "These adjustments collectively improve profit and key service metrics while "
+        "reducing costs, downtime, and failures."
+    )
+    assert direction_errors_v2(text, G07_S2) == []
+
+
+def test_snake_case_kpi_keys_are_anchors() -> None:
+    """The real I01 s1 benchmark text says stockout probability ROSE; it fell
+    (0.2309 -> 0.1901). v1 cannot see "stockout_probability" as a KPI, so the
+    benchmark passed it; v2 flags it."""
+    text = "- stockout_probability rises to 0.1901 from 0.2309."
+    assert direction_errors(text, I01_S1) == [], "negative control: v1 misses snake_case"
+    errors = direction_errors_v2(text, I01_S1)
+    assert errors and "stockout_probability" in errors[0]
+    assert direction_errors_v2("- stockout_probability falls to 0.1901.", I01_S1) == []
+
+
 def test_forbidden_words_are_caught_in_any_case() -> None:
     for word in FORBIDDEN_WORDS:
         assert forbidden_word_errors(f"This plan is {word.upper()}.") == [word]
