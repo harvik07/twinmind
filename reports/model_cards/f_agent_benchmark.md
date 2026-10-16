@@ -304,3 +304,43 @@ python scripts/run_agent_bench.py --audit
 python scripts/analyse_agent_bench.py
 python scripts/ablate_agent_bench.py --workers 3
 ```
+
+---
+
+## 8. Post-benchmark offline re-check (not a test result)
+
+**B5 is unchanged: it FAILED as registered (35/40).** This section reports
+work done after the benchmark, on stored data, with no LLM call. The benchmark
+audit was not re-run.
+
+**Explanation checker v2**
+(`src/twinmind/agents/explanation_v2.py`) fixes the three false-flag patterns
+in section 3's post-hoc reading:
+
+- **Scientific notation.** v2 reads `1.208e-05` as one number. Its facts are
+  rounded per KPI, with units, so the model no longer sees such numbers.
+- **Trailing convention clauses** such as "…, which is worse when higher
+  values are better". v2 ties a direction word only to a KPI in its own clause.
+- **List attribution.** v2 prefers the KPI a direction word directly modifies.
+
+v2 also refuses "optimal", "guaranteed" and "proven". v1 is untouched, so the
+benchmark remains reproducible.
+
+**Regression tests built from the stored failure texts**
+(`tests/test_explanation_v2.py`):
+
+- **9 false flags:** v1 flags each one and v2 does not.
+- **2 real errors** ("downtime hours fall from 14.69 to 20.05", and "… from
+  10.66 to 12.02", both while downtime rose): flagged by both versions.
+- **4 excluded.** For AA2 s1, G02 s2, G03 s2 and G04 s2, the flagged word lies
+  past the stored 80-character excerpt, so which KPI it described cannot be
+  known. This corrects section 3: I had counted AA2 s1 and G02 s2 as
+  misattribution false flags, but the excerpt cannot show that.
+
+**Re-check of the 40 stored explanations**
+(`reports/results/explanation_check_v2_offline.json`): **v1 passes 40/40, v2
+passes 40/40.** What was stored is each cell's *final* text — the passing LLM
+text, or the template — so this shows that v2 introduces no regressions and
+that no stored explanation uses a forbidden word. It cannot re-score the failed
+attempts, which were never stored. Every attempt's text and checker reasons are
+now recorded in the AgentResult and the run log.

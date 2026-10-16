@@ -57,6 +57,7 @@ MODULES = [
     "twinmind.agents.contracts",
     "twinmind.agents.planner",
     "twinmind.agents.planner_eval",
+    "twinmind.agents.explanation_v2",
     "twinmind.agents.bench",
     "twinmind.agents.bench_goals",
     "twinmind.utils.peak_memory",

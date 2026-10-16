@@ -28,7 +28,7 @@ from typing import Annotated, Any, TypedDict
 
 from twinmind.agents.contracts import AgentResult
 from twinmind.agents.critic import critique
-from twinmind.agents.explainer import explain
+from twinmind.agents.explanation_v2 import build_facts_v2, explain_v2
 from twinmind.agents.llm_client import (
     CallBudget,
     CallLogger,
@@ -42,7 +42,7 @@ from twinmind.agents.llm_client import (
     rank_models,
 )
 from twinmind.agents.planner import plan_goal
-from twinmind.agents.tools import Toolkit, build_facts, closest_achievable
+from twinmind.agents.tools import Toolkit, closest_achievable
 from twinmind.optim.contracts import ObjectiveSpec
 from twinmind.optim.goals import DEV_CONTEXTS
 from twinmind.utils.config import AgentConfig
@@ -196,7 +196,10 @@ def build_graph(deps: AgentDeps, budget: CallBudget, *, explain_plan: bool = Tru
         return update
 
     def explainer(state: AgentState) -> dict[str, Any]:
-        facts = build_facts(
+        # Explanation v2 (post-benchmark): plain-decimal facts with units and
+        # the v2 checker. v1 (tools.build_facts / explainer.explain) is kept
+        # unchanged for reproducing the Prompt 9 benchmark audit.
+        facts = build_facts_v2(
             state["spec"],
             state["chosen"],
             state["evaluation"],
@@ -205,18 +208,24 @@ def build_graph(deps: AgentDeps, budget: CallBudget, *, explain_plan: bool = Tru
             state["recommended"],
             state["recommendation_reason"],
         )
-        result = explain(
+        result = explain_v2(
             facts, budget, cfg.budget.max_explainer_regenerations, cfg.explainer.max_words
         )
+        failed = [a for a in result.attempts if any(a["audit"].values())]
         return {
             "nodes_run": ["explainer"],
             "explanation": result.text,
             "explanation_mode": result.mode,
             "explanation_record": {
-                "attempts": result.attempts,
-                "ungrounded": result.ungrounded,
+                "checker_version": result.checker_version,
+                "attempts": len(result.attempts),
+                # Every attempt's text and audit, the failed ones included.
+                "attempt_log": result.attempts,
+                "audits": [a["audit"] for a in result.attempts],
+                "ungrounded": [
+                    [item for items in a["audit"].values() for item in items] for a in failed
+                ],
                 "fallback_reason": result.fallback_reason,
-                "audits": result.audits,
                 "facts": facts,
             },
         }
