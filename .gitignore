@@ -43,6 +43,9 @@ dist/
 /reports/benchmark.json
 /reports/figures/*
 !/reports/figures/.gitkeep
+# Rendered report figures are tracked so the model cards' images work on GitHub.
+!/reports/figures/*.png
+!/reports/figures/*.svg
 
 .DS_Store
 .kaggle_staging/
