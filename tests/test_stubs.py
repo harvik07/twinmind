@@ -60,6 +60,7 @@ MODULES = [
     "twinmind.agents.explanation_v2",
     "twinmind.agents.bench",
     "twinmind.agents.bench_goals",
+    "twinmind.ui.viewmodel",
     "twinmind.utils.peak_memory",
     "twinmind.agents.critic",
     "twinmind.agents.explainer",
