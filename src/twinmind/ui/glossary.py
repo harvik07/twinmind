@@ -293,3 +293,39 @@ def check_complete() -> None:
     wrong = [k for k, t in KPIS.items() if t.higher_is_better != (k in HIGHER_IS_BETTER)]
     if wrong:
         raise ValueError(f"glossary direction disagrees with the optimiser for {wrong}")
+
+
+#: Technical terms used on the "How reliable is this?" page's detailed record
+#: (the examiner's view). The page links to this list in one line.
+TECH_TERMS: dict[str, str] = {
+    "Digital twin (twin)": "The detailed simulation of the five-machine line, run many times "
+    "with different random events.",
+    "Surrogate": "The learned model that gives the instant quick estimate of the twin's numbers.",
+    "Replications (reps)": "Repeated simulation runs of the same plan; 30 reps = 30 simulated "
+    "months.",
+    "95% CI": "A 95% confidence interval: the range the average would likely fall in if the "
+    "simulation were repeated.",
+    "Pre-registered": "The test, its threshold and its PASS/FAIL rule were written down before "
+    "the results were seen.",
+    "Twin-only": "The comparison planner: a plain search on the twin, with no AI, surrogate or "
+    "critic.",
+    "Normalised gap": "How far a plan's objective falls short of the best plan any method "
+    "found, as a fraction; 0 = as good as the best found.",
+    "Non-inferior": "Not worse than the comparison by more than an agreed margin (here 0.10 of "
+    "normalised gap).",
+    "Robustly feasible": "Meets every limit with its 95% interval inside the limit (a safety "
+    "margin), not just on average.",
+    "Critic": "The rule-based reviewer step that checks a plan and can swap it or search again.",
+    "No-room goal": "A goal whose allowed changes cannot improve on the current setup.",
+    "Spec-match": "The planner turned the plain-English goal into the intended precise goal.",
+    "Explanation checker v1 / v2": "Automatic checks of an AI-written explanation's numbers, "
+    "directions and stated reason. v1 was used in the test; v2 is the improved version, not "
+    "yet retested.",
+    "Mutation test": "A check of the checker: correct explanations are deliberately corrupted "
+    "to see which corruptions it catches.",
+    "Novelty": "How far a plan's settings are from those the surrogate was trained on.",
+    "Epistemic std": "The surrogate ensemble's disagreement; not shown in the app because it "
+    "did not flag unfamiliar plans (AUROC 0.590).",
+    "OEE": "Overall equipment effectiveness: availability × speed × quality, 100% is perfect.",
+    "Seed": "The starting number for the random events, so a run can be repeated exactly.",
+}

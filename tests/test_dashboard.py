@@ -31,6 +31,7 @@ from twinmind.utils.paths import PROJECT_ROOT
 
 AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 MAIN = str(PROJECT_ROOT / "app" / "main.py")
+FIXTURE_V1_EVIDENCE = PROJECT_ROOT / "tests" / "fixtures" / "v1_0_evidence_page.py"
 PAGES = [
     "views/plan.py",
     "views/try_changes.py",
@@ -141,7 +142,34 @@ def test_the_walker_finds_a_planted_banned_word_and_respects_technical_expanders
 
 @pytest.mark.parametrize("page", PAGES)
 def test_no_page_uses_jargon_in_its_default_view(page: str) -> None:
+    if page == "views/reliability.py":
+        # The examiner's record below the summary keeps its technical terms.
+        at = _app(page)
+        for text in [*_walk(summary_block(at), default_view=True), *sidebar_text(at)]:
+            assert not gl.jargon_in(text), (text[:160], gl.jargon_in(text))
+        return
     assert_plain(_app(page), page)
+
+
+def summary_block(at: Any) -> Any:
+    """The reliability page's plain summary (a container keyed reliability_summary)."""
+
+    def find(node: Any) -> Any:
+        if str(getattr(getattr(node, "proto", None), "id", "")).endswith("reliability_summary"):
+            return node
+        for child in getattr(node, "children", {}).values():
+            found = find(child)
+            if found is not None:
+                return found
+        return None
+
+    block = find(at._tree)
+    assert block is not None, "the plain summary container is missing"
+    return block
+
+
+def sidebar_text(at: Any) -> list[str]:
+    return list(_walk(at.sidebar, default_view=True))
 
 
 @pytest.mark.parametrize("card_id", [*CARDS, "own_words"])
@@ -280,19 +308,128 @@ def test_the_couldnt_find_wording_is_used_for_no_plan_found() -> None:
     assert "can't be met" not in text
 
 
-def test_the_reliability_page_shows_five_equal_cards_with_both_failures() -> None:
+def test_the_reliability_page_shows_both_failures_plainly_with_the_caveats_visible() -> None:
     at = _app("views/reliability.py")
-    badges = [str(m.value) for m in at.markdown if "-badge[" in str(m.value)]
-    assert len(badges) == 5
-    assert sum("Failed" in b for b in badges) == 2 and sum("Passed" in b for b in badges) == 3
-    exact = [e for e in at.expander if e.label == "Show the exact test"]
-    assert len(exact) == 5
-    text = " ".join(screen(at))
-    assert "the improved version has not been retested" in text
-    assert "3 of 5 tests passed and 2 failed" in text
-    technical = " ".join(screen(at, default_view=False))
-    assert sv.B5_NOTE in technical
-    assert all(c in technical for c in sv.CHECKER_CAVEATS)
+    visible = " ".join(screen(at))  # default view: nothing behind an expander
+    table = next(str(m.value) for m in at.markdown if "Pre-registered claim" in str(m.value))
+    lines = table.splitlines()[2:]
+    assert len(lines) == 5
+    verdicts = [line.split("|")[3].strip() for line in lines]
+    assert verdicts == [
+        "✅ **PASS**",
+        "❌ **FAIL**",
+        "✅ **PASS**",
+        "✅ **PASS**",
+        "❌ **FAIL**",
+    ], "PASS and FAIL rows are formatted identically"
+    assert "3 of 5 passed; 2 failed." in visible
+    assert "**B2 · FAIL.** *Means:*" in visible and "**B5 · FAIL.** *Means:*" in visible
+    assert visible.count("*Does not mean:*") == 2
+    assert sv.B5_NOTE in visible
+    assert all(c in visible for c in sv.CHECKER_CAVEATS)
+    summary = " ".join(_walk(summary_block(at), default_view=True))
+    assert "3 of 5 tests passed and 2 failed" in summary
+    assert summary.count("❌ Failed") == 2 and summary.count("✅ Passed") == 3
+    assert "the improved version has not been retested" in summary
+    collapsed = [e.label for e in at.expander if e.label != "Glossary"]  # sidebar glossary
+    assert not collapsed, "nothing on this page is collapsed"
+    glossary = [
+        b for b in at.get("popover") if b.proto.popover.label == "Glossary of technical terms"
+    ]
+    assert glossary, "one-line link to the glossary of technical terms"
+    terms = " ".join(_walk(glossary[0], default_view=False))
+    assert "Robustly feasible" in terms and "Explanation checker v1 / v2" in terms
+
+
+def test_the_reliability_page_drops_nothing_the_v1_evidence_page_showed() -> None:
+    """Render the v1.0-dashboard Evidence page (kept verbatim in tests/fixtures)
+    and the new page; every B1-B5 row, figure, model card, limitation and caveat
+    of the old page must be on the new one, and visible."""
+    old = AppTest.from_file(str(FIXTURE_V1_EVIDENCE), default_timeout=120).run()
+    new = AppTest.from_file(str(PROJECT_ROOT / "app" / "views" / "reliability.py"),
+                            default_timeout=120).run()  # fmt: skip
+    assert not old.exception and not new.exception
+
+    def b_rows(at: Any) -> set[tuple[str, str, str, str]]:
+        table = next(str(m.value) for m in at.markdown if "Pre-registered claim" in str(m.value))
+        out = set()
+        for line in table.splitlines()[2:]:
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            verdict = cells[2].replace("✅", "").replace("❌", "").strip()
+            out.add((cells[0], cells[1], verdict, cells[-1]))
+        return out
+
+    assert b_rows(old) == b_rows(new)
+    assert len(b_rows(new)) == 5
+
+    def options(at: Any, label: str) -> list[str]:
+        return [str(o) for o in at.selectbox(key=label).options]
+
+    assert options(old, "ev_fig") == options(new, "ev_fig"), "figures"
+    assert options(old, "ev_card") == options(new, "ev_card"), "model cards"
+    assert old.selectbox(key="ev_card").value == new.selectbox(key="ev_card").value
+
+    old_text = " ".join(screen(old, default_view=False))
+    new_visible = " ".join(screen(new))
+    must_keep = [
+        sv.B5_NOTE,
+        *sv.CHECKER_CAVEATS,
+        "3 of 5 passed; 2 failed.",
+        "gaps are lower bounds",
+        "Limitations: where results underperformed the spec",
+        "Neither checker catches negation",
+        *(title for title, _ in sv.underperformed_sections()),
+        *(body[:200] for _, body in sv.underperformed_sections()),
+    ]
+    for item in must_keep:
+        assert item in old_text, f"fixture check: {item[:60]!r}"
+        assert item in new_visible, f"dropped or hidden: {item[:60]!r}"
+    old_frames = [d.value.to_dict() for d in old.dataframe]
+    new_frames = [d.value.to_dict() for d in new.dataframe]
+    assert old_frames == new_frames, "the post-benchmark checker table"
+    assert len(new.get("imgs")) >= len(old.get("imgs")), "images (cards and figure)"
+
+
+# --------------------------------------------------------------------------- #
+# Honesty rules carried over from v1.0 (restored after the Stage B rewrite)
+# --------------------------------------------------------------------------- #
+def test_the_table_renderer_refuses_mixed_labels() -> None:
+    from twinmind.ui import components
+
+    result = sv.load_demo_cache()[0].result
+    mixed = [*vm.kpi_table(result)[:4], *vm.estimate_table({k: 1.0 for k in vm.KPI_DISPLAY})[4:]]
+    with pytest.raises(ValueError, match="mixes source labels"):
+        components.kpi_table(mixed, with_baseline=True)
+
+
+def test_no_app_source_cached_text_or_model_card_uses_a_forbidden_word() -> None:
+    files = [
+        *sorted((PROJECT_ROOT / "app").rglob("*.py")),
+        *sorted((PROJECT_ROOT / "app" / "demo_cache").glob("*.json")),
+        *sorted((PROJECT_ROOT / "reports" / "model_cards").glob("*.md")),
+    ]
+    for path in files:
+        vm.assert_no_overclaim(path.read_text(encoding="utf-8"))
+
+
+def test_model_card_f_states_the_checker_caveats() -> None:
+    card = (PROJECT_ROOT / "reports" / "model_cards" / "f_agent_benchmark.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Development results, not validation" in card
+    assert "neither a lower nor" in card and "verdict is unchanged: FAIL, 35/40" in card
+
+
+@pytest.mark.parametrize("goal_id", ["G07", "G01", "I01", "N01", "AA1", "G09", "G03", "G10"])
+def test_technical_tables_never_mix_labels_and_badge_only_the_weak_kpis(goal_id: str) -> None:
+    at = _saved(_app(), goal_id)
+    technical = [d.value for d in at.dataframe if "Source" in d.value.columns]
+    assert technical, "the technical KPI table is rendered"
+    for frame in technical:
+        assert set(frame["Source"]) == {"verified on twin (30 reps)"}
+        noted = set(frame.loc[frame["Note"] != "", "KPI"])
+        assert noted == {"Downtime", "Unplanned failures"}
+        assert all(vm.WEAK_KPI_BADGE in n for n in frame.loc[frame["Note"] != "", "Note"])
 
 
 def test_past_results_label_live_runs_and_saved_examples_apart(demo_env: Path) -> None:

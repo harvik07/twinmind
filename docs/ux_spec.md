@@ -707,3 +707,10 @@ details, with key-like text redacted as today.
 - **KPI cards** are drawn as two-per-row cards (not `st.metric`), because
   `st.metric` cut "£297,771 → £381,879" off at laptop width and the four-wide
   row broke words at tablet width.
+- **"How reliable is this?" restored after review.** The card layout hid the
+  B1–B5 table, the checker caveats, the limitations, the model cards and the
+  figures behind expanders. The page now keeps the plain summary at the top
+  (the only part under the jargon ban) and shows the full v1.0 Evidence record
+  below it, visible, with a glossary of technical terms. A test renders the
+  v1.0 page (tests/fixtures/v1_0_evidence_page.py) and checks nothing is
+  dropped or hidden.

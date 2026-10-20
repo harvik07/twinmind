@@ -1,7 +1,12 @@
-"""How reliable is this? What was tested, what worked, what did not.
+"""How reliable is this? A short plain summary first, then the full record.
 
-The five pre-registered tests are five identical cards, passed and failed
-alike. The exact wording, numbers and caveats sit one click away.
+The summary (the only part under the jargon ban) says what was tested, what
+worked and what did not. Below it is everything the v1.0 Evidence page showed,
+visible and in the same order: the B1-B5 table with PASS and FAIL given equal
+weight, what each failure means and does not mean, the checker-v1/v2 note and
+caveats, the post-benchmark check, the Limitations, the model cards and the
+figures. That part keeps its technical terms (it is also the examiner's view)
+and links to a glossary of them.
 """
 
 from __future__ import annotations
@@ -12,26 +17,19 @@ from typing import Any
 import streamlit as st
 
 from twinmind.ui import services as sv
+from twinmind.ui.glossary import TECH_TERMS
 
 analysis: dict[str, Any] = json.loads(
     (sv.RESULTS_DIR / "agent_bench_analysis.json").read_text(encoding="utf-8")
 )
-rows = {r.id: r for r in sv.benchmark_rows(analysis)}
+rows = sv.benchmark_rows(analysis)
+by_id = {r.id: r for r in rows}
 b2, b3, b5 = analysis["B2"], analysis["B3"], analysis["B5"]["explainer"]
-passed = sum(r.verdict == "PASS" for r in rows.values())
+passed = sum(r.verdict == "PASS" for r in rows)
+failed_n = b5["n"] - b5["llm_text_pass_within_two_attempts"]
 
-st.title("How reliable is this?")
-st.markdown("### What was tested, what worked, what did not")
-st.markdown(
-    "We tested the planner on 20 goals, twice each, against a simple search with no AI and "
-    "no reviewer step, and decided in advance what would count as a pass. "
-    f"**{passed} of 5 tests passed and {5 - passed} failed.** It found plans at least as good "
-    "as the simple search, its reviewer step caught bad recommendations, and it said so when "
-    "it found no plan that met the limits. It fell short on two things: its recommended "
-    "plans met the limits with a safety margin slightly less often than the simple search's, "
-    "and some of its written explanations failed the automatic check at the time."
-)
-
+#: Each test as a plain question and a plain result (used in the summary and as
+#: a visible column of the table).
 PLAIN = {
     "B1": (
         "Does it find plans at least as good as a simple search?",
@@ -56,76 +54,122 @@ PLAIN = {
     "B5": (
         "Does it understand goals and explain results correctly?",
         f"It understood all {analysis['B5']['planner_spec_match']['n']} goals, but "
-        f"{b5['n'] - b5['llm_text_pass_within_two_attempts']} of {b5['n']} written "
-        "explanations failed the automatic check. The check has been improved since, but the "
-        "improved version has not been retested.",
+        f"{failed_n} of {b5['n']} written explanations failed the automatic check. The check "
+        "has been improved since, but the improved version has not been retested.",
     ),
 }
 
-st.markdown("### The five tests")
-for test_id in ("B1", "B2", "B3", "B4", "B5"):
-    row = rows[test_id]
-    question, answer = PLAIN[test_id]
-    ok = row.verdict == "PASS"
-    with st.container(border=True):
-        left, right = st.columns([4, 1])
-        left.markdown(f"**Test {test_id[1]}. {question}**")
-        right.badge("Passed" if ok else "Failed", icon="✅" if ok else "❌",
-                    color="green" if ok else "red")  # fmt: skip
-        st.markdown(answer)
-        with st.expander("Show the exact test"):
-            st.markdown(
-                f"**{row.id}** · {row.claim}  \n**Verdict:** {row.verdict}  \n"
-                f"**Deciding number:** {row.deciding}"
-            )
-            if test_id == "B5":
-                st.markdown(sv.B5_NOTE)
-                st.markdown("\n".join(f"- {c}" for c in sv.CHECKER_CAVEATS))
 
-st.markdown("### Known limits")
-st.markdown(
-    "- It plans for a computer model of a production line, not your actual factory. The model "
-    "has not been compared against a real line.\n"
-    "- Breakdown and downtime numbers are rough guides: the model is less accurate here.\n"
-    "- The automatic check of the written explanations misses some mistakes: a wrong "
-    "“not”, wrong directions for setting changes, and numbers attached to the wrong measure "
-    "when both moved the same way. The checked numbers on the Plan page are the record.\n"
-    "- The test was small: 20 goals, twice each.\n"
-    "- When a goal is vague, it does not always ask what you meant."
-)
-with st.expander("Read the full section"):
-    st.markdown("\n".join(f"- {c}" for c in sv.CHECKER_CAVEATS))
-    for title, body in sv.underperformed_sections():
-        st.markdown(f"#### {title}")
-        st.markdown(body)
+def verdict_word(verdict: str) -> str:
+    return "✅ Passed" if verdict == "PASS" else "❌ Failed"
 
-with st.expander("For reviewers"):
-    st.markdown("**Agent benchmark, B1–B5 as registered**")
+
+st.title("How reliable is this?")
+
+# --------------------------------------------------------------------------- #
+# Plain summary (the jargon ban applies here)
+# --------------------------------------------------------------------------- #
+with st.container(border=True, key="reliability_summary"):
+    st.markdown("### What was tested, what worked, what did not")
     st.markdown(
-        "| | Pre-registered claim | Verdict | Deciding number |\n|---|---|---|---|\n"
-        + "\n".join(
-            f"| **{r.id}** | {r.claim} | **{r.verdict}** | {r.deciding} |" for r in rows.values()
+        "We tested the planner on 20 goals, twice each, against a simple search with no AI "
+        "and no reviewer step, and decided in advance what would count as a pass. "
+        f"**{passed} of 5 tests passed and {5 - passed} failed.** It found plans at least as "
+        "good as the simple search, its reviewer step caught bad recommendations, and it said "
+        "so when it found no plan that met the limits. It fell short on two things: its "
+        "recommended plans met the limits with a safety margin slightly less often than the "
+        "simple search's, and some of its written explanations failed the automatic check at "
+        "the time."
+    )
+    st.markdown(
+        "\n".join(
+            f"- **{verdict_word(r.verdict)}** · Test {r.id[1]}. {PLAIN[r.id][0]} {PLAIN[r.id][1]}"
+            for r in rows
         )
     )
-    st.markdown(sv.B5_NOTE)
-    mutation = sv.RESULTS_DIR / "explanation_mutation_v2.json"
-    if mutation.exists():
-        data = json.loads(mutation.read_text(encoding="utf-8"))
-        st.caption(data["label"])
-        st.dataframe(
-            [
-                {
-                    "Corruption": name.replace("_", " "),
-                    "v1 caught": f"{v['v1']['caught']}/{v['v1']['n']}",
-                    "v2 caught": f"{v['v2']['caught']}/{v['v2']['n']}",
-                }
-                for name, v in data["per_type"].items()
-            ],
-            hide_index=True,
-            width="stretch",
-        )
-    cards = {c.title: c for c in sv.model_cards()}
-    chosen = cards[st.selectbox("Model card", list(cards), index=len(cards) - 2, key="rv_card")]
+
+# --------------------------------------------------------------------------- #
+# The full record (technical terms allowed; glossary one click away)
+# --------------------------------------------------------------------------- #
+left, right = st.columns([3, 1])
+left.caption(
+    "Below is the full record as registered, in its technical wording. The terms are "
+    "explained in the glossary →"
+)
+with right.popover("Glossary of technical terms", width="stretch"):
+    st.markdown("\n".join(f"- **{term}**: {meaning}" for term, meaning in TECH_TERMS.items()))
+
+st.subheader("Agent benchmark: B1–B5")
+st.markdown(
+    "| | Pre-registered claim | Verdict | Plain result | Deciding number |\n"
+    "|---|---|---|---|---|\n"
+    + "\n".join(
+        f"| **{r.id}** | {r.claim} | {'✅' if r.verdict == 'PASS' else '❌'} **{r.verdict}** | "
+        f"{PLAIN[r.id][1]} | {r.deciding} |"
+        for r in rows
+    )
+)
+st.markdown(f"**{passed} of {len(rows)} passed; {len(rows) - passed} failed.**")
+
+st.markdown("**What the two failures mean**")
+st.markdown(
+    f"- **B2 · FAIL.** *Means:* recommended plans were robustly feasible in "
+    f"{b2['agent']['robust']} of {b2['agent']['recommended']} cells against "
+    f"{b2['twin_only']['robust']} of {b2['twin_only']['recommended']} for twin-only, and the "
+    'registered bar was "at least as often". *Does not mean:* that the agent\'s plans '
+    "usually break limits; the shortfall is one cell, and twin-only had no critic.\n"
+    f"- **B5 · FAIL.** *Means:* {failed_n} of {b5['n']} explanations did not pass checker v1 "
+    "within the one permitted regeneration (a fixed template was shown instead), so the 100% "
+    "bar was missed. *Does not mean:* that the plans or their numbers were wrong; every "
+    "number comes from the twin, not the language model."
+)
+st.warning(sv.B5_NOTE, icon="📌")
+st.markdown(
+    "**Reading the explanation-checker evidence**\n\n"
+    + "\n".join(f"- {caveat}" for caveat in sv.CHECKER_CAVEATS)
+)
+st.caption(
+    "20 goals × 2 seeds. The reference is the best plan any arm found, so gaps are lower "
+    "bounds. Full detail: model card F."
+)
+
+mutation = sv.RESULTS_DIR / "explanation_mutation_v2.json"
+if mutation.exists():
+    st.subheader("Post-benchmark check of the explanation checker (not a test result)")
+    data = json.loads(mutation.read_text(encoding="utf-8"))
+    st.caption(data["label"])
+    st.dataframe(
+        [
+            {
+                "Corruption": name.replace("_", " "),
+                "v1 caught": f"{v['v1']['caught']}/{v['v1']['n']}",
+                "v2 caught": f"{v['v2']['caught']}/{v['v2']['n']}",
+            }
+            for name, v in data["per_type"].items()
+        ],
+        hide_index=True,
+        width="stretch",
+    )
+    st.caption(
+        "Neither checker catches negation, plan-change directions or same-sign KPI swaps; "
+        "the twin's KPI table is the record, the explanation a reading of it."
+    )
+
+# --------------------------------------------------------------------------- #
+# Limitations
+# --------------------------------------------------------------------------- #
+st.subheader("Limitations: where results underperformed the spec")
+for title, body in sv.underperformed_sections():
+    st.markdown(f"#### {title}")
+    st.markdown(body)
+
+# --------------------------------------------------------------------------- #
+# Model cards and figures
+# --------------------------------------------------------------------------- #
+st.subheader("Model cards")
+cards = {c.title: c for c in sv.model_cards()}
+chosen = cards[st.selectbox("Card", list(cards), index=len(cards) - 2, key="ev_card")]
+with st.container(border=True):
     for kind, body in sv.split_markdown(
         chosen.path.read_text(encoding="utf-8"), chosen.path.parent
     ):
@@ -133,9 +177,11 @@ with st.expander("For reviewers"):
             st.image(body)
         else:
             st.markdown(body)
-    figures = sorted(sv.FIGURES_DIR.glob("*.png"))
-    if figures:
-        figure = st.selectbox(
-            "Figure", figures, format_func=lambda p: p.stem.replace("_", " "), key="rv_fig"
-        )
-        st.image(str(figure))
+
+st.subheader("Figures")
+figures = sorted(sv.FIGURES_DIR.glob("*.png"))
+if figures:
+    figure = st.selectbox(
+        "Figure", figures, format_func=lambda p: p.stem.replace("_", " "), key="ev_fig"
+    )
+    st.image(str(figure))
