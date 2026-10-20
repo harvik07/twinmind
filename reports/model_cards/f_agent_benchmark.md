@@ -226,6 +226,13 @@ The B5 explanation verdict stays **FAIL**. The evidence suggests it is mostly a
 higher is better" phrasing, and the facts allow scientific notation — rather
 than fabricated claims.
 
+> **What B5 measured.** B5 was measured with **explanation checker v1** and the
+> **original facts format** (4 significant figures, scientific notation
+> allowed). The live agent now uses **checker v2 and plain-decimal facts, which
+> have NOT been benchmarked.** B5 stands as registered: **FAIL, 35/40.** The
+> post-benchmark work in section 8 also found that one of those 35 passes
+> (I01 seed 1) contains a direction error v1 could not see.
+
 ---
 
 ## 4. Twin-component ablation (exploratory, pre-declared)
@@ -304,3 +311,118 @@ python scripts/run_agent_bench.py --audit
 python scripts/analyse_agent_bench.py
 python scripts/ablate_agent_bench.py --workers 3
 ```
+
+---
+
+## 8. Post-benchmark offline re-check (not a test result)
+
+**B5 is unchanged: it FAILED as registered (35/40).** This section reports
+work done after the benchmark, on stored data, with no LLM call. The benchmark
+audit was not re-run. **Checker v2 and the plain-decimal facts have not been
+benchmarked**; nothing here is a test result.
+
+**Explanation checker v2**
+(`src/twinmind/agents/explanation_v2.py`) fixes the three false-flag patterns
+in section 3's post-hoc reading:
+
+- **Scientific notation.** v2 reads `1.208e-05` as one number. Its facts are
+  rounded per KPI, with units, so the model no longer sees such numbers.
+- **Trailing convention clauses** such as "…, which is worse when higher
+  values are better". v2 strips convention phrases and attributes a direction
+  word within its own clause. A clause that names nothing and follows a comma
+  ("OEE falls …, a decrease of 0.045") continues the previous clause's KPI;
+  nothing carries across while/whereas/but or a semicolon.
+- **List attribution.** v2 prefers the KPI a direction word directly modifies;
+  a verb with no subject applies to the list after it ("reducing costs,
+  downtime, and failures").
+- **snake_case KPI names** ("stockout_probability rises") are recognised. v1's
+  `\bdowntime\b`-style aliases cannot match before an underscore, so v1 never
+  checked these.
+
+v2 also refuses the three overclaiming words the dashboard never shows
+(`FORBIDDEN_WORDS` in that module). v1 is untouched, so the
+benchmark remains reproducible.
+
+The comma carry-over, list rule and snake_case names were added in Prompt 10
+Stage B **because the mutation test below showed v2 missing errors v1 caught**
+(and an error both missed). The stored texts and the false-flag regression
+tests were the guard: none may start failing.
+
+**Regression tests built from the stored failure texts**
+(`tests/test_explanation_v2.py`):
+
+- **9 false flags:** v1 flags each one and v2 does not.
+- **2 real errors** ("downtime hours fall from 14.69 to 20.05", and "… from
+  10.66 to 12.02", both while downtime rose): flagged by both versions.
+- **4 excluded.** For AA2 s1, G02 s2, G03 s2 and G04 s2, the flagged word lies
+  past the stored 80-character excerpt, so which KPI it described cannot be
+  known. This corrects section 3: I had counted AA2 s1 and G02 s2 as
+  misattribution false flags, but the excerpt cannot show that.
+
+**Re-check of the 40 stored explanations**
+(`reports/results/explanation_check_v2_offline.json`): **v1 passes 40/40, v2
+passes 39/40.** The one v2 failure is a **real error**: I01 seed 1 says
+"stockout_probability rises to 0.1901 from 0.2309", but it fell (delta
+−0.04074). v1 passed it because it cannot see snake_case names, so it was
+counted among B5's 35 passes. B5 is not re-scored. What was stored is each
+cell's *final* text — the passing LLM text, or the template — so this cannot
+re-score the failed attempts, which were never stored. Every attempt's text and
+checker reasons are now recorded in the AgentResult and the run log. The
+dashboard's demo cache uses I01 seed 2 instead of seed 1.
+
+### Mutation test (post-benchmark, not a test result)
+
+`scripts/mutation_test_explanations.py` →
+`reports/results/explanation_mutation_v2.json`. No LLM call. Each stored text
+that passes both checkers (39; I01 s1 excluded) is corrupted with **one**
+mechanical edit per mutant, and both checkers audit every mutant against the
+same v1 facts the text was written from. Sites are found by the script's own
+patterns, not by either checker's.
+
+| Corruption | v1 caught | v2 caught |
+|---|---|---|
+| Direction word flipped (all sites) | 306/431 (71%) | **377/431 (87%)** |
+| … in a KPI sentence | 306/397 (77%) | **377/397 (95%)** |
+| … in a plan-change sentence ("safety stock rises") | 0/34 (0%) | 0/34 (0%) |
+| Stated number changed (×1.25 or ×0.6, off every fact) | 1202/1203 | 1202/1203 |
+| KPI name swapped (fixed cycle, all) | 74/262 (28%) | 74/262 (28%) |
+| … to a KPI whose delta has the opposite sign | 74/94 (79%) | 74/94 (79%) |
+| Claim negated ("rises" → "does not rise"; "is recommended" ↔ "is not recommended") | 0/244 (0%) | 0/244 (0%) |
+
+**Corruptions v1 catches and v2 misses: 0** (71 the other way). Before the
+fixes above, the first v2 missed 119 that v1 caught — 117 direction flips in
+", a decrease of …" clauses and lists, and 2 KPI swaps — which is why it was
+changed.
+
+What neither checker catches, plainly:
+
+- **Negation: nothing.** Both checkers look for direction words and ignore
+  "not". "Profit does not rise" when it rose, or "the plan is not recommended"
+  when it is, passes both.
+- **Plan-change directions: nothing.** A wrong direction for a decision
+  variable ("safety stock falls" when it rose) is not checked by either.
+- **Same-sign KPI swaps.** Neither checker ties a number to the KPI it is
+  stated for, so swapping to a KPI that moved the same way is invisible.
+- **Of the 20 missed KPI-sentence flips**, 8 are real misses by both (G11 s1:
+  "…; the delta is 5480.0, which is lower" — a semicolon starts a new subject),
+  8 flip a convention phrase the generator failed to skip ("*Better_when* is
+  higher") and 4 flip words inside a negated list ("none of the metrics rises,
+  increases …"); those 12 are not real errors.
+- **Number changes: 1 miss**, where the changed value equals a number inside a
+  flag message.
+
+These gaps are why the dashboard shows the twin's KPI table, with intervals,
+beside every explanation: the table is the record, and the explanation is a
+reading of it.
+
+**How to read these numbers.**
+
+- **(a) Development results, not validation.** v2 was changed until its
+  v1-only misses were zero **on this same mutation set**, so the catch rates
+  above measure the set it was tuned on. They are not an independent
+  validation of v2.
+- **(b) B5's count is no bound.** I01 seed 1 passed v1 and is counted inside
+  B5's 35/40, but fails v2 with a real direction error; and v1 also rejected
+  correct texts (the false flags in section 3). So 35/40 is neither a lower nor
+  an upper bound on explanation quality.
+- **(c) B5's verdict is unchanged: FAIL, 35/40.**

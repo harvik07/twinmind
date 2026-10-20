@@ -39,6 +39,7 @@ dist/
 
 /reports/llm_calls*.jsonl
 /reports/agent_runs.jsonl
+/reports/dashboard_runs.jsonl
 /reports/agent_memory.duckdb
 /reports/benchmark.json
 /reports/figures/*

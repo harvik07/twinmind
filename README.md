@@ -1,38 +1,53 @@
 # TwinMind
 
-An agentic deep-learning digital twin of a manufacturing line.
+An agentic digital twin of a five-machine production line. You type a planning
+goal in plain English; an agent turns it into a precise objective, searches
+plans on a learned surrogate, verifies the chosen plan on a discrete-event
+simulator against the current policy, and explains the result.
 
-The system learns how the line *degrades* and how demand *moves*, simulates the
-line under those learned dynamics, learns a fast emulator of that simulation, and
-puts an LLM agent in front of the whole thing to search for better operating
-policies — while keeping every reported number deterministic.
+**The language model only reads goals and writes explanations.** Every KPI,
+comparison, interval and constraint check is deterministic Python, and the
+dashboard says which numbers are surrogate *estimates* and which are *verified
+on the twin*, with their intervals.
 
-## Architecture
+![Ask: a replayed result, verified on the twin](docs/dashboard_ask.png)
 
-1. **Model A — machine health.** CNN-BiLSTM on NASA C-MAPSS predicting remaining
-   useful life, plus a failure-probability head trained on UCI AI4I 2020.
-   MC-dropout gives predictive uncertainty.
-2. **Model B — demand.** N-HiTS / PatchTST via Nixtla `neuralforecast` on Kaggle
-   Favorita store sales, trained with a multi-quantile loss at q10/q50/q90.
-3. **Digital twin.** A SimPy discrete-event simulation of machines, buffers,
-   shifts, inventory and suppliers. Its failure hazard comes from Model A and its
-   order book from Model B — no hard-coded MTBF anywhere.
-4. **Model C — surrogate.** A heteroscedastic residual MLP trained on ~65k
-   simulator rollouts that emulates the twin roughly 10,000× faster, so an agent
-   can screen hundreds of scenarios in seconds and re-verify only the top
-   candidates on the real twin.
-5. **Agent layer.** A LangGraph state machine — Planner / Explorer / Evaluator /
-   Critic / Explainer — driven by Groq.
-   **Hard rule:** the LLM only proposes scenario parameters and writes
-   explanations. Every KPI, comparison and constraint check is deterministic
-   Python.
-6. **Dashboard and baselines.** A Streamlit dashboard, plus Optuna TPE / CMA-ES
-   and random / grid search as evaluation baselines.
+---
 
-Everything runs CPU-only except the training scripts, which are written to be
-importable from a Kaggle or Colab notebook that clones this repo.
+## How it fits together
 
-## Setup — Windows (development)
+```mermaid
+flowchart LR
+    subgraph Learned dynamics
+        A["Model A<br/>machine health<br/>(C-MAPSS, AI4I)"]
+        B["Model B<br/>demand quantiles<br/>(Favorita)"]
+    end
+    A -- failure hazard --> T["Digital twin<br/>SimPy, 5 machines,<br/>28-day horizon"]
+    B -- order book --> T
+    T -- 32,768 rollouts --> C["Model C<br/>surrogate ensemble"]
+    subgraph Agent ["Agent (LangGraph)"]
+        P["planner<br/>(LLM)"] --> E["explorer<br/>surrogate search,<br/>twin shortlist"]
+        E --> V["evaluator<br/>twin, 30 paired reps"]
+        V --> K["critic<br/>rules, one retry"]
+        K --> X["explainer<br/>(LLM, checked)"]
+    end
+    C --> E
+    T --> E
+    T --> V
+    X --> D["Dashboard<br/>Ask · What-if · Evidence · History"]
+```
+
+The LLM (Groq, `openai/gpt-oss-20b`) is used by the **planner** and the
+**explainer** only, at most 6 calls per goal. Its explanation is checked against
+the facts (numbers, directions, the stated reason, and no overclaiming words)
+and replaced by a fixed template if it fails twice.
+
+---
+
+## Quickstart: demo mode (no key, no data)
+
+Demo mode runs every page on six replayed benchmark results committed in
+`app/demo_cache/`. It needs no API key, no datasets and no trained models.
 
 ```bash
 python -m venv .venv
@@ -43,239 +58,200 @@ python -m venv .venv
 ```
 
 ```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+```bash
 python -m pip install -e ".[dev]"
 ```
+
+```bash
+python -m streamlit run app/main.py -- --demo
+```
+
+Every replayed result carries a visible **"replayed benchmark result, not a
+live run"** label.
+
+### Live mode
+
+Live mode needs a Groq key and the local model and data files (which are not in
+the repository: see *Reproduce*).
 
 ```bash
 copy .env.example .env
 ```
 
-Fill in `GROQ_API_KEY` (and `KAGGLE_USERNAME` / `KAGGLE_KEY` if you want
-`download_data.py` to work). Then check the scaffold is sound:
+Put your key after `GROQ_API_KEY=` in `.env` (never commit it; `.env` is
+gitignored). Then start without `--demo`:
 
 ```bash
-python -m pytest
+python -m streamlit run app/main.py
 ```
 
-The demand model needs a heavy extra dependency tree, so it is optional:
+The sidebar says which mode is active and why. Live mode runs **one goal at a
+time** in the Streamlit process (no background workers), shows each agent step
+and the LLM calls used against the cap, and records every run in History as
+finished, replayed or aborted. If the language model cannot be reached, the
+closest replayed goal is shown instead, labelled as a replay.
 
-```bash
-python -m pip install -e ".[forecast]"
+---
+
+## The dashboard
+
+| Page | What it shows |
+|---|---|
+| **Ask** | A goal → objective, constraints, the plan, any **side effects** (a KPI outside the goal whose verified change is worse beyond its 95% interval), a KPI table against the current policy (verified on the twin, 30 reps, with 95% CIs), critic flags in plain English, closest-achievable options for infeasible goals, training-coverage band, and the explanation, which has passed an automated check of numbers and KPI directions (with what that check does not catch). |
+| **What-if** | 16 levers. The surrogate's **estimate** (means only, never an interval) plus a novelty band; then **Verify on twin**: at most 10 replications under a 60 s cap, with the measured seconds. |
+| **Evidence** | B1–B5 with both FAILs, the model cards, the figures, and every "Underperformed the spec" section. |
+| **History** | Every dashboard event, with live runs and replays labelled differently, plus the agent's own run log. |
+
+What the dashboard will not do: show the surrogate's epistemic std (it does not
+separate out-of-distribution plans: AUROC 0.590), mix estimates and verified
+numbers in one table, or describe a plan with overclaiming words (a fixed list,
+enforced by tests on everything the pages render). Downtime and
+unplanned failures always carry this badge: *indicative: surrogate R² 0.91 /
+0.73, and sensitive to the health-model assumption (feasibility flipped in 7 of
+40 benchmark cells under a fixed-failure-rate hazard).* Each rule has a test.
+
+![What-if in demo mode: a replayed plan's verified numbers](docs/dashboard_whatif.png)
+
+---
+
+## Results
+
+### Agent benchmark (pre-registered; 20 goals × 2 seeds)
+
+| | Pre-registered claim | Verdict | Deciding number |
+|---|---|---|---|
+| **B1** | The agent is non-inferior to twin-only search on normalised gap | **PASS** (and superior) | mean(agent − twin-only) = −0.335, 95% CI −0.520 to −0.141 |
+| **B2** | Recommended plans are robustly feasible at least as often as twin-only's | **FAIL** | agent 22/23 = 95.7% against twin-only 31/32 = 96.9% |
+| **B3** | The critic leaves strictly fewer bad recommendations | **PASS** | 1 against 12 without the critic |
+| **B4** | Impossible and pointless goals are handled | **PASS** | 4/4 infeasible goals with options; 3/3 no-room goals flagged |
+| **B5** | Planner spec-match ≥ 85% AND 100% of explanations pass the checks | **FAIL** | planner 20/20; explanations **35/40** |
+
+**B5 was measured with explanation checker v1 and the original facts format.
+The live agent now uses checker v2 and plain-decimal facts, which have NOT been
+benchmarked.** B5 stands as registered: **FAIL, 35/40.** A post-benchmark
+mutation test (not a test result) found v2 catches everything v1 catches, and
+found one benchmark explanation v1 passed that states a direction wrongly
+([model card F §8](reports/model_cards/f_agent_benchmark.md)).
+
+![Evidence: B1–B5 with both FAILs](docs/dashboard_evidence.png)
+
+### Components
+
+| Component | Headline | Against its target |
+|---|---|---|
+| A1 machine health (C-MAPSS FD001) | RMSE 12.76 ± 0.16 at the production preset | Parity with the random forest (12.72 ± 0.16), not better |
+| A2 failure classifier (AI4I) | PR-AUC 0.869; recall at 80% precision 0.811 | Recall target 0.90 **missed**; PR-AUC target revised from 0.90 to 0.85, because only a model fed the leaked failure-mode columns reaches 0.90 (card A2) |
+| B demand (Favorita, LightGBM quantile) | relative MAE 0.878 | Missed (≤ 0.85); N-HiTS meets it at 0.838 but is not in production |
+| C surrogate | R² ≥ 0.95 on 6 of 8 KPIs | Missed on downtime (0.907) and unplanned failures (0.733); epistemic std fails OOD detection (AUROC 0.590) |
+| D optimiser (held-out benchmark) | median gap 0.129 for surrogate-first TPE | **All four hypotheses FAIL as registered**; two pass when the two goals no method could satisfy are excluded |
+| E agent planner | spec-match 15/17, adversarial 5/5 | Clarification **4/6, FAIL** (≥ 75%) |
+| F agent benchmark | see above | 3 PASS, 2 FAIL |
+
+Every number links back to a model card in
+[`reports/model_cards/`](reports/model_cards/), and each card has a section on
+where it underperformed.
+
+---
+
+## Limitations
+
+- **It is a statement about a simulator, not a factory.** The twin is not
+  validated against a real line; its demand-to-capacity ratio is an assumption
+  that moves profit substantially.
+- **Weak KPIs.** The surrogate predicts downtime and unplanned failures worst,
+  and feasibility on goals that constrain them flipped in 7 of 40 benchmark
+  cells when the learned hazard was swapped for a fixed failure rate.
+- **The explanation checker has known gaps.** Neither version catches negation
+  ("profit does not rise" when it rose), a wrong direction for a plan change, or
+  a KPI name swapped for one that moved the same way. The KPI table is the
+  record; the explanation is a reading of it.
+- **The benchmark is small**: 20 goals, 2 seeds, a reference that is the best
+  plan any arm found (so gaps are lower bounds), and a free-tier LLM.
+- **Clarification is weak** (4/6), and the benchmark had no clarification goal.
+- **Live goals are slow**: one goal took 106–205 s on one worker in the agent
+  card's demo, most of it twin time.
+- **Speed figures were measured on a quiet, plugged-in machine.** On a busy or
+  hot laptop the twin runs slower: its 250 ms-per-run performance test failed
+  twice at about 434 ms and passed when the machine was quiet. The threshold was
+  not changed. No speed-up measured on a busy machine is quoted anywhere.
+
+---
+
+## Repository map
+
 ```
-
-## Setup — Kaggle / Colab (training)
-
-```python
-!git clone https://github.com/<you>/TwinMind.git
-%cd TwinMind
-!pip install -q -r requirements.txt
-!pip install -q -e .
-```
-
-`requirements.txt` and `requirements-dev.txt` are flat files generated from
-`pyproject.toml`, because Kaggle notebooks install from a flat file. Add
-`!pip install -q -r requirements-forecast.txt` only when training Model B.
-
-Then, in a notebook cell:
-
-```python
-from twinmind.utils.config import load_config
-from twinmind.utils.seed import set_seed
-
-set_seed(42)
-config = load_config("models")
-```
-
-## Commands
-
-Every Makefile target is a one-line wrapper over a plain `python` command. On
-Windows without `make`, run the raw command instead.
-
-| Target | Raw command |
-| --- | --- |
-| `make setup` | `python -m pip install -e ".[dev]"` |
-| `make test` | `python -m pytest` |
-| `make test-fast` | `python -m pytest -m "not data"` (skips tests needing downloads) |
-| `make lint` | `python -m ruff check . && python -m mypy src/` |
-| `make format` | `python -m ruff format . && python -m ruff check --fix .` |
-| `make clean` | removes `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `build`, `dist` |
-| `make data` | `python scripts/download_data.py --dataset all` |
-| `make data-optional` | `python scripts/download_data.py --dataset all --include-optional` |
-| `make notebooks` | `python scripts/build_notebooks.py` |
-| `make eda` | `python scripts/build_notebooks.py --execute` |
-| `make baselines` | `python scripts/train_baselines.py --subset all --seeds 3` |
-| `make train-health` | `python scripts/train_health.py --subset all --seeds 3` |
-| `make train-ai4i` | `python scripts/train_ai4i.py --model both --seeds 3` |
-| `make figures` | `python scripts/make_figures.py` |
-| `make results-table` | `python -m twinmind.eval.registry` |
-| `make train-demand` | `python scripts/train_demand.py --model nhits` |
-| `make rollouts` | `python scripts/generate_rollouts.py --n 65000` |
-| `make train-surrogate` | `python scripts/train_surrogate.py` |
-| `make benchmark` | `python scripts/run_benchmark.py --method all` |
-| `make app` | `python -m streamlit run app/streamlit_app.py` |
-
-On Windows, `make lint` splits into two commands:
-
-```bash
-python -m ruff check .
-```
-
-```bash
-python -m mypy src/
-```
-
-## Layout
-
-```
-configs/     data.yaml, twin.yaml, models.yaml, agent.yaml — validated by Pydantic
-data/        raw/ interim/ processed/ (gitignored)
+app/
+  main.py          Streamlit entry point (navigation, sidebar)
+  views/           ask.py, whatif.py, evidence.py, history.py
+  demo_cache/      six replayed benchmark results (no secrets, no data paths)
+configs/           data, twin, models, agent YAMLs, validated by Pydantic
 src/twinmind/
-  data/      download, loaders, C-MAPSS windowing, Favorita features
-  models/    Model A (health), Model B (demand), Model C (surrogate)
-  twin/      SimPy machines, inventory, demand process, costs, runner + contracts
-  optimise/  random / grid / Optuna baselines and the oracle
-  agents/    LangGraph graph, nodes, deterministic tools, memory, LLM client
-  eval/      metrics, ablations, explanation faithfulness
-  utils/     paths, config, seeding, logging
-notebooks/   01_..07_ exploration and Kaggle training (generated by scripts/build_notebooks.py)
-app/         Streamlit dashboard
-scripts/     CLI entry points for data, training and benchmarking
-tests/       pytest suite
-reports/     metrics, LLM call logs, data_cards/, figures/
+  data/            downloads, loaders, windowing, features
+  models/          A (health), B (demand), C (surrogate)
+  twin/            SimPy line, demand process, costs, runner
+  optim/ optimise/ search, surrogate-first verification, novelty, baselines
+  agents/          LangGraph graph, planner, critic, tools, explanation v1 and v2
+  ui/              viewmodel.py and services.py (no Streamlit), components.py
+  eval/ utils/     metrics, registry, figures; paths, config, logging
+scripts/           CLI entry points (data, training, benchmarks, demo cache)
+tests/             pytest suite; CI runs it with no network, no key, no data
+reports/           model cards, pre-registrations, results JSON, figures
+docs/              dashboard screenshots
 ```
 
-## Design notes
+---
 
-**Configs are typed.** Each YAML in `configs/` maps to one Pydantic model with
-`extra="forbid"`. A mistyped key raises `ValidationError` at load time rather
-than being silently ignored and surfacing as a wrong number mid-training.
-`${VAR}` and `${VAR:-default}` are interpolated from the environment.
+## Reproduce
 
-**Paths are resolved from `__file__`, not the cwd.** `PROJECT_ROOT` is the same
-whether you run from the repo root, from `tests/`, or from a notebook, and every
-accessor creates its directory on first use.
+The datasets, rollouts and trained models are gitignored (Favorita cannot be
+redistributed). Long jobs are listed with the card that documents them; run
+them one at a time with at most 3 workers on an 8 GB machine.
 
-**The scenario space is 18-dimensional** and declared once, in `twin.yaml`:
-throughput multiplier, shift count, overtime hours, a PM interval and a speed
-setpoint for each of the five machines, supplier choice, reorder point, order
-quantity, safety stock, and price multiplier. `SCENARIO_DIMS` in
-`twin/runner.py` pins the canonical vector order that the surrogate, the
-optimisers and the agent all share; a test asserts the two agree.
+1. Data: `python scripts/download_data.py --dataset all` (Kaggle credentials in
+   `.env`), then the caches: `scripts/build_health_cache.py`,
+   `scripts/build_demand_cache.py`.
+2. Models A and B: `scripts/train_health.py`, `scripts/train_ai4i.py`,
+   `scripts/train_demand.py` (cards A1, A2, B).
+3. Twin rollouts and surrogate: `scripts/generate_rollouts.py`,
+   `scripts/train_surrogate.py` (cards twin_design, C).
+4. Optimiser benchmark: `scripts/run_optim_benchmark.py`,
+   `scripts/analyse_optim_benchmark.py` (card D).
+5. Agent benchmark: `scripts/run_agent_bench.py --workers 3`, then `--audit`,
+   `scripts/analyse_agent_bench.py`, `scripts/ablate_agent_bench.py` (card F).
+6. Post-benchmark checks (no LLM): `scripts/recheck_explanations_v2.py`,
+   `scripts/mutation_test_explanations.py`; demo cache:
+   `scripts/build_demo_cache.py`.
 
-**Corrective maintenance costs exactly 5× preventive**, and a config validator
-enforces that ratio — it is the asymmetry the whole maintenance-policy argument
-rests on, so it should not be quietly editable.
+Each card's *Reproduce* section has the exact flags.
 
-**The LLM is rate-limited and logged.** `GroqClient` enforces 28 requests/min and
-5,500 tokens/min (Groq's free tier is ~30 RPM / 6k TPM), retries twice on schema
-violation, and appends model, token counts and latency to
-`reports/llm_calls.jsonl` for the calls-per-query metric. `EchoClient` is a
-deterministic offline stub so the test suite and CI never touch the network.
+### Tests
 
-## The data layer
-
-`python scripts/download_data.py --dataset all` fetches C-MAPSS, AI4I 2020 and
-Favorita into `data/raw/<dataset>/`. Each directory gets a `manifest.json` of file
-names, sizes, sha256 and fetch time, so a second run verifies checksums, does no
-network I/O and exits 0. `--force` re-downloads; `--include-optional` adds SKAB.
-
-Loaders return tidy frames and cache to `data/interim/<name>.parquet`; pass
-`use_cache=False` to rebuild from raw. After that, training touches no raw file:
-
-```python
-from twinmind.data.loaders import load_cmapss
-from twinmind.data.windowing import compute_rul, drop_constant_sensors, split_by_unit
+```bash
+python -m pytest -m "not data"
 ```
 
-Three things in here are load-bearing, and each has a test that fails loudly if it
-regresses. Full detail is in `reports/data_cards/`.
+That is what CI runs (Python 3.11 and 3.12), with no network, no Groq key and
+no datasets; the dashboard is tested in demo mode with Streamlit's AppTest. Tests
+that need local data carry the `data` marker:
 
-**AI4I has a leakage trap.** `TWF/HDF/PWF/OSF/RNF` are the individual failure modes
-and their OR reproduces the `machine_failure` target for 99.73% of rows. A model
-given them scores ~1.0 AUC and has learned to read the answer key. `load_ai4i`
-returns `(features, target, failure_modes)` as three separate objects, a config
-validator rejects any attempt to list a mode column as a feature, and a test
-re-measures that 99.73% on every run so the quarantine stays justified by evidence.
+```bash
+python -m pytest -m "data"
+```
 
-**C-MAPSS test trajectories are truncated.** They stop before failure, with the
-true remaining life supplied separately in `RUL_<subset>.txt`. Computing RUL the
-training way on a test frame assumes every engine failed on its last observed
-cycle, which is false for all of them — mean truncation is 75–87 cycles. Use
-`compute_test_rul`.
+Lint and types: `python -m ruff check .`, `python -m ruff format --check .`,
+`python -m mypy src/`.
 
-**Favorita has transferred holidays.** A `Holiday` row with `transferred = True`
-did *not* happen on its listed date; a `Transfer` row says when it actually did;
-and a `Work Day` row is the opposite of a holiday. `build_holiday_flags` handles
-all five event types, resolved per store by locale.
-
-Anything that learns a statistic — which sensors are constant, the regime clusters,
-the per-regime means — is fitted on the training split and applied to the others.
-`OperatingConditionNormaliser` has no `fit_transform`, and a test asserts that
-transforming a frame shifted by +500 does *not* come out zero-centred.
-
-For Favorita, `test_features_are_non_anticipative_under_truncation` builds features,
-removes the last 60 days of raw input, rebuilds, and asserts every overlapping row
-is unchanged. Any feature peeking into the future would move.
-
-Tests needing downloaded files are marked `@pytest.mark.data`, so `pytest -m "not data"`
-passes on a clean checkout and CI stays green without any dataset.
+---
 
 ## Working on this repo
 
-`main` stays green: every commit passes ruff, mypy and pytest, enforced by CI on
-Python 3.11 and 3.12. Feature work goes on `feat/<area>` branches and is
-squash-merged with a conventional-commit title. Full conventions, including the
-release tags for each roadmap week, are in [CONTRIBUTING.md](CONTRIBUTING.md).
+`main` stays green; feature work goes on `feat/<area>` branches, squash-merged
+with a conventional-commit title ([CONTRIBUTING.md](CONTRIBUTING.md)). Install
+the pre-commit hooks once per clone with `python -m pre_commit install`.
 
-Install the pre-commit hooks once per clone:
-
-```bash
-python -m pre_commit install
-```
-
-They run ruff (lint and format), whitespace and end-of-file fixers, a 1 MB
-file-size ceiling so a stray parquet or checkpoint cannot be committed, and
-`detect-private-key`.
-
-CI runs `pytest -m "not data"`. The runner has no datasets and never will --
-C-MAPSS is ~45 MB and Favorita needs credentials plus per-user acceptance of the
-competition rules -- so tests that need real files carry the `data` marker and
-are deselected there. They still run locally once the data is downloaded.
-
-**The repository is private**, because Favorita data cannot be redistributed
-under the competition rules and this is graded work. `.env.example` is tracked
-and holds placeholders only; real credentials belong in `.env`, which is ignored.
-
-## Current status
-
-**Data layer and Model A complete. No simulator or agent yet.**
-
-| Component | Status |
-| --- | --- |
-| Repo layout, packaging, CI | Done |
-| `utils/` — paths, config, seed, logging | Done |
-| `agents/llm_client.py` — Groq + Echo, rate limiter, call log | Done |
-| Data contracts — `Scenario`, `KPIVector`, `KPIWithCI` | Done |
-| `configs/` — all four YAMLs with real values | Done |
-| Data acquisition + manifests | Done |
-| Loaders — C-MAPSS, AI4I, SKAB | Done |
-| Loader — Favorita | Done, verified on real data (3,000,888 rows) |
-| C-MAPSS preprocessing — RUL, sensors, regimes, windows, splits | Done |
-| Favorita feature pipeline | Done — 200 series, 336,800 rows, 47 columns |
-| Data cards | Done, all four measured from real data |
-| EDA notebooks 01–03 | Done, execute end to end |
-| Test suite (318 tests; 295 without data) | Passing |
-| Model A1 — C-MAPSS RUL + failure head | Done on FD001; **misses target**, see below |
-| Model A2 — AI4I failure classifier | Done; 2 of 3 targets missed, see model card |
-| Baselines — Ridge, random forest, LSTM | Done, all four subsets |
-| Metrics + last-window protocol | Done |
-| Result registry (`runs.jsonl`) + summary table | Done |
-| Model cards | Done — `reports/model_cards/` |
-| Model B — demand | Stubs only |
-| Digital twin (SimPy) | Stubs only |
-| Model C — surrogate | Stubs only |
-| Agent layer (LangGraph nodes) | Stubs only |
-| Streamlit dashboard | Placeholder shell |
-
-Every stub raises `NotImplementedError` with the function's name, so nothing
-fails silently as it gets filled in.
+**The repository is private**, because Favorita data cannot be redistributed and
+this is graded work. `.env.example` holds placeholders only; real credentials
+belong in `.env`, which is ignored.

@@ -1,0 +1,609 @@
+{
+ "id": "g07",
+ "goal_id": "G07",
+ "seed": 1,
+ "category": "feasible",
+ "role": "A clean feasible goal: no critic flag, accepted first time.",
+ "context_id": 14,
+ "replayed": true,
+ "provenance": "Replayed from the Prompt 9 agent benchmark, goal G07, seed 1; not a live run.",
+ "result": {
+  "goal_text": "Maximise profit and on-time delivery together, counting each 0.01 of on-time delivery as worth £5,000.",
+  "context_id": 14,
+  "status": "ok",
+  "spec": {
+   "name": "bench_weighted_profit_service",
+   "objective": {
+    "profit": 1.0,
+    "on_time_delivery_rate": 500000.0
+   },
+   "sense": "maximise",
+   "constraints": [],
+   "free_dims": [
+    "throughput_multiplier",
+    "shift_count",
+    "overtime_hours",
+    "pm_interval_M1",
+    "pm_interval_M2",
+    "pm_interval_M3",
+    "pm_interval_M4",
+    "pm_interval_M5",
+    "speed_setpoint_M1",
+    "speed_setpoint_M2",
+    "speed_setpoint_M3",
+    "speed_setpoint_M4",
+    "speed_setpoint_M5",
+    "reorder_point",
+    "order_quantity",
+    "safety_stock"
+   ],
+   "fixed": {},
+   "context_id": 14,
+   "infeasible_by_design": false,
+   "notes": ""
+  },
+  "question": null,
+  "refusal": null,
+  "plan": {
+   "scenario": {
+    "throughput_multiplier": 1.2476662756974872,
+    "shift_count": 2,
+    "overtime_hours": 0.003717354682391788,
+    "pm_interval_M1": 422.9246766398882,
+    "pm_interval_M2": 579.5517194186588,
+    "pm_interval_M3": 195.98830462876575,
+    "pm_interval_M4": 385.2123707134946,
+    "pm_interval_M5": 228.69942217055188,
+    "speed_setpoint_M1": 0.9176988276434092,
+    "speed_setpoint_M2": 0.8082364874405532,
+    "speed_setpoint_M3": 0.9153676667272985,
+    "speed_setpoint_M4": 0.8227888431424253,
+    "speed_setpoint_M5": 0.9162541625230723,
+    "supplier_choice": 0,
+    "reorder_point": 8223.082073002039,
+    "order_quantity": 2559.754227222715,
+    "safety_stock": 957.2296304526349,
+    "price_multiplier": 1.0
+   },
+   "recommended": true,
+   "recommendation_reason": "improves the objective over the current policy",
+   "verification": {
+    "mean": {
+     "units_produced": 25270.7,
+     "oee": 0.6991203282318115,
+     "unit_cost": 23.410166208830578,
+     "profit": 461221.2430692344,
+     "stockout_probability": 0.19629629629629627,
+     "downtime_hours": 7.076973196915371,
+     "unplanned_failures": 0.4,
+     "on_time_delivery_rate": 0.8508881543805142
+    },
+    "sem": {
+     "units_produced": 279.92328512568497,
+     "oee": 0.007789058184887813,
+     "unit_cost": 0.5046736906755086,
+     "profit": 13983.491484115075,
+     "stockout_probability": 0.009642283550502041,
+     "downtime_hours": 0.33230735188111615,
+     "unplanned_failures": 0.16329931618554522,
+     "on_time_delivery_rate": 0.011653031263347446
+    },
+    "stream": "search"
+   },
+   "origin": "explorer margin 1 std, seed 1",
+   "novelty": 0.8804783607259902
+  },
+  "baseline_comparison": {
+   "n_reps": 30,
+   "stream": "reeval",
+   "goal_seed": 1,
+   "confidence_level": 0.95,
+   "kpis": {
+    "units_produced": {
+     "plan": {
+      "mean": 25564.633333333335,
+      "sem": 270.93016228402666,
+      "ci_low": 25010.51893448222,
+      "ci_high": 26118.74773218445
+     },
+     "baseline": {
+      "mean": 24213.066666666666,
+      "sem": 285.3317163451873,
+      "ci_low": 23629.49778255689,
+      "ci_high": 24796.635550776442
+     },
+     "diff": {
+      "mean": 1351.5666666666666,
+      "sem": 334.59890788388435,
+      "ci_low": 667.2350620373165,
+      "ci_high": 2035.8982712960167
+     }
+    },
+    "oee": {
+     "plan": {
+      "mean": 0.7059670403103154,
+      "sem": 0.00753866100085496,
+      "ci_low": 0.6905487473693771,
+      "ci_high": 0.7213853332512538
+     },
+     "baseline": {
+      "mean": 0.7332242979515473,
+      "sem": 0.008217764228787637,
+      "ci_low": 0.716417082958773,
+      "ci_high": 0.7500315129443216
+     },
+     "diff": {
+      "mean": -0.027257257641232137,
+      "sem": 0.009601441807874657,
+      "ci_low": -0.046894411033909594,
+      "ci_high": -0.007620104248554679
+     }
+    },
+    "unit_cost": {
+     "plan": {
+      "mean": 23.156237488682823,
+      "sem": 0.22788068286307056,
+      "ci_low": 22.690169161221828,
+      "ci_high": 23.622305816143818
+     },
+     "baseline": {
+      "mean": 26.122215047172077,
+      "sem": 0.2997130149489232,
+      "ci_low": 25.509233104865576,
+      "ci_high": 26.735196989478577
+     },
+     "diff": {
+      "mean": -2.9659775584892496,
+      "sem": 0.35857425363272466,
+      "ci_low": -3.6993442509245082,
+      "ci_high": -2.232610866053991
+     }
+    },
+    "profit": {
+     "plan": {
+      "mean": 417123.79304492497,
+      "sem": 11254.176081455375,
+      "ci_low": 394106.41852535156,
+      "ci_high": 440141.1675644984
+     },
+     "baseline": {
+      "mean": 363270.7662365424,
+      "sem": 9450.754674913318,
+      "ci_low": 343941.8026348854,
+      "ci_high": 382599.72983819933
+     },
+     "diff": {
+      "mean": 53853.02680838254,
+      "sem": 10609.528598465155,
+      "ci_low": 32154.104429746978,
+      "ci_high": 75551.94918701811
+     }
+    },
+    "stockout_probability": {
+     "plan": {
+      "mean": 0.17777777777777773,
+      "sem": 0.006253201882325598,
+      "ci_low": 0.16498854392980541,
+      "ci_high": 0.19056701162575004
+     },
+     "baseline": {
+      "mean": 0.1876543209876543,
+      "sem": 0.007307399247722546,
+      "ci_low": 0.17270901143931394,
+      "ci_high": 0.20259963053599467
+     },
+     "diff": {
+      "mean": -0.009876543209876543,
+      "sem": 0.008687467684606789,
+      "ci_low": -0.027644409633504306,
+      "ci_high": 0.007891323213751222
+     }
+    },
+    "downtime_hours": {
+     "plan": {
+      "mean": 7.790494404008071,
+      "sem": 0.22733168116138042,
+      "ci_low": 7.325548911100955,
+      "ci_high": 8.255439896915187
+     },
+     "baseline": {
+      "mean": 12.210302731415677,
+      "sem": 0.33664639284834336,
+      "ci_low": 11.521783549845194,
+      "ci_high": 12.89882191298616
+     },
+     "diff": {
+      "mean": -4.4198083274076065,
+      "sem": 0.340072317497634,
+      "ci_low": -5.115334311622531,
+      "ci_high": -3.7242823431926815
+     }
+    },
+    "unplanned_failures": {
+     "plan": {
+      "mean": 0.7,
+      "sem": 0.08509629433967632,
+      "ci_low": 0.5259585363808446,
+      "ci_high": 0.8740414636191554
+     },
+     "baseline": {
+      "mean": 0.8666666666666667,
+      "sem": 0.06312427686319992,
+      "ci_low": 0.7375630244878586,
+      "ci_high": 0.9957703088454748
+     },
+     "diff": {
+      "mean": -0.16666666666666666,
+      "sem": 0.10810098868553088,
+      "ci_low": -0.38775801307016633,
+      "ci_high": 0.05442467973683304
+     }
+    },
+    "on_time_delivery_rate": {
+     "plan": {
+      "mean": 0.8622141750209888,
+      "sem": 0.005797746374360845,
+      "ci_low": 0.8503564522785786,
+      "ci_high": 0.8740718977633991
+     },
+     "baseline": {
+      "mean": 0.8507288651208557,
+      "sem": 0.006489806203747003,
+      "ci_low": 0.8374557211012555,
+      "ci_high": 0.8640020091404558
+     },
+     "diff": {
+      "mean": 0.011485309900133097,
+      "sem": 0.0071841364908949166,
+      "ci_low": -0.0032078990041724056,
+      "ci_high": 0.0261785188044386
+     }
+    }
+   },
+   "objective": {
+    "plan": {
+     "mean": 848230.8805554193,
+     "sem": 13144.333069928172,
+     "ci_low": 821347.700934737,
+     "ci_high": 875114.0601761015
+    },
+    "baseline": {
+     "mean": 788635.1987969704,
+     "sem": 11521.146961095605,
+     "ci_low": 765071.8075207706,
+     "ci_high": 812198.5900731703
+    },
+    "diff": {
+     "mean": 59595.68175844907,
+     "sem": 13759.299800548779,
+     "ci_low": 31454.753951376122,
+     "ci_high": 87736.60956552203
+    }
+   },
+   "constraint_margins": {},
+   "feasible_point": true,
+   "feasible_robust": true,
+   "baseline_feasible_point": true,
+   "baseline_feasible_robust": true
+  },
+  "candidates": [
+   {
+    "scenario": {
+     "throughput_multiplier": 1.2476662756974872,
+     "shift_count": 2,
+     "overtime_hours": 0.003717354682391788,
+     "pm_interval_M1": 422.9246766398882,
+     "pm_interval_M2": 579.5517194186588,
+     "pm_interval_M3": 195.98830462876575,
+     "pm_interval_M4": 385.2123707134946,
+     "pm_interval_M5": 228.69942217055188,
+     "speed_setpoint_M1": 0.9176988276434092,
+     "speed_setpoint_M2": 0.8082364874405532,
+     "speed_setpoint_M3": 0.9153676667272985,
+     "speed_setpoint_M4": 0.8227888431424253,
+     "speed_setpoint_M5": 0.9162541625230723,
+     "supplier_choice": 0,
+     "reorder_point": 8223.082073002039,
+     "order_quantity": 2559.754227222715,
+     "safety_stock": 957.2296304526349,
+     "price_multiplier": 1.0
+    },
+    "objective": 886665.3202594916,
+    "verification_mean": {
+     "units_produced": 25270.7,
+     "oee": 0.6991203282318115,
+     "unit_cost": 23.410166208830578,
+     "profit": 461221.2430692344,
+     "stockout_probability": 0.19629629629629627,
+     "downtime_hours": 7.076973196915371,
+     "unplanned_failures": 0.4,
+     "on_time_delivery_rate": 0.8508881543805142
+    },
+    "verification_sem": {
+     "units_produced": 279.92328512568497,
+     "oee": 0.007789058184887813,
+     "unit_cost": 0.5046736906755086,
+     "profit": 13983.491484115075,
+     "stockout_probability": 0.009642283550502041,
+     "downtime_hours": 0.33230735188111615,
+     "unplanned_failures": 0.16329931618554522,
+     "on_time_delivery_rate": 0.011653031263347446
+    },
+    "feasible_point": true,
+    "feasible_robust": true,
+    "status": "ok",
+    "surrogate_pred": {
+     "units_produced": 25339.45028752925,
+     "oee": 0.7058783154288054,
+     "unit_cost": 23.405322549362516,
+     "profit": 424735.2842312195,
+     "stockout_probability": 0.18940585815723027,
+     "downtime_hours": 6.43653754186539,
+     "unplanned_failures": 0.37408992612646697,
+     "on_time_delivery_rate": 0.8587831878624939
+    },
+    "origin": "explorer margin 1 std, seed 1"
+   },
+   {
+    "scenario": {
+     "throughput_multiplier": 1.2231782878882798,
+     "shift_count": 2,
+     "overtime_hours": 0.0051857562044829095,
+     "pm_interval_M1": 471.7410003072872,
+     "pm_interval_M2": 663.4400137392958,
+     "pm_interval_M3": 199.1637237613909,
+     "pm_interval_M4": 304.17879614369474,
+     "pm_interval_M5": 223.20175112936076,
+     "speed_setpoint_M1": 0.9181691831412285,
+     "speed_setpoint_M2": 0.8324099251548452,
+     "speed_setpoint_M3": 0.9436879858807572,
+     "speed_setpoint_M4": 0.8495880001974613,
+     "speed_setpoint_M5": 0.9117772542844957,
+     "supplier_choice": 0,
+     "reorder_point": 7645.361283636059,
+     "order_quantity": 2786.8425423094395,
+     "safety_stock": 1060.3219320184842,
+     "price_multiplier": 1.0
+    },
+    "objective": 880837.8750939881,
+    "verification_mean": {
+     "units_produced": 25494.8,
+     "oee": 0.696187253881988,
+     "unit_cost": 23.163262178333714,
+     "profit": 457447.1274430879,
+     "stockout_probability": 0.2,
+     "downtime_hours": 8.360252090055177,
+     "unplanned_failures": 0.6,
+     "on_time_delivery_rate": 0.8467814953018005
+    },
+    "verification_sem": {
+     "units_produced": 319.85836448861755,
+     "oee": 0.008907750942465308,
+     "unit_cost": 0.3727792886980301,
+     "profit": 15541.49781425051,
+     "stockout_probability": 0.009876543209876541,
+     "downtime_hours": 0.604527729290453,
+     "unplanned_failures": 0.1632993161855452,
+     "on_time_delivery_rate": 0.010147332498911624
+    },
+    "feasible_point": true,
+    "feasible_robust": true,
+    "status": "ok",
+    "surrogate_pred": {
+     "units_produced": 24789.944017337908,
+     "oee": 0.6821473955491859,
+     "unit_cost": 23.711249338772586,
+     "profit": 425704.84420023125,
+     "stockout_probability": 0.19651085291397818,
+     "downtime_hours": 6.72179863194479,
+     "unplanned_failures": 0.4261173470996485,
+     "on_time_delivery_rate": 0.854569178942535
+    },
+    "origin": "explorer margin 1 std, seed 1"
+   },
+   {
+    "scenario": {
+     "throughput_multiplier": 1.2062419450508193,
+     "shift_count": 2,
+     "overtime_hours": 0.2560350112949304,
+     "pm_interval_M1": 445.96263745803907,
+     "pm_interval_M2": 648.4619595764673,
+     "pm_interval_M3": 149.80004918002015,
+     "pm_interval_M4": 346.2604286415693,
+     "pm_interval_M5": 226.85599283499198,
+     "speed_setpoint_M1": 0.88291906255381,
+     "speed_setpoint_M2": 0.837741446593206,
+     "speed_setpoint_M3": 0.9525525526274815,
+     "speed_setpoint_M4": 0.8672390837816875,
+     "speed_setpoint_M5": 0.8922299343795472,
+     "supplier_choice": 0,
+     "reorder_point": 7796.910744108506,
+     "order_quantity": 2546.091052301408,
+     "safety_stock": 1413.2208551579733,
+     "price_multiplier": 1.0
+    },
+    "objective": 876385.2920775549,
+    "verification_mean": {
+     "units_produced": 25170.2,
+     "oee": 0.6825615584661269,
+     "unit_cost": 23.635814248798567,
+     "profit": 452936.45278861356,
+     "stockout_probability": 0.19999999999999998,
+     "downtime_hours": 8.074421237567332,
+     "unplanned_failures": 0.5,
+     "on_time_delivery_rate": 0.8468976785778825
+    },
+    "verification_sem": {
+     "units_produced": 292.0399820420332,
+     "oee": 0.007987934203584837,
+     "unit_cost": 0.5072217758918893,
+     "profit": 14783.029595506772,
+     "stockout_probability": 0.009876543209876543,
+     "downtime_hours": 0.5920190365912357,
+     "unplanned_failures": 0.16666666666666666,
+     "on_time_delivery_rate": 0.012354326343074136
+    },
+    "feasible_point": true,
+    "feasible_robust": true,
+    "status": "ok",
+    "surrogate_pred": {
+     "units_produced": 25417.09026490534,
+     "oee": 0.6924278472852929,
+     "unit_cost": 23.508078738284322,
+     "profit": 422606.8638423852,
+     "stockout_probability": 0.18766133447718328,
+     "downtime_hours": 7.770008514928714,
+     "unplanned_failures": 0.44953459985651734,
+     "on_time_delivery_rate": 0.8589022279051961
+    },
+    "origin": "explorer margin 1 std, seed 1"
+   },
+   {
+    "scenario": {
+     "throughput_multiplier": 1.2123560217353433,
+     "shift_count": 2,
+     "overtime_hours": 0.12606359721481064,
+     "pm_interval_M1": 397.14318702857315,
+     "pm_interval_M2": 676.2029624975901,
+     "pm_interval_M3": 132.9137999657438,
+     "pm_interval_M4": 328.1636743362529,
+     "pm_interval_M5": 186.02743478603935,
+     "speed_setpoint_M1": 0.8846464413359203,
+     "speed_setpoint_M2": 0.8521194766961189,
+     "speed_setpoint_M3": 0.9291652511523314,
+     "speed_setpoint_M4": 0.8613256701371994,
+     "speed_setpoint_M5": 0.9032075985805105,
+     "supplier_choice": 0,
+     "reorder_point": 7893.6565901905815,
+     "order_quantity": 3005.075694506332,
+     "safety_stock": 1225.1825690497456,
+     "price_multiplier": 1.0
+    },
+    "objective": 874424.8473669498,
+    "verification_mean": {
+     "units_produced": 26111.9,
+     "oee": 0.7030322695680697,
+     "unit_cost": 23.221210160977698,
+     "profit": 448605.4916416262,
+     "stockout_probability": 0.18518518518518517,
+     "downtime_hours": 8.688195033738705,
+     "unplanned_failures": 0.8,
+     "on_time_delivery_rate": 0.851638711450647
+    },
+    "verification_sem": {
+     "units_produced": 474.9761736714333,
+     "oee": 0.012340838904733392,
+     "unit_cost": 0.4444807594783778,
+     "profit": 15140.00142033438,
+     "stockout_probability": 0.015616185976140144,
+     "downtime_hours": 0.8862106655672245,
+     "unplanned_failures": 0.19999999999999998,
+     "on_time_delivery_rate": 0.012018920075903538
+    },
+    "feasible_point": true,
+    "feasible_robust": true,
+    "status": "ok",
+    "surrogate_pred": {
+     "units_produced": 25437.217327874052,
+     "oee": 0.6982524774179969,
+     "unit_cost": 23.550239408280145,
+     "profit": 423358.4675286596,
+     "stockout_probability": 0.18395189743615906,
+     "downtime_hours": 8.36731386804854,
+     "unplanned_failures": 0.40587902588322,
+     "on_time_delivery_rate": 0.8613142727319717
+    },
+    "origin": "explorer margin 1 std, seed 1"
+   },
+   {
+    "scenario": {
+     "throughput_multiplier": 1.2364903110636793,
+     "shift_count": 2,
+     "overtime_hours": 0.1699089286090248,
+     "pm_interval_M1": 443.7359595637707,
+     "pm_interval_M2": 605.7292037313658,
+     "pm_interval_M3": 185.70759611998878,
+     "pm_interval_M4": 347.34116408010254,
+     "pm_interval_M5": 208.5404932906483,
+     "speed_setpoint_M1": 0.8960494233299954,
+     "speed_setpoint_M2": 0.8377092082521249,
+     "speed_setpoint_M3": 0.9262302875261951,
+     "speed_setpoint_M4": 0.8159529699461082,
+     "speed_setpoint_M5": 0.9206501000602827,
+     "supplier_choice": 0,
+     "reorder_point": 7829.301579301314,
+     "order_quantity": 2724.057716654566,
+     "safety_stock": 1174.136063627495,
+     "price_multiplier": 1.0
+    },
+    "objective": 873893.1842593048,
+    "verification_mean": {
+     "units_produced": 25850.5,
+     "oee": 0.6864077087040166,
+     "unit_cost": 23.203788550121864,
+     "profit": 449912.4281443904,
+     "stockout_probability": 0.19259259259259257,
+     "downtime_hours": 8.697087611572181,
+     "unplanned_failures": 0.8,
+     "on_time_delivery_rate": 0.8479615122298286
+    },
+    "verification_sem": {
+     "units_produced": 300.0575592930278,
+     "oee": 0.008418724539154173,
+     "unit_cost": 0.4499007438130902,
+     "profit": 13254.288759421232,
+     "stockout_probability": 0.013296703227492601,
+     "downtime_hours": 0.6036700050142731,
+     "unplanned_failures": 0.13333333333333333,
+     "on_time_delivery_rate": 0.011166519427150065
+    },
+    "feasible_point": true,
+    "feasible_robust": true,
+    "status": "ok",
+    "surrogate_pred": {
+     "units_produced": 25336.137650537985,
+     "oee": 0.6892160487679141,
+     "unit_cost": 23.43987737080283,
+     "profit": 425566.7552230344,
+     "stockout_probability": 0.1872891058519826,
+     "downtime_hours": 6.915890996129961,
+     "unplanned_failures": 0.41285446361323996,
+     "on_time_delivery_rate": 0.8593315184573775
+    },
+    "origin": "explorer margin 1 std, seed 1"
+   }
+  ],
+  "flags": [],
+  "closest_achievable": [],
+  "explanation": "The plan is recommended because it “improves the objective over the current policy”.  \n\n**Units produced** rises from 24210.0 to 25560.0, a delta of 1352.0, which is higher and therefore better.  \n\n**OEE** falls from 0.7332 to 0.706, a delta of –0.02726, which is lower and therefore worse.  \n\n**Unit cost** falls from 26.12 to 23.16, a delta of –2.966, which is lower and therefore better.  \n\n**Profit** rises from 363300.0 to 417100.0, a delta of 53850.0, which is higher and therefore better.  \n\n**Stockout probability** falls from 0.1877 to 0.1778, a delta of –0.009877, which is lower and therefore better.  \n\n**Downtime hours** falls from 12.21 to 7.79, a delta of –4.42, which is lower and therefore better.  \n\n**Unplanned failures** falls from 0.8667 to 0.7, a delta of –0.1667, which is lower and therefore better.  \n\n**On‑time delivery rate** rises from 0.8507 to 0.8622, a delta of 0.01149, which is higher and therefore better.  \n\nAll KPI changes are reported with their confidence intervals. The plan is feasible, robustly feasible, and the objective change is +59600.0. No flags are present.",
+  "explanation_mode": "llm",
+  "trace": {
+   "nodes_run": [
+    "explorer",
+    "evaluator",
+    "critic"
+   ],
+   "critic_actions": [
+    "accept"
+   ],
+   "retries_used": 0,
+   "planner_repairs": 0,
+   "llm_model": "fake-llm",
+   "llm_calls": [],
+   "llm_calls_total": 0,
+   "llm_call_cap": 6,
+   "prompt_tokens": 0,
+   "completion_tokens": 0,
+   "llm_latency_seconds": 0,
+   "twin_runs": 260,
+   "surrogate_evals": 920,
+   "explorer_seconds": 60.369776599999966,
+   "wall_seconds": 70.14553860000001,
+   "explanation": {
+    "source": "agent benchmark audit (explainer v1); passes checker v2 offline",
+    "attempts": 1
+   }
+  },
+  "created_at": 1792083146.8160129
+ }
+}

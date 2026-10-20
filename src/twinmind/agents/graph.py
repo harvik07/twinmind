@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import operator
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -28,7 +29,7 @@ from typing import Annotated, Any, TypedDict
 
 from twinmind.agents.contracts import AgentResult
 from twinmind.agents.critic import critique
-from twinmind.agents.explainer import explain
+from twinmind.agents.explanation_v2 import build_facts_v2, explain_v2
 from twinmind.agents.llm_client import (
     CallBudget,
     CallLogger,
@@ -42,7 +43,7 @@ from twinmind.agents.llm_client import (
     rank_models,
 )
 from twinmind.agents.planner import plan_goal
-from twinmind.agents.tools import Toolkit, build_facts, closest_achievable
+from twinmind.agents.tools import Toolkit, closest_achievable
 from twinmind.optim.contracts import ObjectiveSpec
 from twinmind.optim.goals import DEV_CONTEXTS
 from twinmind.utils.config import AgentConfig
@@ -196,7 +197,10 @@ def build_graph(deps: AgentDeps, budget: CallBudget, *, explain_plan: bool = Tru
         return update
 
     def explainer(state: AgentState) -> dict[str, Any]:
-        facts = build_facts(
+        # Explanation v2 (post-benchmark): plain-decimal facts with units and
+        # the v2 checker. v1 (tools.build_facts / explainer.explain) is kept
+        # unchanged for reproducing the Prompt 9 benchmark audit.
+        facts = build_facts_v2(
             state["spec"],
             state["chosen"],
             state["evaluation"],
@@ -205,18 +209,24 @@ def build_graph(deps: AgentDeps, budget: CallBudget, *, explain_plan: bool = Tru
             state["recommended"],
             state["recommendation_reason"],
         )
-        result = explain(
+        result = explain_v2(
             facts, budget, cfg.budget.max_explainer_regenerations, cfg.explainer.max_words
         )
+        failed = [a for a in result.attempts if any(a["audit"].values())]
         return {
             "nodes_run": ["explainer"],
             "explanation": result.text,
             "explanation_mode": result.mode,
             "explanation_record": {
-                "attempts": result.attempts,
-                "ungrounded": result.ungrounded,
+                "checker_version": result.checker_version,
+                "attempts": len(result.attempts),
+                # Every attempt's text and audit, the failed ones included.
+                "attempt_log": result.attempts,
+                "audits": [a["audit"] for a in result.attempts],
+                "ungrounded": [
+                    [item for items in a["audit"].values() for item in items] for a in failed
+                ],
                 "fallback_reason": result.fallback_reason,
-                "audits": result.audits,
                 "facts": facts,
             },
         }
@@ -276,6 +286,36 @@ def run_agent(goal_text: str, context_id: int, deps: AgentDeps) -> AgentResult:
         {"goal_text": goal_text, "context_id": context_id},
         {"recursion_limit": 25},
     )
+    return _assemble(goal_text, context_id, state, budget, deps, started, twin_before)
+
+
+def run_agent_streaming(
+    goal_text: str,
+    context_id: int,
+    deps: AgentDeps,
+    on_step: Callable[[str, int, int], None] | None = None,
+) -> AgentResult:
+    """:func:`run_agent`, reporting each node as it finishes.
+
+    ``on_step(node, llm_calls_used, llm_call_cap)`` is called after every node,
+    so a UI can show progress and the LLM budget live. The result and the
+    run-log line are the same as :func:`run_agent`'s.
+    """
+    _check_dev(context_id)
+    started = time.perf_counter()
+    twin_before = int(getattr(deps.toolkit, "twin_runs", 0))
+    budget = CallBudget(deps.llm, deps.config.budget.max_llm_calls_per_goal)
+    state: AgentState = {}
+    for mode, chunk in build_graph(deps, budget).stream(
+        {"goal_text": goal_text, "context_id": context_id},
+        {"recursion_limit": 25},
+        stream_mode=["updates", "values"],
+    ):
+        if mode == "values":
+            state = chunk
+        elif on_step is not None:
+            for node in chunk:
+                on_step(str(node), budget.used, budget.max_calls)
     return _assemble(goal_text, context_id, state, budget, deps, started, twin_before)
 
 

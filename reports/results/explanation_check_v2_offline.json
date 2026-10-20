@@ -1,0 +1,697 @@
+{
+ "label": "post-benchmark offline re-check, not a test result; B5 is unchanged",
+ "n": 40,
+ "v1_pass": 40,
+ "v2_pass": 39,
+ "v2_fail_reasons": {
+  "I01__agent__seed1": {
+   "direction_errors": [
+    "'rises' for stockout_probability, whose delta is -0.04074 (- stockout_probability rises to 0.1901 from 0.2309)"
+   ]
+  }
+ },
+ "rows": [
+  {
+   "cell": "AA1__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "AA1__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "AA2__agent__seed1",
+   "stored_mode": "template",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "AA2__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G01__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G01__agent__seed2",
+   "stored_mode": "template",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G02__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G02__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G03__agent__seed1",
+   "stored_mode": "template",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G03__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G04__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G04__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G05__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G05__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G06__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G06__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G07__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G07__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G08__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G08__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G09__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G09__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G10__agent__seed1",
+   "stored_mode": "template",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G10__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G11__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G11__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G12__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "G12__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "I01__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": false,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [
+     "'rises' for stockout_probability, whose delta is -0.04074 (- stockout_probability rises to 0.1901 from 0.2309)"
+    ],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "I01__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "I02__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "I02__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "I03__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "I03__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "N01__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "N01__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "N02__agent__seed1",
+   "stored_mode": "template",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "N02__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "N03__agent__seed1",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  },
+  {
+   "cell": "N03__agent__seed2",
+   "stored_mode": "llm",
+   "v1_pass": true,
+   "v2_pass": true,
+   "v1": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": []
+   },
+   "v2": {
+    "ungrounded_numbers": [],
+    "direction_errors": [],
+    "reason_errors": [],
+    "forbidden_words": []
+   }
+  }
+ ]
+}

@@ -17,8 +17,8 @@ short of the spec.
 
 ## 0. What it optimises
 
-**The twin, not a factory.** Every recommendation here is optimal for a
-simulator whose `demand_capacity_ratio` — an assumption chosen to load the line
+**The twin, not a factory.** Every recommendation here is the best plan found
+for a simulator whose `demand_capacity_ratio` — an assumption chosen to load the line
 to about 85%, not measured — moves profit by 45% when changed by a quarter
 ([twin_design.md](twin_design.md)). The LLM layer only proposes scenario
 parameters and writes explanations; every KPI, comparison and constraint check
@@ -117,7 +117,7 @@ n = 1, seed variance comes from 2 replicates, and every interval is wide.
 > **"Gap to best_known" is a lower bound on the true gap to the optimum.**
 > best_known is surrogate-guided — the sweep is ranked by the surrogate and
 > only its top 100 reach the twin — and it is not an oracle. A method at gap 0
-> is "as good as the best anything found", not "optimal".
+> is "as good as the best anything found", not "the best possible".
 
 ---
 

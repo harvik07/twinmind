@@ -68,4 +68,4 @@ benchmark:
 	$(PYTHON) scripts/run_benchmark.py --method all
 
 app:
-	$(PYTHON) -m streamlit run app/streamlit_app.py
+	$(PYTHON) -m streamlit run app/main.py

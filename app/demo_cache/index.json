@@ -1,0 +1,64 @@
+{
+ "entries": [
+  {
+   "id": "g07",
+   "goal_id": "G07",
+   "seed": 1,
+   "category": "feasible",
+   "role": "A clean feasible goal: no critic flag, accepted first time.",
+   "context_id": 14,
+   "goal_text": "Maximise profit and on-time delivery together, counting each 0.01 of on-time delivery as worth £5,000.",
+   "file": "g07.json"
+  },
+  {
+   "id": "g01",
+   "goal_id": "G01",
+   "seed": 1,
+   "category": "feasible",
+   "role": "The critic acted: it swapped plans, and the plan is still flagged as not robustly feasible.",
+   "context_id": 8,
+   "goal_text": "Maximise profit while keeping unplanned failures to at most one over the month.",
+   "file": "g01.json"
+  },
+  {
+   "id": "i01",
+   "goal_id": "I01",
+   "seed": 2,
+   "category": "infeasible",
+   "role": "An infeasible goal: no plan meets the constraints; closest-achievable options.",
+   "context_id": 8,
+   "goal_text": "Maximise profit with on-time delivery of at least 99% and a stockout probability of no more than 1%.",
+   "file": "i01.json"
+  },
+  {
+   "id": "n01",
+   "goal_id": "N01",
+   "seed": 1,
+   "category": "no_room",
+   "role": "No room: the only lever cannot move the objective, so nothing is recommended.",
+   "context_id": 9,
+   "goal_text": "Maximise profit by changing only the preventive-maintenance interval of M5.",
+   "file": "n01.json"
+  },
+  {
+   "id": "aa1",
+   "goal_id": "AA1",
+   "seed": 1,
+   "category": "ambiguous_answerable",
+   "role": "Ambiguous wording with one reasonable reading.",
+   "context_id": 15,
+   "goal_text": "Squeeze more money out of the line, but don't let more than about a quarter of days end in a stockout.",
+   "file": "aa1.json"
+  },
+  {
+   "id": "g09",
+   "goal_id": "G09",
+   "seed": 1,
+   "category": "feasible",
+   "role": "A constraint on unplanned failures, a weakly predicted KPI; also flagged as novel.",
+   "context_id": 16,
+   "goal_text": "Maximise OEE with no more than 1.5 unplanned failures expected.",
+   "file": "g09.json"
+  }
+ ]
+}
