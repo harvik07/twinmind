@@ -348,6 +348,48 @@ def run_on_spec(
     return _assemble(spec.name, spec.context_id, state, budget, deps, started, twin_before)
 
 
+def run_on_spec_streaming(
+    spec: ObjectiveSpec,
+    deps: AgentDeps,
+    seed: int,
+    on_step: Callable[[str, int, int], None] | None = None,
+    *,
+    explain_plan: bool = False,
+) -> AgentResult:
+    """:func:`run_on_spec`, reporting each node as it finishes.
+
+    A read-only progress hook for the dashboard's goal cards: the same graph,
+    nodes, seed and initial state as :func:`run_on_spec`, so it returns the same
+    result; ``on_step(node, llm_calls_used, llm_call_cap)`` only observes. An
+    exception raised by ``on_step`` stops the run between nodes (the
+    dashboard's cancel and time limit). The benchmark does not use it.
+    """
+    _check_dev(spec.context_id)
+    started = time.perf_counter()
+    twin_before = int(getattr(deps.toolkit, "twin_runs", 0))
+    budget = CallBudget(deps.llm, deps.config.budget.max_llm_calls_per_goal)
+    initial: AgentState = {
+        "goal_text": spec.name,
+        "context_id": spec.context_id,
+        "spec": spec,
+        "outcome_kind": "spec",
+        "margin_std": deps.config.explorer.margin_std,
+        "retries_used": 0,
+        "candidates": [],
+        "seed": seed,
+    }
+    state: AgentState = {}
+    for mode, chunk in build_graph(deps, budget, explain_plan=explain_plan).stream(
+        initial, {"recursion_limit": 25}, stream_mode=["updates", "values"]
+    ):
+        if mode == "values":
+            state = chunk
+        elif on_step is not None:
+            for node in chunk:
+                on_step(str(node), budget.used, budget.max_calls)
+    return _assemble(spec.name, spec.context_id, state, budget, deps, started, twin_before)
+
+
 def _check_dev(context_id: int) -> None:
     if context_id not in DEV_CONTEXTS:
         raise ValueError(

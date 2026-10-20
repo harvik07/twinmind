@@ -15,7 +15,7 @@ import re
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -24,11 +24,16 @@ from twinmind.agents.contracts import AgentResult
 from twinmind.utils.paths import PROJECT_ROOT
 
 DEMO_CACHE = PROJECT_ROOT / "app" / "demo_cache"
-REPLAY_LABEL = "replayed benchmark result, not a live run"
+#: Plain label on every saved (replayed) result; the technical wording is kept
+#: for the "Show technical details" expander.
+REPLAY_LABEL = "Saved example result, not a live run"
+TECH_REPLAY_LABEL = "replayed benchmark result, not a live run"
+#: Past results "Type" column: live runs and saved examples are labelled apart.
 HISTORY_LABELS = {
-    "live": "live run",
-    "replayed": REPLAY_LABEL,
-    "aborted": "aborted, no result",
+    "live": "Live",
+    "started": "Live",
+    "aborted": "Live",
+    "replayed": "Saved example, not a live run",
 }
 
 #: What-if twin verification: at most this many replications, and the runs
@@ -191,14 +196,15 @@ def safe_error(error: BaseException) -> str:
 
 @dataclass(frozen=True)
 class HistoryItem:
-    """One dashboard event."""
+    """One run or saved example in Past results."""
 
-    kind: str  # "live" | "replayed" | "aborted"
+    kind: str  # "live" | "replayed" | "aborted" | "started"
     when: str
     goal_text: str
-    status: str
+    status: str  # agent status, or "running" | "stopped" | "cancelled" | ...
     detail: str = ""
     result: AgentResult | None = None
+    run_id: str = ""
 
     @property
     def label(self) -> str:
@@ -213,8 +219,10 @@ def append_history(
     detail: str = "",
     result: AgentResult | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    run_id: str = "",
 ) -> HistoryItem:
-    """Append one event. Every run that starts ends with exactly one event."""
+    """Append one event. A live run writes "started" first and one final event
+    with the same ``run_id`` when it ends."""
     if kind not in HISTORY_LABELS:
         raise ValueError(f"unknown history kind {kind!r}")
     item = HistoryItem(
@@ -224,6 +232,7 @@ def append_history(
         status=status,
         detail=detail,
         result=result,
+        run_id=run_id,
     )
     record = {
         "kind": item.kind,
@@ -231,6 +240,7 @@ def append_history(
         "goal_text": item.goal_text,
         "status": item.status,
         "detail": item.detail,
+        "run_id": run_id,
         "result": result.to_dict() if result is not None else None,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -239,8 +249,13 @@ def append_history(
     return item
 
 
-def read_history(path: Path) -> list[HistoryItem]:
-    """Newest first. A malformed line is skipped, not fatal."""
+def read_history(path: Path, running_id: str = "") -> list[HistoryItem]:
+    """Newest first. A malformed line is skipped, not fatal.
+
+    A "started" event is folded into its run's final event. One with no final
+    event is either the run in progress (``running_id``) or a run the app lost
+    (a restart): shown as stopped before finishing, never silently dropped.
+    """
     if not path.exists():
         return []
     items = []
@@ -255,11 +270,21 @@ def read_history(path: Path) -> list[HistoryItem]:
                     status=raw["status"],
                     detail=raw.get("detail", ""),
                     result=AgentResult.from_dict(raw["result"]) if raw.get("result") else None,
+                    run_id=raw.get("run_id", ""),
                 )
             )
         except (ValueError, KeyError, TypeError):
             continue
-    return items[::-1]
+    ended = {i.run_id for i in items if i.run_id and i.kind != "started"}
+    out = []
+    for item in items:
+        if item.kind != "started":
+            out.append(item)
+        elif item.run_id == running_id:
+            out.append(replace(item, status="running"))
+        elif item.run_id not in ended:
+            out.append(replace(item, kind="aborted", status="stopped"))
+    return out[::-1]
 
 
 def read_run_log(path: Path) -> list[AgentResult]:

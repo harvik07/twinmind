@@ -1,13 +1,21 @@
+# ruff: noqa: I001, E402
+# Fixture: the v1.0-dashboard page, verbatim except this import, which loads
+# the vendored v1.0 components (tests/fixtures/v1_0_components.py).
 """History: every dashboard event, replays and live runs labelled apart, plus
 the agent's own run log (every live run, from the CLI too)."""
 
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).parent))
+import v1_0_components as ui
+
 from typing import Any
 
 import streamlit as st
 
-from twinmind.ui import components as ui
 from twinmind.ui import services as sv
 
 st.title("History")

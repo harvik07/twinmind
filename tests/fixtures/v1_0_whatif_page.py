@@ -1,3 +1,6 @@
+# ruff: noqa: I001, E402
+# Fixture: the v1.0-dashboard page, verbatim except this import, which loads
+# the vendored v1.0 components (tests/fixtures/v1_0_components.py).
 """What-if: move the 16 levers, read the surrogate's ESTIMATE, then verify on
 the twin (at most 10 replications, under a wall-clock cap).
 
@@ -7,12 +10,17 @@ interval; a twin number always has its 95% CI and its replication count.
 
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).parent))
+import v1_0_components as ui
+
 from typing import Any
 
 import streamlit as st
 
 from twinmind.twin.runner import KPI_NAMES, Scenario
-from twinmind.ui import components as ui
 from twinmind.ui import services as sv
 from twinmind.ui import viewmodel as vm
 

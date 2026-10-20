@@ -1,3 +1,6 @@
+# ruff: noqa: I001, E402
+# Fixture: the v1.0-dashboard page, verbatim except this import, which loads
+# the vendored v1.0 components (tests/fixtures/v1_0_components.py).
 """Ask: a goal in plain English -> a twin-verified plan, or a replayed one.
 
 Live mode runs ONE goal at a time and shows each node and the LLM calls used
@@ -9,12 +12,17 @@ labelled "replayed, not live".
 
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+
+_sys.path.insert(0, str(_Path(__file__).parent))
+import v1_0_components as ui
+
 from typing import Any
 
 import streamlit as st
 
 from twinmind.agents.contracts import AgentResult
-from twinmind.ui import components as ui
 from twinmind.ui import services as sv
 
 NODE_TEXT = {
