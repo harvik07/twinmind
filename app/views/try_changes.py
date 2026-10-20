@@ -17,7 +17,7 @@ from twinmind.ui import components as ui
 from twinmind.ui import plain as pl
 from twinmind.ui import services as sv
 from twinmind.ui import viewmodel as vm
-from twinmind.ui.glossary import KPIS, SECTIONS, SETTINGS
+from twinmind.ui.glossary import KPIS, ROUGH_KPI_NOTE, SECTIONS, SETTINGS
 from twinmind.ui.goals import DEFAULT_MONTH, goal_text
 
 mode = sv.detect_mode()
@@ -119,6 +119,7 @@ if mode.twin_available:
     now, new = SurrogateEvaluator(model["surrogate"], month).evaluate([current_setup, scenario])
     st.caption("Your current setup → these settings.")
     ui.metric_cards(pl.estimate_cards(now, new))
+    st.caption(f"⚠️ {ROUGH_KPI_NOTE}")
     with st.expander("More numbers"):
         st.caption(pl.ESTIMATE_LABEL + ".")
         st.dataframe(
@@ -152,9 +153,12 @@ else:
         for c in specs
     )
     if start_result is not None and unmoved:
-        st.warning(f"**{sv.REPLAY_LABEL}.**", icon="📁")
+        st.info(f"**{sv.REPLAY_LABEL}.**", icon="📁")
         st.caption(pl.checked_label(start_result) + ", against the current setup.")
         ui.metric_cards(pl.kpi_cards(start_result))
+        st.caption(f"⚠️ {ROUGH_KPI_NOTE}")
+        with st.expander(ui.TECH):
+            ui.kpi_table(vm.kpi_table(start_result), with_baseline=True)
 
 # --------------------------------------------------------------------------- #
 # Check with the detailed simulation
@@ -206,11 +210,13 @@ if checked:
                 help=f"{KPIS[kpi].help} Likely between {pl.value_text(kpi, run.lows[kpi])} "
                 f"and {pl.value_text(kpi, run.highs[kpi])}.",
                 rough=KPIS[kpi].rough,
+                likely=pl.likely_text(kpi, run.lows[kpi], run.highs[kpi]),
             )
             for kpi in pl.HEADLINE_KPIS
         ]
     )
-    note = f"Took {run.seconds:.1f} seconds."
+    st.caption(f"⚠️ {ROUGH_KPI_NOTE}")
+    note = f"Took {run.seconds:.1f} seconds ({run.seconds_per_run:.2f} seconds per run)."
     if run.slower_than_quiet:
         note += " Slower than usual: the computer may be busy."
     if run.stopped_by_time_cap:

@@ -38,7 +38,7 @@ state = st.session_state
 st.title("Plan")
 st.caption("Find better settings for your line, checked in a detailed simulation.")
 if demo:
-    st.warning(pl.error_message("demo"), icon="📁")
+    st.info(pl.error_message("demo"), icon="📁")
 
 # --------------------------------------------------------------------------- #
 # Welcome
@@ -59,12 +59,20 @@ if not state.get("welcome_dismissed"):
 # --------------------------------------------------------------------------- #
 # Showing a result
 # --------------------------------------------------------------------------- #
-def show(kind: str, result: AgentResult, note: str = "", asked: str = "") -> None:
+def show(
+    kind: str,
+    result: AgentResult,
+    note: str = "",
+    asked: str = "",
+    entry: sv.DemoEntry | None = None,
+) -> None:
     state["plan_shown"] = {
         "kind": kind,
         "result": result.to_dict(),
         "note": note,
         "asked": asked,
+        "saved_from": pl.saved_from(entry.goal_id, entry.seed) if entry else "",
+        "provenance": entry.provenance if entry else "",
     }
 
 
@@ -77,7 +85,7 @@ def show_saved(entry: sv.DemoEntry, card_id: str | None, asked: str, why: str) -
         )
     sv.append_history(log, "replayed", goal_text(entry.result.spec or {}), entry.result.status,
                       why, entry.result)  # fmt: skip
-    show("saved", entry.result, note, asked)
+    show("saved", entry.result, note, asked, entry)
 
 
 # --------------------------------------------------------------------------- #
@@ -205,8 +213,14 @@ def _start_live() -> None:
     try:
         deps = ui.live_deps()
     except Exception as error:
-        state["plan_error"] = {"kind": "ai_unreachable", "detail": sv.safe_error(error),
-                               "goal": own_words or ""}  # fmt: skip
+        detail = sv.safe_error(error)
+        state["plan_error"] = {"kind": "ai_unreachable", "detail": detail}
+        asked = own_words.strip() if chosen == OWN_WORDS else ""
+        card_id = str(chosen) if chosen in CARDS else None
+        guess = asked or (CARDS[card_id].title if card_id else "")
+        entry = ui.demo_by_id(CARDS[card_id].demo_id) if card_id else None
+        show_saved(entry or sv.closest_demo(guess, ui.demo_cache()), card_id, asked,
+                   f"The AI service could not be reached ({detail}).")  # fmt: skip
         return
     if chosen == OWN_WORDS:
         from twinmind.agents.graph import run_agent_streaming
@@ -246,6 +260,7 @@ def _start_live() -> None:
 
 if pressed:
     state.pop("plan_error", None)
+    state.pop("plan_failed", None)
     if demo:
         if chosen == OWN_WORDS:
             entry = sv.closest_demo(own_words, ui.demo_cache())
@@ -255,7 +270,7 @@ if pressed:
             try:
                 build_spec(card.id, {}, True, DEFAULT_MONTH)  # the card always makes a goal
             except GoalFormError as error:  # pragma: no cover -- every card is tested
-                st.error(str(error))
+                st.warning(str(error), icon="✋")
             show_saved(ui.demo_by_id(card.demo_id), card.id, "", "Demo mode: saved example.")
     else:
         _start_live()
@@ -263,12 +278,9 @@ if pressed:
 error = state.get("plan_error")
 if error:
     if error["kind"] == "form":
-        st.error(error["detail"], icon="✋")
+        st.warning(error["detail"], icon="✋")
     else:
-        st.error(pl.error_message(error["kind"]), icon="⚠️")
-        if error["kind"] == "ai_unreachable":
-            entry = sv.closest_demo(error.get("goal") or "", ui.demo_cache())
-            ui.plan_result(entry.result, saved=True)
+        st.info(pl.error_message(error["kind"]), icon="ℹ️")
 
 
 # --------------------------------------------------------------------------- #
@@ -299,15 +311,18 @@ if job_id and status.id == job_id and not status.active and state.get("plan_seen
         show("live", status.result, asked=str(status.meta.get("asked", "")))
     else:
         state["plan_shown"] = None
-        state["plan_failed"] = {"kind": status.error_kind or "failed", "detail":
-                                status.error_detail, "goal": status.goal_text}  # fmt: skip
+        kind = status.error_kind or "failed"
+        state["plan_failed"] = {"kind": kind, "detail": status.error_detail,
+                                "state": status.state}  # fmt: skip
+        if kind == "ai_unreachable":  # show a labelled saved example instead, logged once
+            asked = str(status.meta.get("asked", ""))
+            show_saved(sv.closest_demo(asked or status.goal_text, ui.demo_cache()), None, asked,
+                       "The AI service could not be reached.")  # fmt: skip
 
 failed = state.get("plan_failed")
-if failed and not state.get("plan_shown"):
-    st.error(pl.error_message(failed["kind"]), icon="⚠️")
-    if failed["kind"] == "ai_unreachable":
-        entry = sv.closest_demo(failed.get("goal") or "", ui.demo_cache())
-        ui.plan_result(entry.result, saved=True)
+if failed:
+    reason = pl.stop_reason(failed.get("state", "failed"), failed.get("detail", ""))
+    st.info(f"**Stopped:** {reason}. {pl.error_message(failed['kind'])}", icon="⏹️")
     if failed.get("detail"):
         with st.expander(ui.TECH):
             st.code(failed["detail"])
@@ -320,6 +335,8 @@ if shown:
         saved=shown["kind"] == "saved",
         note=shown.get("note", ""),
         asked=shown.get("asked", ""),
+        saved_from=shown.get("saved_from", ""),
+        provenance=shown.get("provenance", ""),
     )
 
 # --------------------------------------------------------------------------- #
@@ -331,5 +348,6 @@ entries = {goal_text(e.result.spec or {}): e for e in ui.demo_cache()}
 picked = st.selectbox("Saved example", list(entries), key="saved_pick")
 if st.button("Show this saved example", key="saved_show") and picked:
     state.pop("plan_failed", None)
+    state.pop("plan_error", None)
     show_saved(entries[picked], None, "", "Picked from the saved examples.")
     st.rerun()

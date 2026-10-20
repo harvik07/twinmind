@@ -79,7 +79,7 @@ python -m streamlit run app/main.py -- --demo
 
 3. In the browser: on **Plan**, choose a goal card (for example *Make more
    profit*), then press **Show a saved example**. Read the sentence at the top,
-   then *What to change*, *What you get*, *Things to watch* and *How much to
+   then *What to change*, *What you get*, *Before you act* and *How much to
    trust this*. Everything technical is under **Show technical details**.
 
 ### Live mode (finds new plans)
@@ -111,9 +111,9 @@ labelled as such.
 
 | Page | What a manager does there |
 |---|---|
-| **Plan** | Pick what to improve from six cards (or describe it in your own words), set limits in business units (most breakdowns in 4 weeks, lowest on-time delivery, …), press one button. The result leads with one sentence and a status (*Recommended plan*; *No better plan found: your current setup is already close*; *We couldn't find a plan that meets these limits. Closest options below.*), then *What to change* (settings in plain words with units), *What you get* (four numbers, before → after, better / worse / no clear change), *Things to watch* (side effects and risks, with a severity), *Why this plan* (numbers only, no claims about causes), and *How much to trust this*. |
+| **Plan** | Pick what to improve from six cards (or describe it in your own words), set limits in business units (most breakdowns in 4 weeks, lowest on-time delivery, …), press one button. The result leads with one sentence and a status (*Recommended plan*; *Your current setup is already close to the best we could find*; *We couldn't find a plan that meets these limits. Closest options below.*), then *What to change* (settings in plain words with units), *What you get* (four numbers, before → after, better / worse / no clear change, each with its likely range, and the rest in a *More numbers* table), *Before you act* (side effects and risks, worded as things worth checking), *Why this plan* (numbers only, no claims about causes), and *How much to trust this*, with what the result cost to work out. |
 | **Try changes** | Move the 16 settings, grouped as *Shifts and overtime*, *Maintenance*, *Machine speed*, *Stock and ordering*. See a **quick estimate** (instant, rough, never with a range), then **Check with the detailed simulation** (10 runs, a few seconds; numbers with "likely between" ranges). |
-| **How reliable is this?** | A short plain summary (what was tested, what worked, what did not), then the full record, all visible: the B1–B5 table with PASS and FAIL given equal weight, what each failure means and does not mean, the checker-v1/v2 note and caveats, the post-benchmark checker table, the Limitations, the model cards and the figures, with a glossary of the technical terms. |
+| **How reliable is this?** | A short plain summary (*What works well*: the three tests that were met; *Where it needs care*: the two that were not, B2 and B5, and the checker's limits), then the full record, all visible: the B1–B5 table with neutral *Met* / *Not met* labels in equal weight beside each registered PASS/FAIL, what each not-met result means and does not mean, the checker-v1/v2 note and caveats, the post-benchmark checker table, the Limitations, the model cards and the figures, with a glossary of the technical terms. |
 | **Past results** | Every plan and saved example, newest first; live runs and saved examples labelled apart; click a row to reopen it. |
 
 **How much to trust this** is a fixed rule, not a score: the plan's numbers

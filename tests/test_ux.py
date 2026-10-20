@@ -181,7 +181,7 @@ def test_the_plain_summary_states_numbers_and_never_causes(goal_id: str) -> None
     ("goal_id", "outcome", "chip"),
     [
         ("G07", "recommended", "Recommended plan"),
-        ("N01", "no_better", "No better plan found: your current setup is already close"),
+        ("N01", "no_better", "Your current setup is already close to the best we could find"),
         (
             "I01",
             "not_found",
@@ -200,22 +200,26 @@ def test_headline_answers_first() -> None:
         "Change 16 settings: Profit goes from £297,771 to £381,879 (+£84,109) over 4 weeks, "
         "with your limits met on average."
     )
-    assert pl.headline(_saved("N01")).startswith("Keep your current setup.")
-    assert pl.headline(_saved("I01")).startswith("None of the plans we checked met all")
+    assert pl.headline(_saved("N01")).startswith(
+        "Your current setup is already close to the best we could find."
+    )
+    assert pl.headline(_saved("I01")).startswith(
+        "We couldn't find a plan that meets all these limits."
+    )
 
 
 def test_kpi_cards_say_better_or_worse_in_words() -> None:
     cards = {c.kpi: c for c in pl.kpi_cards(_saved("G09"))}
     assert list(cards)[:2] == ["oee", "unplanned_failures"], "the goal's own numbers first"
-    assert cards["profit"].word == "worse" and cards["profit"].color == "red"
+    assert cards["profit"].word == "worse" and cards["profit"].color == "orange"
     assert cards["unplanned_failures"].rough
     assert all(c.word in ("better", "worse", "no clear change") for c in cards.values())
 
 
 def test_side_effects_are_things_to_watch_in_plain_words() -> None:
     watch = [w.text for w in pl.things_to_watch(_saved("G09"))]
-    assert any(t.startswith("Profit gets worse: £344,569 → −£243,182") for t in watch)
-    assert pl.things_to_watch(_saved("G09"))[0].severity == "High"
+    assert any(t.startswith("Profit changes for the worse: £344,569 → −£243,182") for t in watch)
+    assert pl.things_to_watch(_saved("G09"))[0].severity == "Check first"
 
 
 def test_what_to_change_uses_friendly_names_and_units() -> None:

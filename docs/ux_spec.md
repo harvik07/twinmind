@@ -714,3 +714,13 @@ details, with key-like text redacted as today.
   below it, visible, with a glossary of technical terms. A test renders the
   v1.0 page (tests/fixtures/v1_0_evidence_page.py) and checks nothing is
   dropped or hidden.
+- **Parity with v1.0 for every page, and a calmer tone (after review).** Each
+  v1.0 page (Ask, What-if, History, Evidence) is kept as a fixture and rendered
+  next to its replacement; tests fail if any honesty guarantee is dropped or
+  hidden. Restored to the default view: every 95% range ("likely between"),
+  where a saved example came from, the check caption beside the AI
+  explanation, the simulation cost, the per-run seconds, the AI calls used
+  during a run, the closest-option framing, and the plain stop reason.
+  Cautions read "Before you act" / "Worth checking"; "no better plan" and
+  "couldn't find a plan" are normal outcomes in neutral or green styling;
+  the reliability page uses Met / Not met, with no red anywhere.

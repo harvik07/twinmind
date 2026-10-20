@@ -19,20 +19,25 @@ runner = ui.job_runner()
 status = runner.status()
 items = sv.read_history(sv.history_path(), running_id=status.id if status.active else "")
 
-OUTCOME = {
-    "running": "⏳ Being worked out",
-    "stopped": "⏹ Stopped before finishing",
-    "cancelled": "⏹ Cancelled",
-    "timed_out": "⏹ Stopped at the time limit",
-    "failed": "⚠️ Failed, no result",
-}
-
 
 def outcome(item: sv.HistoryItem) -> str:
+    """The result's status chip; a run without a result is "Stopped", with why."""
     if item.result is not None:
         chip = pl.chip(item.result)
         return f"{chip.icon} {chip.text}"
-    return OUTCOME.get(item.status, "⚠️ No result")
+    if item.status == "running":
+        return "⏳ Being worked out"
+    return f"⏹ Stopped: {pl.stop_reason(item.status, item.detail)}"
+
+
+def saved_entry(item: sv.HistoryItem) -> sv.DemoEntry | None:
+    """The saved example a replayed item showed (for its provenance line)."""
+    if item.result is None:
+        return None
+    for entry in ui.demo_cache():
+        if entry.result.to_dict() == item.result.to_dict():
+            return entry
+    return None
 
 
 def type_label(item: sv.HistoryItem) -> str:
@@ -44,10 +49,10 @@ if not items:
 else:
     table: list[dict[str, Any]] = [
         {
-            "When": i.when.replace(" UTC", ""),
+            "When": i.when.replace(" UTC", "")[:16],
+            "Type": type_label(i),
             "Your goal": pl.goal_sentence(i.result) if i.result else i.goal_text,
             "Outcome": outcome(i),
-            "Type": type_label(i),
         }
         for i in items
     ]
@@ -55,6 +60,12 @@ else:
     event = st.dataframe(
         table,
         hide_index=True,
+        column_config={
+            "When": st.column_config.TextColumn(width="small"),
+            "Type": st.column_config.TextColumn(width="medium"),
+            "Your goal": st.column_config.TextColumn(width="large"),
+            "Outcome": st.column_config.TextColumn(width="large"),
+        },
         width="stretch",
         on_select="rerun",
         selection_mode="single-row",
@@ -65,10 +76,16 @@ else:
         item = items[selected[0]]
         st.divider()
         if item.result is not None:
-            ui.plan_result(item.result, saved=item.kind == "replayed")
+            entry = saved_entry(item) if item.kind == "replayed" else None
+            ui.plan_result(
+                item.result,
+                saved=item.kind == "replayed",
+                saved_from=pl.saved_from(entry.goal_id, entry.seed) if entry else "",
+                provenance=entry.provenance if entry else "",
+            )
         else:
-            key = item.status if item.status in pl.MESSAGES else "stopped"
-            st.warning(pl.error_message(key if key != "failed" else "failed"), icon="⏹")
+            st.info(f"**{outcome(item)}.** Press Find a plan on the Plan page to start again.",
+                    icon="ℹ️")  # fmt: skip
             if item.detail:
                 with st.expander(ui.TECH):
                     st.code(item.detail)

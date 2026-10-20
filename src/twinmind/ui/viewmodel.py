@@ -81,7 +81,7 @@ STATUS_TEXT: dict[str, tuple[str, str]] = {
 EXPLANATION_CHECK = "passed an automated check of numbers and KPI directions"
 EXPLANATION_CHECK_GAPS = (
     "Negation: “profit does not rise” when it rose passes the check.",
-    "Claims about plan changes: a wrong direction for a lever (“safety stock falls” "
+    "Claims about plan changes: a wrong direction for a setting (“safety stock falls” "
     "when it rose) is not checked.",
     "KPI swaps where both KPIs moved the same way: a number or direction attached to the "
     "wrong KPI passes if that KPI moved the same way.",

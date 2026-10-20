@@ -60,32 +60,42 @@ PLAIN = {
 }
 
 
-def verdict_word(verdict: str) -> str:
-    return "✅ Passed" if verdict == "PASS" else "❌ Failed"
+#: Neutral labels in equal visual weight: a calm green tick and a grey mark.
+MET = ":green[✓] **Met**"
+NOT_MET = ":gray[○] **Not met**"
 
+
+def result_label(verdict: str) -> str:
+    return MET if verdict == "PASS" else NOT_MET
+
+
+met = [r for r in rows if r.verdict == "PASS"]
+not_met = [r for r in rows if r.verdict != "PASS"]
 
 st.title("How reliable is this?")
 
 # --------------------------------------------------------------------------- #
-# Plain summary (the jargon ban applies here)
+# Plain summary (the jargon ban applies here): what works first, then care
 # --------------------------------------------------------------------------- #
 with st.container(border=True, key="reliability_summary"):
     st.markdown("### What was tested, what worked, what did not")
     st.markdown(
         "We tested the planner on 20 goals, twice each, against a simple search with no AI "
-        "and no reviewer step, and decided in advance what would count as a pass. "
-        f"**{passed} of 5 tests passed and {5 - passed} failed.** It found plans at least as "
-        "good as the simple search, its reviewer step caught bad recommendations, and it said "
-        "so when it found no plan that met the limits. It fell short on two things: its "
-        "recommended plans met the limits with a safety margin slightly less often than the "
-        "simple search's, and some of its written explanations failed the automatic check at "
-        "the time."
+        "and no reviewer step, and decided in advance what each test had to show. "
+        f"**{len(met)} of 5 tests were met and {len(not_met)} were not.**"
     )
+    st.markdown("#### What works well")
+    st.markdown(
+        "\n".join(f"- {MET} · Test {r.id[1]}. {PLAIN[r.id][0]} {PLAIN[r.id][1]}" for r in met)
+    )
+    st.markdown("#### Where it needs care")
     st.markdown(
         "\n".join(
-            f"- **{verdict_word(r.verdict)}** · Test {r.id[1]}. {PLAIN[r.id][0]} {PLAIN[r.id][1]}"
-            for r in rows
+            f"- {NOT_MET} · Test {r.id[1]}. {PLAIN[r.id][0]} {PLAIN[r.id][1]}" for r in not_met
         )
+        + "\n- The automatic check of written explanations misses some mistakes: a wrong "
+        "“not”, wrong directions for setting changes, and numbers attached to the wrong "
+        "measure when both moved the same way. The checked numbers are the record."
     )
 
 # --------------------------------------------------------------------------- #
@@ -101,27 +111,27 @@ with right.popover("Glossary of technical terms", width="stretch"):
 
 st.subheader("Agent benchmark: B1–B5")
 st.markdown(
-    "| | Pre-registered claim | Verdict | Plain result | Deciding number |\n"
-    "|---|---|---|---|---|\n"
+    "| | Pre-registered claim | Result | Registered verdict | Plain result | Deciding number |\n"
+    "|---|---|---|---|---|---|\n"
     + "\n".join(
-        f"| **{r.id}** | {r.claim} | {'✅' if r.verdict == 'PASS' else '❌'} **{r.verdict}** | "
+        f"| **{r.id}** | {r.claim} | {result_label(r.verdict)} | {r.verdict} | "
         f"{PLAIN[r.id][1]} | {r.deciding} |"
         for r in rows
     )
 )
-st.markdown(f"**{passed} of {len(rows)} passed; {len(rows) - passed} failed.**")
+st.markdown(f"**{len(met)} of {len(rows)} met (PASS); {len(not_met)} not met (FAIL).**")
 
-st.markdown("**What the two failures mean**")
+st.markdown("**What the two not-met results mean**")
 st.markdown(
-    f"- **B2 · FAIL.** *Means:* recommended plans were robustly feasible in "
+    f"- **B2 · not met (FAIL).** *What it means:* recommended plans were robustly feasible in "
     f"{b2['agent']['robust']} of {b2['agent']['recommended']} cells against "
     f"{b2['twin_only']['robust']} of {b2['twin_only']['recommended']} for twin-only, and the "
-    'registered bar was "at least as often". *Does not mean:* that the agent\'s plans '
-    "usually break limits; the shortfall is one cell, and twin-only had no critic.\n"
-    f"- **B5 · FAIL.** *Means:* {failed_n} of {b5['n']} explanations did not pass checker v1 "
-    "within the one permitted regeneration (a fixed template was shown instead), so the 100% "
-    "bar was missed. *Does not mean:* that the plans or their numbers were wrong; every "
-    "number comes from the twin, not the language model."
+    'registered bar was "at least as often". *What it does not mean:* that the agent’s '
+    "plans usually break limits; the shortfall is one cell, and twin-only had no critic.\n"
+    f"- **B5 · not met (FAIL).** *What it means:* {failed_n} of {b5['n']} explanations did "
+    "not pass checker v1 within the one permitted regeneration (a fixed template was shown "
+    "instead), so the 100% bar was missed. *What it does not mean:* that the plans or their "
+    "numbers were wrong; every number comes from the twin, not the language model."
 )
 st.warning(sv.B5_NOTE, icon="📌")
 st.markdown(

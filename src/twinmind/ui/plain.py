@@ -92,14 +92,16 @@ class Chip:
 
 CHIPS = {
     "recommended": Chip("✅", "Recommended plan", "green"),
-    "no_better": Chip("➖", "No better plan found: your current setup is already close", "orange"),
+    "no_better": Chip(
+        "👍", "Your current setup is already close to the best we could find", "green"
+    ),
     "not_found": Chip(
         "🔍",
         "We couldn't find a plan that meets these limits. Closest options below.",
-        "orange",
+        "blue",
     ),
-    "question": Chip("❓", "We need one more detail", "blue"),
-    "unusable": Chip("⛔", "We couldn't use this goal", "red"),
+    "question": Chip("💬", "We need one more detail", "blue"),
+    "unusable": Chip("💬", "We couldn't use this goal as written", "gray"),
 }
 
 
@@ -157,9 +159,11 @@ def headline(result: AgentResult, unreachable: bool = False) -> str:
     if kind == "unusable":
         return error_message("ai_unreachable" if unreachable else "not_understood")
     if kind == "not_found":
-        options = closest_lines(result)
-        first = f" The closest any checked plan came: {options[0]}" if options else ""
-        return f"None of the plans we checked met all your limits.{first}"
+        closest = result.closest_achievable
+        first = (
+            f" The closest any checked plan came: {_closest_value(closest[0])}." if closest else ""
+        )
+        return f"We couldn't find a plan that meets all these limits.{first}"
     changes = setting_changes(result)
     n = len(changes)
     moves = " and ".join(_moves(result))
@@ -180,17 +184,32 @@ def headline(result: AgentResult, unreachable: bool = False) -> str:
         if unclear
         else "not an improvement"
     )
-    return f"Keep your current setup. With the best plan found, {moves}: {size}."
+    return (
+        "Your current setup is already close to the best we could find. With the best plan "
+        f"found, {moves}: {size}."
+    )
+
+
+def _closest_value(c: dict[str, Any]) -> str:
+    kpi = c["kpi"]
+    asked = limit_phrase(kpi, c["op"], float(c["threshold"]))
+    return f"{KPIS[kpi].name} {value_text(kpi, c['closest_achievable'])} (you asked for {asked})"
+
+
+def _shown_precision(kpi: str, value: float) -> float:
+    """A value rounded as the page shows it (fractions to 0.1 of a percent)."""
+    unit, decimals = vm.KPI_FORMAT[kpi]
+    return round(value, 3) if unit == "fraction 0-1" else round(value, decimals)
 
 
 def closest_lines(result: AgentResult) -> list[str]:
-    """Closest-achievable values, as plain options."""
+    """Closest-achievable values, each as an option for the manager to decide on."""
     out = []
     for c in result.closest_achievable:
         kpi = c["kpi"]
-        asked = limit_phrase(kpi, c["op"], float(c["threshold"]))
+        reachable = limit_phrase(kpi, c["op"], _shown_precision(kpi, c["closest_achievable"]))
         out.append(
-            f"{KPIS[kpi].name} {value_text(kpi, c['closest_achievable'])} (you asked for {asked})."
+            f"{_closest_value(c)}. Option for you to decide on, not a decision: accept {reachable}."
         )
     return out
 
@@ -282,10 +301,11 @@ class KPICard:
     help: str
     rough: bool
     rough_estimate: bool = False  # a quick estimate: the word is marked "(rough)"
+    likely: str | None = None  # "Likely between X and Y": checked numbers only, shown
 
     @property
     def color(self) -> str:
-        return {"better": "green", "worse": "red"}.get(self.word, "gray")
+        return {"better": "green", "worse": "orange"}.get(self.word, "gray")
 
     @property
     def arrow(self) -> str:
@@ -333,9 +353,15 @@ def kpi_cards(result: AgentResult) -> list[KPICard]:
                 word=v.word,
                 help=term.help + likely,
                 rough=term.rough,
+                likely=likely_text(kpi, row["plan"]["ci_low"], row["plan"]["ci_high"]),
             )
         )
     return cards
+
+
+def likely_text(kpi: str, low: float, high: float) -> str:
+    """A 95% interval in plain words, shown with every checked number."""
+    return f"Likely between {value_text(kpi, low)} and {value_text(kpi, high)}"
 
 
 def estimate_cards(now: dict[str, float], new: dict[str, float]) -> list[KPICard]:
@@ -382,6 +408,9 @@ def more_numbers(result: AgentResult) -> list[dict[str, str]]:
                 "Current setup": value_text(kpi, row["baseline"]["mean"]),
                 "With the plan": value_text(kpi, row["plan"]["mean"]),
                 "Change": change_text(kpi, diff["mean"]),
+                "With the plan, likely between": likely_text(
+                    kpi, row["plan"]["ci_low"], row["plan"]["ci_high"]
+                ).replace("Likely between ", ""),
                 "Verdict": verdict(kpi, diff["mean"], diff["ci_low"], diff["ci_high"]).word,
                 "Note": "⚠ rough guide" if term.rough else "",
             }
@@ -398,10 +427,10 @@ def checked_label(result: AgentResult) -> str:
 # Things to watch
 # --------------------------------------------------------------------------- #
 SEVERITY = {
-    "high": ("🔴", "High"),
-    "medium": ("🟠", "Medium"),
-    "low": ("🟡", "Low"),
-    "info": ("ℹ️", "Info"),
+    "high": ("🟠", "Check first"),
+    "medium": ("🟡", "Worth checking"),
+    "low": ("ℹ️", "Good to know"),
+    "info": ("ℹ️", "Note"),
 }
 FLAG_WATCH: dict[str, tuple[str, str]] = {
     "not_robustly_feasible": (
@@ -447,8 +476,8 @@ def things_to_watch(result: AgentResult) -> list[WatchItem]:
         items.append(
             (
                 level,
-                f"{KPIS[kpi].name} gets worse: {before} → {after}. It isn't part of your goal, "
-                "so check you can live with it.",
+                f"{KPIS[kpi].name} changes for the worse: {before} → {after}. It isn't part of "
+                "your goal, so check you can live with it.",
             )
         )
     codes = [f["code"] for f in result.flags]
@@ -631,8 +660,8 @@ MESSAGES = {
     "goal with fewer limits, or try again when the computer is less busy.",
     "stopped": "This run stopped before finishing, so there is no result. Press Find a plan to "
     "start again.",
-    "failed": "Something went wrong while working out the plan, and no result was produced. Try "
-    "again; if it happens again, see Technical details.",
+    "failed": "The plan stopped before it finished, so there is no result this time. Press "
+    "Find a plan to try again; the details are under Show technical details.",
     "busy": "A plan is already being worked out. It will appear on the Plan page when it's ready.",
     "demo": "Demo mode: this is a saved example for a similar goal. Your limits are not used.",
     "no_quick_estimate": "Quick estimates and checks need the full installation. Start from a "
@@ -641,8 +670,65 @@ MESSAGES = {
 }
 
 
+def check_caption(mode: str | None, *, saved: bool = False) -> str:
+    """The automated-check result in plain words, shown beside the AI explanation.
+    Never "verified": the check is far weaker than the detailed simulation."""
+    if mode == "llm":
+        text = f"The AI-written explanation below {vm.EXPLANATION_CHECK}."
+        return text + (" It was written when this example was saved." if saved else "")
+    if mode == "template":
+        return (
+            "The summary below comes from a fixed template, because the AI's text did not pass "
+            "the automated check of numbers and KPI directions."
+        )
+    return ""
+
+
+def cost_line(result: AgentResult) -> str:
+    """What finding this out cost, in plain words (shown with the trust level)."""
+    trace = result.trace or {}
+    runs = int(trace.get("twin_runs", 0))
+    calls = int(trace.get("llm_calls_total", 0))
+    cap = trace.get("llm_call_cap")
+    seconds = float(trace.get("wall_seconds", 0.0))
+    text = f"Worked out with {runs:,} runs of the detailed simulation in {seconds:.0f} seconds"
+    if cap:
+        text += f", using {calls} of {cap} allowed AI calls"
+    return text + "."
+
+
 def error_message(kind: str) -> str:
     return MESSAGES[kind]
+
+
+STOP_REASONS = {
+    "cancelled": "you cancelled it",
+    "timed_out": "it reached the 10-minute limit",
+    "stopped": "the app was closed or restarted before it finished",
+    "ai_unreachable": "the AI service couldn't be reached",
+    "ai_busy": "the AI service was busy",
+    "failed": "something went wrong; the details are under Show technical details",
+}
+
+
+def stop_reason(status: str, detail: str = "") -> str:
+    """Why a run stopped, in plain words (from its status and raw detail)."""
+    if status in ("cancelled", "timed_out", "stopped"):
+        return STOP_REASONS[status]
+    from twinmind.ui.jobs import classify_error
+
+    text = detail.lower()
+    if "ratelimit" in text or "rate limit" in text or "429" in text:
+        return STOP_REASONS["ai_busy"]
+    kind = classify_error(RuntimeError(detail)) if detail else "failed"
+    if any(k in text for k in ("connection", "llm unavailable", "groq", "apierror")):
+        kind = "ai_unreachable"
+    return STOP_REASONS.get(kind, STOP_REASONS["failed"])
+
+
+def saved_from(goal_id: str, seed: int) -> str:
+    """Where a saved example came from, in plain words."""
+    return f"Saved from the planner tests: goal {goal_id}, run {seed}. Nothing was run just now."
 
 
 def goal_sentence(result: AgentResult) -> str:

@@ -225,7 +225,7 @@ def test_the_progress_view_and_running_banner_are_plain(fresh_runner: JobRunner)
 @pytest.mark.parametrize("card_id", list(CARDS))
 def test_demo_mode_shows_the_banner_and_greys_out_the_limits(card_id: str) -> None:
     at = _choose(_app(), card_id)
-    assert str(at.warning[0].value) == pl.error_message("demo")
+    assert str(at.info[0].value) == pl.error_message("demo"), "the banner comes first"
     assert at.checkbox and all(c.disabled for c in at.checkbox)
     assert at.number_input and all(n.disabled for n in at.number_input)
     assert all(r.disabled for r in at.radio)
@@ -236,8 +236,8 @@ def test_demo_mode_shows_the_banner_and_greys_out_the_limits(card_id: str) -> No
 @pytest.mark.parametrize("card_id", list(CARDS))
 def test_every_card_gives_a_labelled_saved_example(card_id: str, demo_env: Path) -> None:
     at = _find(_choose(_app(), card_id))
-    warnings = [str(w.value) for w in at.warning]
-    assert f"**{sv.REPLAY_LABEL}.**" in warnings
+    labels = [str(i.value) for i in at.info]
+    assert f"**{sv.REPLAY_LABEL}.**" in labels
     entry = next(e for e in sv.load_demo_cache() if e.id == CARDS[card_id].demo_id)
     related = any("related goal" in str(i.value) for i in at.info)
     assert related == is_related_only(card_id, entry.result.spec or {})
@@ -264,7 +264,13 @@ def test_no_forbidden_word_anywhere_and_never_verified_for_explanations(goal_id:
     captions = [str(c.value) for c in at.caption if vm.EXPLANATION_CHECK in str(c.value)]
     assert captions and all("verif" not in c.lower() for c in captions)
     (ai,) = [e for e in at.expander if e.label == "AI-written explanation (technical wording)"]
-    gaps = " ".join(str(m.value) for m in ai.markdown)
+    assert any(vm.EXPLANATION_CHECK in str(c.value) for c in ai.caption)
+    visible = [str(c.value) for c in at.caption if vm.EXPLANATION_CHECK in str(c.value)]
+    assert any(c.startswith("The AI-written explanation below") for c in visible), (
+        "the check caption is visible beside the explanation, as in v1.0"
+    )
+    (limits,) = [e for e in at.expander if e.label == "What this check does not catch"]
+    gaps = " ".join(str(m.value) for m in limits.markdown)
     assert "Negation" in gaps and "plan changes" in gaps and "KPI swaps" in gaps
 
 
@@ -288,7 +294,7 @@ def test_estimates_never_carry_a_range_and_checked_numbers_always_do() -> None:
 def test_side_effects_and_the_weak_kpi_warning_render_in_plain_words() -> None:
     at = _saved(_app(), "G09")
     text = " ".join(screen(at))
-    assert "Profit gets worse: £344,569 → −£243,182" in text
+    assert "Profit changes for the worse: £344,569 → −£243,182" in text
     assert gl.ROUGH_KPI_NOTE.split(":")[0] in text or "less reliable in this model" in text
     technical = " ".join(screen(at, default_view=False))
     assert vm.WEAK_KPI_BADGE in technical, "the exact badge survives in Technical details"
@@ -314,24 +320,30 @@ def test_the_reliability_page_shows_both_failures_plainly_with_the_caveats_visib
     table = next(str(m.value) for m in at.markdown if "Pre-registered claim" in str(m.value))
     lines = table.splitlines()[2:]
     assert len(lines) == 5
-    verdicts = [line.split("|")[3].strip() for line in lines]
-    assert verdicts == [
-        "✅ **PASS**",
-        "❌ **FAIL**",
-        "✅ **PASS**",
-        "✅ **PASS**",
-        "❌ **FAIL**",
-    ], "PASS and FAIL rows are formatted identically"
-    assert "3 of 5 passed; 2 failed." in visible
-    assert "**B2 · FAIL.** *Means:*" in visible and "**B5 · FAIL.** *Means:*" in visible
-    assert visible.count("*Does not mean:*") == 2
+    results = [line.split("|")[3].strip() for line in lines]
+    registered = [line.split("|")[4].strip() for line in lines]
+    assert results == [
+        ":green[✓] **Met**",
+        ":gray[○] **Not met**",
+        ":green[✓] **Met**",
+        ":green[✓] **Met**",
+        ":gray[○] **Not met**",
+    ], "Met and Not met rows are formatted identically, with no red"
+    assert registered == ["PASS", "FAIL", "PASS", "PASS", "FAIL"]
+    assert "3 of 5 met (PASS); 2 not met (FAIL)." in visible
+    assert "**B2 · not met (FAIL).** *What it means:*" in visible
+    assert "**B5 · not met (FAIL).** *What it means:*" in visible
+    assert visible.count("*What it does not mean:*") == 2
     assert sv.B5_NOTE in visible
     assert all(c in visible for c in sv.CHECKER_CAVEATS)
     summary = " ".join(_walk(summary_block(at), default_view=True))
-    assert "3 of 5 tests passed and 2 failed" in summary
-    assert summary.count("❌ Failed") == 2 and summary.count("✅ Passed") == 3
+    assert "3 of 5 tests were met and 2 were not" in summary
+    assert summary.index("What works well") < summary.index("Where it needs care")
+    assert summary.count("**Not met**") == 2 and summary.count("**Met**") == 3
+    assert "misses some mistakes" in summary, "the checker limits sit under Where it needs care"
+    assert ":red" not in summary and "❌" not in summary
     assert "the improved version has not been retested" in summary
-    collapsed = [e.label for e in at.expander if e.label != "Glossary"]  # sidebar glossary
+    collapsed = [e.label for e in at.main.get("expander")]  # the sidebar is not the page
     assert not collapsed, "nothing on this page is collapsed"
     glossary = [
         b for b in at.get("popover") if b.proto.popover.label == "Glossary of technical terms"
@@ -355,7 +367,8 @@ def test_the_reliability_page_drops_nothing_the_v1_evidence_page_showed() -> Non
         out = set()
         for line in table.splitlines()[2:]:
             cells = [c.strip() for c in line.strip("|").split("|")]
-            verdict = cells[2].replace("✅", "").replace("❌", "").strip()
+            # v1.0: "**PASS**" in Verdict; now: the registered verdict has its own column.
+            verdict = (cells[3] if len(cells) == 6 else cells[2]).replace("*", "").strip()
             out.add((cells[0], cells[1], verdict, cells[-1]))
         return out
 
@@ -374,7 +387,7 @@ def test_the_reliability_page_drops_nothing_the_v1_evidence_page_showed() -> Non
     must_keep = [
         sv.B5_NOTE,
         *sv.CHECKER_CAVEATS,
-        "3 of 5 passed; 2 failed.",
+        ("3 of 5 passed; 2 failed.", "3 of 5 met (PASS); 2 not met (FAIL)."),
         "gaps are lower bounds",
         "Limitations: where results underperformed the spec",
         "Neither checker catches negation",
@@ -382,8 +395,10 @@ def test_the_reliability_page_drops_nothing_the_v1_evidence_page_showed() -> Non
         *(body[:200] for _, body in sv.underperformed_sections()),
     ]
     for item in must_keep:
-        assert item in old_text, f"fixture check: {item[:60]!r}"
-        assert item in new_visible, f"dropped or hidden: {item[:60]!r}"
+        # A pair is (v1.0 wording, new wording) for the same content: wording only.
+        old_item, new_item = item if isinstance(item, tuple) else (item, item)
+        assert old_item in old_text, f"fixture check: {old_item[:60]!r}"
+        assert new_item in new_visible, f"dropped or hidden: {new_item[:60]!r}"
     old_frames = [d.value.to_dict() for d in old.dataframe]
     new_frames = [d.value.to_dict() for d in new.dataframe]
     assert old_frames == new_frames, "the post-benchmark checker table"
@@ -445,7 +460,9 @@ def test_past_results_label_live_runs_and_saved_examples_apart(demo_env: Path) -
         "🟢 Live",
         "📁 Saved example, not a live run",
     ]
-    assert list(frame["Outcome"])[0] == "⏹ Stopped before finishing"
+    assert list(frame["Outcome"])[0] == (
+        "⏹ Stopped: the app was closed or restarted before it finished"
+    )
     assert_plain(at, "past results")
 
 
@@ -480,7 +497,7 @@ def test_a_finished_live_card_run_shows_the_plain_result(
     assert at.button(key="find").label == "Find a plan"
     at = _find(at).run()
     assert not at.exception
-    assert not any(sv.REPLAY_LABEL in str(w.value) for w in at.warning)
+    assert not any(sv.REPLAY_LABEL in t for t in screen(at))
     assert any("Recommended plan" in t for t in screen(at))
     items = sv.read_history(demo_env)
     assert len(items) == 1 and items[0].kind == "live" and items[0].label == "Live"
@@ -536,6 +553,189 @@ def test_an_unreachable_ai_service_explains_itself_and_shows_a_labelled_example(
 
     monkeypatch.setattr(components, "live_deps", no_ai)
     at = _find(_choose(_app(), "profit"))
-    assert any(pl.error_message("ai_unreachable") in str(e.value) for e in at.error)
-    assert any(sv.REPLAY_LABEL in str(w.value) for w in at.warning)
+    assert any(pl.error_message("ai_unreachable") in str(i.value) for i in at.info)
+    assert not at.error, "calm styling: no red error box"
+    assert any(sv.REPLAY_LABEL in str(i.value) for i in at.info)
     assert not any("gsk_" in t for t in screen(at, default_view=False))
+
+
+# --------------------------------------------------------------------------- #
+# v1.0 guarantees the Stage B rewrite lost, restored on the new pages
+# --------------------------------------------------------------------------- #
+def _every_text(at: Any) -> list[str]:
+    texts = screen(at, default_view=False)
+    for box in at.selectbox:
+        texts += [box.label, *map(str, box.options)]
+    return texts
+
+
+@pytest.mark.parametrize("page", PAGES)
+def test_demo_mode_says_why_without_showing_any_secret(page: str) -> None:
+    at = _app(page)
+    (tech,) = [e for e in at.sidebar.expander if e.label == "Show technical details"]
+    assert "TWINMIND_DEMO=1 is set" in " ".join(str(m.value) for m in tech.markdown)
+    for text in _every_text(at):
+        assert "gsk_" not in text and "GROQ_API_KEY=" not in text, text[:80]
+        assert "C:\\" not in text and "/Users/" not in text, text[:80]
+
+
+@pytest.mark.parametrize("goal_id", ["G07", "G01", "I01", "N01", "AA1", "G09", "G03", "G10"])
+def test_every_saved_example_is_labelled_and_says_where_it_came_from(goal_id: str) -> None:
+    entry = next(e for e in sv.load_demo_cache() if e.goal_id == goal_id)
+    at = _saved(_app(), goal_id)
+    assert f"**{sv.REPLAY_LABEL}.**" in [str(i.value) for i in at.info]
+    assert pl.saved_from(entry.goal_id, entry.seed) in [str(c.value) for c in at.caption]
+
+
+def test_a_typed_goal_in_demo_mode_shows_a_labelled_saved_example_and_is_logged(
+    demo_env: Path,
+) -> None:
+    at = _choose(_app(), "own_words")
+    at.text_area(key="own_words").input("Maximise OEE with few unplanned failures").run()
+    at = _find(at)
+    assert f"**{sv.REPLAY_LABEL}.**" in [str(i.value) for i in at.info]
+    assert any("You asked" in str(c.value) for c in at.caption)
+    (item,) = sv.read_history(demo_env)
+    assert item.kind == "replayed" and item.label == "Saved example, not a live run"
+
+
+def test_no_page_renders_a_forbidden_word_anywhere() -> None:
+    at = _app()
+    texts = _every_text(at)
+    for goal_id in ["G07", "G01", "I01", "N01", "AA1", "G09", "G03", "G10"]:
+        texts += _every_text(_saved(at, goal_id))
+    at.switch_page("views/try_changes.py").run()
+    for option in at.radio(key="tc_start").options:
+        at.radio(key="tc_start").set_value(option).run()
+        texts += _every_text(at)
+    at.switch_page("views/reliability.py").run()
+    for card in at.selectbox(key="ev_card").options:
+        at.selectbox(key="ev_card").set_value(card).run()
+        texts += _every_text(at)
+    at.switch_page("views/past_results.py").run()
+    texts += _every_text(at)
+    assert not at.exception
+    for text in texts:
+        vm.assert_no_overclaim(text)
+
+
+def test_g07_renders_only_its_oee_side_effect() -> None:
+    at = _saved(_app(), "G07")
+    effects = [t for t in screen(at) if "changes for the worse" in t]
+    assert len(effects) == 1 and effects[0].count("changes for the worse") == 1
+    assert "Equipment efficiency (OEE) changes for the worse: 73.3% → 70.6%" in effects[0]
+
+
+def test_an_unreachable_ai_service_is_logged_without_any_key(
+    live: None, monkeypatch: pytest.MonkeyPatch, demo_env: Path
+) -> None:
+    from twinmind.ui import components
+
+    def no_ai() -> Any:
+        raise ConnectionError("network down; api_key=gsk_abcdef123")
+
+    monkeypatch.setattr(components, "live_deps", no_ai)
+    _find(_choose(_app(), "profit"))
+    (item,) = sv.read_history(demo_env)
+    assert item.kind == "replayed" and "could not be reached" in item.detail
+    assert "gsk_" not in demo_env.read_text(encoding="utf-8")
+
+
+def test_a_crashed_live_run_is_shown_as_stopped_calmly_and_recorded(
+    live: None, monkeypatch: pytest.MonkeyPatch, demo_env: Path
+) -> None:
+    from twinmind.agents import graph
+    from twinmind.ui import components
+
+    sync = JobRunner(start_thread=lambda target: target())
+    monkeypatch.setattr(components, "job_runner", lambda: sync)
+    monkeypatch.setattr(components, "live_deps", lambda: object())
+
+    def crash(*args: Any, **kwargs: Any) -> AgentResult:
+        raise RuntimeError("twin exploded")
+
+    monkeypatch.setattr(graph, "run_on_spec_streaming", crash)
+    at = _find(_choose(_app(), "profit")).run()
+    assert not at.error, "calm styling: a stopped run is not a red error"
+    assert any(str(i.value).startswith("**Stopped:**") for i in at.info)
+    (item,) = sv.read_history(demo_env)
+    assert item.kind == "aborted" and "twin exploded" in item.detail
+    assert not sync.busy, "the one-run lock is released"
+
+
+def test_live_progress_shows_the_ai_calls_used_against_the_cap(
+    live: None, monkeypatch: pytest.MonkeyPatch, fresh_runner: JobRunner
+) -> None:
+    from twinmind.agents import graph
+    from twinmind.ui import components
+
+    monkeypatch.setattr(components, "live_deps", lambda: object())
+    gate = threading.Event()
+
+    def fake(spec: Any, deps: Any, seed: int, on_step: Any, **kw: Any) -> AgentResult:
+        on_step("explorer", 1, 6)
+        gate.wait(10)
+        return sv.load_demo_cache()[0].result
+
+    monkeypatch.setattr(graph, "run_on_spec_streaming", fake)
+    try:
+        at = _find(_choose(_app(), "profit"))
+        for _ in range(40):
+            if fresh_runner.status().nodes:
+                break
+            threading.Event().wait(0.05)
+        at.run()
+        assert any("AI calls used: 1 of 6 allowed." in str(c.value) for c in at.caption)
+    finally:
+        gate.set()
+
+
+# --------------------------------------------------------------------------- #
+# Calm tone: no red or error styling for normal outcomes
+# --------------------------------------------------------------------------- #
+def _no_red(at: Any, where: str) -> None:
+    assert not at.error, f"{where}: st.error used for a normal outcome"
+    for text in screen(at, default_view=False):
+        assert ":red[" not in text and ":red-badge[" not in text, (where, text[:80])
+        assert "❌" not in text and "⛔" not in text, (where, text[:80])
+
+
+@pytest.mark.parametrize(
+    ("goal_id", "chip"),
+    [
+        ("G07", "Recommended plan"),
+        ("N01", "Your current setup is already close to the best we could find"),
+        ("I01", "We couldn't find a plan that meets these limits. Closest options below."),
+        ("G09", "Recommended plan"),
+    ],
+)
+def test_normal_outcomes_are_calm(goal_id: str, chip: str) -> None:
+    at = _saved(_app(), goal_id)
+    _no_red(at, goal_id)
+    badges = [str(m.value) for m in at.markdown if "-badge[" in str(m.value)]
+    assert any(chip in b for b in badges)
+    explanation = next(e for e in sv.load_demo_cache() if e.goal_id == goal_id).result.explanation
+    for text in screen(at):  # the default view, outside the AI's own words
+        if text != explanation:
+            assert "!" not in text.replace("![", ""), (goal_id, text[:80])
+    if goal_id == "I01":
+        text = " ".join(screen(at))
+        assert text.index("Closest options") < text.index("Before you act")
+
+
+def test_stopped_runs_and_the_reliability_page_are_calm(demo_env: Path) -> None:
+    sv.append_history(demo_env, "started", "a lost goal", "running", run_id="r1")
+    sv.append_history(demo_env, "aborted", "a stopped goal", "cancelled", "cancelled", run_id="r2")
+    at = _app("views/past_results.py")
+    _no_red(at, "past results")
+    outcomes = list(at.dataframe[0].value["Outcome"])
+    assert outcomes == [
+        "⏹ Stopped: you cancelled it",
+        "⏹ Stopped: the app was closed or restarted before it finished",
+    ]
+    at = _app("views/reliability.py")
+    _no_red(at, "reliability")
+    visible = " ".join(screen(at))
+    assert visible.count("**Not met**") >= 2 and "B2 · not met (FAIL)" in visible
+    assert "B5 · not met (FAIL)" in visible
+    assert all(c in visible for c in sv.CHECKER_CAVEATS)

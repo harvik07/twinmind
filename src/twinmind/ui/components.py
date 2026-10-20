@@ -22,6 +22,7 @@ from twinmind.ui.jobs import JobRunner
 
 TECH = "Show technical details"
 AI_EXPLANATION = "AI-written explanation (technical wording)"
+CHECK_GAPS = "What this check does not catch"
 
 
 # --------------------------------------------------------------------------- #
@@ -94,6 +95,10 @@ def sidebar(mode: sv.Mode) -> None:
         st.sidebar.info("Demo mode: showing saved example results.", icon="📁")
     with st.sidebar.expander("Glossary"):
         glossary()
+    if mode.reasons:
+        with st.sidebar.expander(TECH):
+            st.caption("Why demo mode is on (no key or file contents are shown):")
+            st.markdown("\n".join(f"- {reason}" for reason in mode.reasons))
 
 
 def glossary() -> None:
@@ -161,6 +166,8 @@ def metric_cards(cards: Sequence[pl.KPICard]) -> None:
                     st.caption(f"Now: {card.before}")
                 if card.change:
                     st.markdown(f":{card.color}[{card.line}]")
+                if card.likely:
+                    st.caption(card.likely)
                 if card.rough:
                     st.caption("⚠ Rough guide: the model is less accurate here.")
 
@@ -185,11 +192,20 @@ def plan_result(
     note: str = "",
     asked: str = "",
     unreachable: bool = False,
+    saved_from: str = "",
+    provenance: str = "",
 ) -> None:
-    """The whole plain result: answer first, evidence after, technical last."""
+    """The whole plain result: answer first, evidence after, technical last.
+
+    Every safety item stays visible: the saved-example label and where it came
+    from, the checked label and its 95% ranges, Before you act (side effects,
+    flags, the rough-guide note), the automated-check caption, the trust level
+    and the run cost. The exact technical labels are under Show technical
+    details.
+    """
     if saved:
-        st.warning(f"**{sv.REPLAY_LABEL}.**", icon="📁")
-        st.caption("This result was worked out earlier and saved; nothing was run just now.")
+        st.info(f"**{sv.REPLAY_LABEL}.**", icon="📁")
+        st.caption(saved_from or "This result was worked out earlier and saved.")
     if note:
         st.info(note, icon="ℹ️")
     trust = pl.trust(res)
@@ -203,6 +219,14 @@ def plan_result(
     st.caption(f"Goal: {pl.goal_sentence(res)}")
     st.markdown(f"### {pl.headline(res, unreachable=unreachable)}")
 
+    options = pl.closest_lines(res)
+    if pl.outcome(res) == "not_found" and options:
+        st.markdown("#### Closest options")
+        st.markdown(
+            "\n".join(f"- {o}" for o in options)
+            + "\n\nChange a limit and press Find a plan again, or keep your current setup."
+        )
+
     changes = pl.setting_changes(res) if pl.outcome(res) == "recommended" else []
     if changes:
         st.markdown("#### What to change")
@@ -210,15 +234,6 @@ def plan_result(
         if len(changes) > 3:
             with st.expander(f"{len(changes) - 3} more settings"):
                 st.markdown("\n".join(f"- {c.text}" for c in changes[3:]))
-
-    options = pl.closest_lines(res)
-    if pl.outcome(res) == "not_found" and options:
-        st.markdown("#### Closest options")
-        st.markdown(
-            "\n".join(f"- {o}" for o in options)
-            + "\n\nThese are options for you to decide on. Change a limit and press "
-            "Find a plan again."
-        )
 
     cards = pl.kpi_cards(res)
     if cards:
@@ -228,34 +243,37 @@ def plan_result(
         metric_cards(cards)
         rows = pl.more_numbers(res)
         if rows:
-            with st.expander("More numbers"):
-                st.caption(pl.checked_label(res) + ".")
-                st.dataframe(rows, hide_index=True, width="stretch")
+            st.markdown("**More numbers**")
+            st.caption(pl.checked_label(res) + ".")
+            st.dataframe(rows, hide_index=True, width="stretch")
 
-    watch = pl.things_to_watch(res)
     if res.baseline_comparison:
-        st.markdown("#### Things to watch")
-        watch_list(watch)
+        st.markdown("#### Before you act")
+        watch_list(pl.things_to_watch(res))
 
     summary = pl.plain_summary(res)
     if summary:
         st.markdown("#### Why this plan" if pl.outcome(res) == "recommended" else "#### Summary")
         st.markdown(summary)
     if res.explanation:
+        source = vm.explanation_source(res.explanation_mode, replayed=saved)
+        caption = pl.check_caption(res.explanation_mode, saved=saved)
+        if caption:
+            st.caption(caption)
         with st.expander(AI_EXPLANATION):
             st.markdown(res.explanation)
-            source = vm.explanation_source(res.explanation_mode, replayed=saved)
             if source:
                 st.caption(source)
-            st.markdown("**What this check does not catch**")
+        with st.expander(CHECK_GAPS):
             st.markdown("\n".join(f"- {gap}" for gap in vm.EXPLANATION_CHECK_GAPS))
 
     if trust is not None:
         st.markdown("#### How much to trust this")
         trust_block(trust)
+        st.caption(pl.cost_line(res))
 
     with st.expander(TECH):
-        technical_details(res, saved=saved)
+        technical_details(res, saved=saved, provenance=provenance)
 
 
 # --------------------------------------------------------------------------- #
@@ -348,3 +366,5 @@ def progress_panel(status: Any, *, card_goal: bool) -> None:
             f"Elapsed {_elapsed(status.elapsed(time.monotonic()))} · usually 2–4 minutes. "
             "You can keep using the page while it works."
         )
+        if status.llm_cap:
+            st.caption(f"AI calls used: {status.llm_used} of {status.llm_cap} allowed.")
