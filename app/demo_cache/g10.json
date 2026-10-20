@@ -614,7 +614,8 @@
    "explanation": {
     "source": "agent benchmark audit (explainer v1); passes checker v2 offline",
     "attempts": 1
-   }
+   },
+   "candidates_checked": 40
   },
   "created_at": 1792083317.078865
  }

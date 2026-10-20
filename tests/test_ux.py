@@ -478,3 +478,15 @@ def test_progress_steps_are_plain_and_ordered() -> None:
     assert dict(steps)["Searching for plans"] == "done"
     assert dict(steps)["Checking the best candidates in the detailed simulation (30 runs)"] == "now"
     assert all(not gl.jargon_in(text) for text, _ in steps)
+
+
+def test_the_trust_conclusion_counts_every_candidate_the_run_checked() -> None:
+    """Saved examples keep only their best 5 candidates; the conclusion must
+    still report how many the run really checked (from the trace)."""
+    assert len(_saved("N01").candidates) == 5
+    no_better = pl.trust(_saved("N01"))
+    not_found = pl.trust(_saved("I01"))
+    assert no_better is not None and not_found is not None
+    assert no_better.conclusion.startswith("We searched and checked 20 candidates")
+    assert not_found.conclusion.startswith("We searched and checked 40 candidates")
+    assert pl.plain_summary(_saved("I01")).startswith("We checked 40 candidate plans.")

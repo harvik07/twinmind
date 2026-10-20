@@ -504,7 +504,7 @@ def plain_summary(result: AgentResult) -> str:
     if kind in ("question", "unusable") or not result.baseline_comparison:
         return ""
     if kind == "not_found":
-        n = len(result.candidates)
+        n = int((result.trace or {}).get("candidates_checked", len(result.candidates)))
         closest = " ".join(closest_lines(result))
         return f"We checked {n} candidate plans. None met all your limits. {closest}".strip()
     sentences = []
@@ -591,7 +591,9 @@ def trust(result: AgentResult) -> Trust | None:
         return None
     kind = outcome(result)
     n_reps = int(evaluation.get("n_reps", 0))
-    n_cand = len(result.candidates)
+    # Saved examples keep only their best 5 candidates; the trace records how
+    # many the run really checked.
+    n_cand = int((result.trace or {}).get("candidates_checked", len(result.candidates)))
 
     t1 = n_reps >= 2
     if kind == "recommended":
