@@ -299,7 +299,7 @@ plus 3.85 h overtime = 11.85 running hours a day).
 │                                                                          │
 │ How much to trust this: ●○○ Rough guide  (2 of 3 checks below failed)    │
 │  ✓ Numbers checked with the detailed simulation (30 runs)                │
-│  ✗ Your limits are met on average, not in every simulated month          │
+│  ✗ Your limits are met on average, not with a safety margin          │
 │  ✓ Settings are close to ones the model has seen before                  │
 │  ✗ The goal involves breakdown or downtime numbers, which are rough      │
 │                                                                          │
@@ -314,7 +314,7 @@ alone:
 |---|---|---|
 | `ok`, recommended (incl. `degraded_template`) | ✅ **Recommended plan** (green) | "Change N settings to {raise/lower} {objective KPI} from {before} to {after} over 4 weeks ({delta}){, keeping {limit} …}." |
 | `ok`, not recommended (`no_improvement`) | ➖ **No better plan found: your current setup is already close** (amber) | "Keep your current setup. The best plan found changed {KPI} by {delta}, which is too small to tell apart from normal month-to-month variation." |
-| `infeasible` | ⛔ **This goal can't be met: closest options below** (red) | "No plan met all your limits. The closest any checked plan came: {KPI} {closest} (you asked for {op} {threshold})." |
+| `infeasible` | ⛔ **We couldn't find a plan that meets these limits. Closest options below.** (red) | "No plan met all your limits. The closest any checked plan came: {KPI} {closest} (you asked for {op} {threshold})." |
 | `needs_clarification` | ❓ **We need one more detail** (blue) | the planner's question |
 | `spec_invalid` | ⛔ **We couldn't use this goal** (red) | §A8 message |
 
@@ -347,7 +347,7 @@ with an icon and a severity word:
 | Source | Plain text | Severity |
 |---|---|---|
 | side effect (Prompt 10 rule, unchanged) | "{KPI} gets worse: {before} → {after}. It isn't part of your goal, so check you can live with it." | High if KPI is profit or on-time delivery, else Medium |
-| `not_robustly_feasible` | "Your limits are met on average, but not in every simulated month." | Medium |
+| `not_robustly_feasible` | "Your limits are met on average, but not with a safety margin." | Medium |
 | `weak_kpi_constraint` | "Your goal uses breakdown or downtime numbers, which are rough guides: the model is less accurate here." | Low |
 | `novel_plan` | "These settings are unlike most the model has seen, so its quick estimates were less reliable. The numbers above come from the detailed simulation." | Low |
 | `no_improvement` | "The best plan found isn't clearly better than your current setup." | Info |
@@ -374,7 +374,7 @@ Four checks:
 | # | Check | Passes when | Source |
 |---|---|---|---|
 | T1 | Checked with the detailed simulation | the numbers shown come from twin replications (≥ 2) | `baseline_comparison.n_reps`, or a What-if check |
-| T2 | Limits met in every simulated month | the plan is recommended AND `feasible_robust`; **not applicable** when not recommended or there are no limits | evaluation, flags |
+| T2 | Limits met with a safety margin | the plan is recommended AND `feasible_robust`; **not applicable** when not recommended or there are no limits | evaluation, flags |
 | T3 | Familiar territory | novelty score ≤ 0.987382 (the T1 95th percentile) | `plan.novelty` |
 | T4 | No breakdown/downtime numbers in the goal | objective and limits avoid `unplanned_failures` and `downtime_hours` | spec |
 
@@ -464,8 +464,8 @@ cap, twin runs, wall time, demand month (context id), explanation source.
    > with no AI and no reviewer step, and decided in advance what would count
    > as a pass. **3 of 5 tests passed and 2 failed.** It finds plans at least
    > as good as the simple search; its reviewer step catches bad
-   > recommendations; it says so when a goal can't be met. It failed on two
-   > things: its recommended plans met the limits in every simulated month
+   > recommendations; it says so when it finds no plan that meets the limits. It failed on two
+   > things: its recommended plans met the limits with a safety margin
    > slightly less often than the simple search's (22 of 23 against 31 of 32),
    > and 5 of its 40 written explanations failed the automatic check at the
    > time.
@@ -476,7 +476,7 @@ cap, twin runs, wall time, demand month (context id), explanation source.
    | Test | Plain question | Plain result |
    |---|---|---|
    | B1 | Does it find plans at least as good as a simple search? | Passed: its plans were better on average. |
-   | B2 | Do its recommended plans meet your limits in every simulated month at least as often? | Failed: 22 of 23 against 31 of 32. |
+   | B2 | Do its recommended plans meet your limits with a safety margin at least as often? | Failed: 22 of 23 against 31 of 32. |
    | B3 | Does the reviewer step stop bad recommendations? | Passed: 1 bad recommendation with it, 12 without. |
    | B4 | Does it say so when a goal is impossible or pointless? | Passed: all 4 impossible goals, all 3 pointless ones. |
    | B5 | Does it understand goals and explain results correctly? | Failed: it understood all 20 goals, but 5 of 40 explanations failed the check. |
@@ -562,7 +562,7 @@ Plain-word dictionary (default view):
 | verified on twin (N reps) | checked with the detailed simulation (N runs) |
 | replayed benchmark result | saved example result, not a live run |
 | novelty band | familiar / less familiar / unfamiliar territory |
-| robustly feasible | meets your limits in every simulated month |
+| robustly feasible | meets your limits with a safety margin |
 | constraint | limit |
 | objective | what you want to improve |
 | current policy | current setup |
@@ -677,3 +677,33 @@ details, with key-like text redacted as today.
    `graph.py`, so it needs your OK under the UI-only rule.
 4. **Demo cache additions:** G03 s2 and G10 s2, from existing cells, rebuilt
    with the existing builder (re-checked with checker v2). OK?
+
+---
+
+## 12. Stage B amendments (approved corrections, applied in the build)
+
+- **"No plan found" wording.** Every "this goal can't be met" became "We couldn't
+  find a plan that meets these limits. Closest options below." A finite search
+  that finds none is not proof that none exists.
+- **"Every simulated month" was an overclaim.** "Robustly feasible" means each
+  limited KPI's 95% interval lies inside the limit, not that the limit holds in
+  every simulated month. The UI says "met with a safety margin" vs "met on
+  average".
+- **Demo mode does not look interactive.** The Plan page opens with "Demo mode:
+  this is a saved example for a similar goal. Your limits are not used.", the
+  limits are greyed out and captioned "Not used in demo mode", and the button
+  reads "Show a saved example".
+- **Trust wording for breakdown/downtime goals:** "Breakdown and downtime numbers
+  are less reliable in this model, so treat this as a rough guide." For "no
+  better plan" and "couldn't find a plan", the indicator describes the
+  conclusion ("We searched and checked N candidates; none beat your current
+  setup").
+- **Why this plan** is a fixed template of numbers and setting changes, with no
+  causal claims; the AI's text is one click away, unchanged, under "AI-written
+  explanation (technical wording)".
+- **Background run:** one thread, a lock-protected status object, Cancel and a
+  10-minute hard limit, both taking effect between agent steps; every run ends
+  with a status, and a rerun or double click never starts a second thread.
+- **KPI cards** are drawn as two-per-row cards (not `st.metric`), because
+  `st.metric` cut "£297,771 → £381,879" off at laptop width and the four-wide
+  row broke words at tablet width.

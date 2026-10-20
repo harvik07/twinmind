@@ -1,16 +1,18 @@
 # TwinMind
 
-An agentic digital twin of a five-machine production line. You type a planning
-goal in plain English; an agent turns it into a precise objective, searches
-plans on a learned surrogate, verifies the chosen plan on a discrete-event
-simulator against the current policy, and explains the result.
+Finds better settings for a five-machine production line and checks them in a
+detailed simulation before recommending anything. A factory manager picks what
+to improve (more profit, fewer breakdowns, on-time delivery, lower cost per
+unit, fewer days short of stock), sets the limits they can live with, and gets
+one sentence back: what to change and what it gives, with the evidence behind
+it.
 
-**The language model only reads goals and writes explanations.** Every KPI,
-comparison, interval and constraint check is deterministic Python, and the
-dashboard says which numbers are surrogate *estimates* and which are *verified
-on the twin*, with their intervals.
+**The AI only reads goals typed in your own words and writes a summary.** Every
+number, comparison and limit check is deterministic Python: a quick estimate
+from a learned model, then a detailed simulation (30 runs) of the chosen plan
+against your current setup.
 
-![Ask: a replayed result, verified on the twin](docs/dashboard_ask.png)
+![Plan: the answer first, then what to change and what you get](docs/dashboard_plan.png)
 
 ---
 
@@ -34,20 +36,24 @@ flowchart LR
     C --> E
     T --> E
     T --> V
-    X --> D["Dashboard<br/>Ask · What-if · Evidence · History"]
+    X --> D["Dashboard<br/>Plan · Try changes ·<br/>How reliable is this? · Past results"]
 ```
 
-The LLM (Groq, `openai/gpt-oss-20b`) is used by the **planner** and the
-**explainer** only, at most 6 calls per goal. Its explanation is checked against
-the facts (numbers, directions, the stated reason, and no overclaiming words)
-and replaced by a fixed template if it fails twice.
+The LLM (Groq, `openai/gpt-oss-20b`) is used by the **planner** (only for goals
+typed in your own words) and the **explainer**, at most 6 calls per goal. Its
+explanation is checked against the facts (numbers, directions, the stated
+reason, and no overclaiming words) and replaced by a fixed template if it fails
+twice.
 
 ---
 
-## Quickstart: demo mode (no key, no data)
+## Try it in five minutes (demo mode: no key, no data)
 
-Demo mode runs every page on six replayed benchmark results committed in
-`app/demo_cache/`. It needs no API key, no datasets and no trained models.
+Demo mode shows eight **saved example results** from the agent benchmark. It
+needs no API key, no datasets and no trained models, and every result says
+"Saved example result, not a live run".
+
+1. Install (once):
 
 ```bash
 python -m venv .venv
@@ -65,17 +71,21 @@ python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 python -m pip install -e ".[dev]"
 ```
 
+2. Start:
+
 ```bash
 python -m streamlit run app/main.py -- --demo
 ```
 
-Every replayed result carries a visible **"replayed benchmark result, not a
-live run"** label.
+3. In the browser: on **Plan**, choose a goal card (for example *Make more
+   profit*), then press **Show a saved example**. Read the sentence at the top,
+   then *What to change*, *What you get*, *Things to watch* and *How much to
+   trust this*. Everything technical is under **Show technical details**.
 
-### Live mode
+### Live mode (finds new plans)
 
-Live mode needs a Groq key and the local model and data files (which are not in
-the repository: see *Reproduce*).
+Live mode needs a Groq key and the local model and data files (not in the
+repository: see *Reproduce*).
 
 ```bash
 copy .env.example .env
@@ -88,32 +98,51 @@ gitignored). Then start without `--demo`:
 python -m streamlit run app/main.py
 ```
 
-The sidebar says which mode is active and why. Live mode runs **one goal at a
-time** in the Streamlit process (no background workers), shows each agent step
-and the LLM calls used against the cap, and records every run in History as
-finished, replayed or aborted. If the language model cannot be reached, the
-closest replayed goal is shown instead, labelled as a replay.
+Choose a goal card, set any limits, and press **Find a plan**. It usually takes
+2–4 minutes; you can keep using the app meanwhile. A banner on every page shows
+that a plan is being worked out, with a **Cancel** button and a 10-minute limit.
+One plan is worked out at a time. If the AI service can't be reached, the app
+says so in plain words and shows a saved example for a similar goal instead,
+labelled as such.
 
 ---
 
 ## The dashboard
 
-| Page | What it shows |
+| Page | What a manager does there |
 |---|---|
-| **Ask** | A goal → objective, constraints, the plan, any **side effects** (a KPI outside the goal whose verified change is worse beyond its 95% interval), a KPI table against the current policy (verified on the twin, 30 reps, with 95% CIs), critic flags in plain English, closest-achievable options for infeasible goals, training-coverage band, and the explanation, which has passed an automated check of numbers and KPI directions (with what that check does not catch). |
-| **What-if** | 16 levers. The surrogate's **estimate** (means only, never an interval) plus a novelty band; then **Verify on twin**: at most 10 replications under a 60 s cap, with the measured seconds. |
-| **Evidence** | B1–B5 with both FAILs, the model cards, the figures, and every "Underperformed the spec" section. |
-| **History** | Every dashboard event, with live runs and replays labelled differently, plus the agent's own run log. |
+| **Plan** | Pick what to improve from six cards (or describe it in your own words), set limits in business units (most breakdowns in 4 weeks, lowest on-time delivery, …), press one button. The result leads with one sentence and a status (*Recommended plan*; *No better plan found: your current setup is already close*; *We couldn't find a plan that meets these limits. Closest options below.*), then *What to change* (settings in plain words with units), *What you get* (four numbers, before → after, better / worse / no clear change), *Things to watch* (side effects and risks, with a severity), *Why this plan* (numbers only, no claims about causes), and *How much to trust this*. |
+| **Try changes** | Move the 16 settings, grouped as *Shifts and overtime*, *Maintenance*, *Machine speed*, *Stock and ordering*. See a **quick estimate** (instant, rough, never with a range), then **Check with the detailed simulation** (10 runs, a few seconds; numbers with "likely between" ranges). |
+| **How reliable is this?** | What was tested, what worked, what did not: the five pre-registered tests as five identical cards, both failures included, then the known limits; model cards and figures for reviewers. |
+| **Past results** | Every plan and saved example, newest first; live runs and saved examples labelled apart; click a row to reopen it. |
 
-What the dashboard will not do: show the surrogate's epistemic std (it does not
-separate out-of-distribution plans: AUROC 0.590), mix estimates and verified
-numbers in one table, or describe a plan with overclaiming words (a fixed list,
-enforced by tests on everything the pages render). Downtime and
-unplanned failures always carry this badge: *indicative: surrogate R² 0.91 /
-0.73, and sensitive to the health-model assumption (feasibility flipped in 7 of
-40 benchmark cells under a fixed-failure-rate hazard).* Each rule has a test.
+**How much to trust this** is a fixed rule, not a score: the plan's numbers
+come from the detailed simulation; the limits are met with a safety margin; the
+settings are close to ones the model has seen; and the goal doesn't depend on
+breakdown or downtime numbers (the model's weakest). All four → *Checked*; one
+missing → *Partly checked*; two or more, or no detailed simulation → *Rough
+guide*. The reasons are listed under it; there are no probabilities.
 
-![What-if in demo mode: a replayed plan's verified numbers](docs/dashboard_whatif.png)
+What the dashboard will not do, each enforced by a test:
+
+- use jargon in its default view (a test walks every rendered string, outside
+  the "Show technical details" sections, against a banned-word list);
+- mix quick estimates and checked numbers;
+- show the quick-estimate model's own uncertainty (it does not flag unfamiliar
+  plans: AUROC 0.590); a familiar / less familiar / unfamiliar territory check
+  is shown instead;
+- describe a plan with overclaiming words, or call an AI explanation's check
+  "verified";
+- hide that breakdown and downtime numbers are rough guides. The exact
+  technical badge (*indicative: surrogate R² 0.91 / 0.73, and sensitive to the
+  health-model assumption …*) is kept under Show technical details.
+
+The agent gained one **read-only progress hook** for the dashboard
+(`run_on_spec_streaming`, beside `run_agent_streaming`): the same graph and
+nodes, tested to return exactly what `run_on_spec` returns. The benchmark does
+not use it and is unaffected.
+
+![Plan: six goal cards](docs/dashboard_goals.png)
 
 ---
 
@@ -136,7 +165,7 @@ mutation test (not a test result) found v2 catches everything v1 catches, and
 found one benchmark explanation v1 passed that states a direction wrongly
 ([model card F §8](reports/model_cards/f_agent_benchmark.md)).
 
-![Evidence: B1–B5 with both FAILs](docs/dashboard_evidence.png)
+![How reliable is this? The five tests, both failures included](docs/dashboard_reliability.png)
 
 ### Components
 
@@ -184,9 +213,10 @@ where it underperformed.
 
 ```
 app/
-  main.py          Streamlit entry point (navigation, sidebar)
-  views/           ask.py, whatif.py, evidence.py, history.py
-  demo_cache/      six replayed benchmark results (no secrets, no data paths)
+  main.py          Streamlit entry point (navigation, sidebar, running banner)
+  views/           plan.py, try_changes.py, reliability.py, past_results.py
+  demo_cache/      eight saved example results (no secrets, no data paths)
+.streamlit/        config.toml: the calm light theme, toolbar hidden
 configs/           data, twin, models, agent YAMLs, validated by Pydantic
 src/twinmind/
   data/            downloads, loaders, windowing, features
@@ -194,12 +224,13 @@ src/twinmind/
   twin/            SimPy line, demand process, costs, runner
   optim/ optimise/ search, surrogate-first verification, novelty, baselines
   agents/          LangGraph graph, planner, critic, tools, explanation v1 and v2
-  ui/              viewmodel.py and services.py (no Streamlit), components.py
+  ui/              glossary, goals, plain, jobs, viewmodel, services (no Streamlit);
+                   components.py (the only Streamlit module)
   eval/ utils/     metrics, registry, figures; paths, config, logging
 scripts/           CLI entry points (data, training, benchmarks, demo cache)
 tests/             pytest suite; CI runs it with no network, no key, no data
 reports/           model cards, pre-registrations, results JSON, figures
-docs/              dashboard screenshots
+docs/              dashboard screenshots, ux_spec.md (the redesign spec)
 ```
 
 ---

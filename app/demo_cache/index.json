@@ -59,6 +59,26 @@
    "context_id": 16,
    "goal_text": "Maximise OEE with no more than 1.5 unplanned failures expected.",
    "file": "g09.json"
+  },
+  {
+   "id": "g03",
+   "goal_id": "G03",
+   "seed": 2,
+   "category": "feasible",
+   "role": "Lower cost per unit with an on-time delivery floor (the cost card).",
+   "context_id": 10,
+   "goal_text": "Get the cost per unit as low as possible while still delivering at least 80% of orders on time.",
+   "file": "g03.json"
+  },
+  {
+   "id": "g10",
+   "goal_id": "G10",
+   "seed": 2,
+   "category": "feasible",
+   "role": "Lower downtime with a profit floor: the closest to the breakdowns card.",
+   "context_id": 17,
+   "goal_text": "Minimise machine downtime while keeping profit at £200,000 or more.",
+   "file": "g10.json"
   }
  ]
 }

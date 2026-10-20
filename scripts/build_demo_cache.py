@@ -54,6 +54,8 @@ PICKS = [
         1,
         "A constraint on unplanned failures, a weakly predicted KPI; also flagged as novel.",
     ),
+    ("G03", 2, "Lower cost per unit with an on-time delivery floor (the cost card)."),
+    ("G10", 2, "Lower downtime with a profit floor: the closest to the breakdowns card."),
 ]
 
 FORBIDDEN_STRINGS = ("data/", "data\\", ".env", "gsk_", "GROQ_API_KEY")

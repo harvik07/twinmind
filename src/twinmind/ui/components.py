@@ -1,10 +1,9 @@
-"""Streamlit rendering of the view models. The only ``twinmind.ui`` module that
-imports Streamlit; every word it shows comes from ``viewmodel`` or ``services``
-or is a fixed string here, and all of it is scanned for overclaiming in tests.
+"""Streamlit rendering. The only ``twinmind.ui`` module that imports Streamlit.
 
-Heavy objects (the surrogate, the twin's resources, the Groq client) are
-loaded once per process with ``st.cache_resource``; nothing runs in the
-background, and one agent goal or twin verification runs at a time.
+The default view uses plain words only (``ui.plain``, ``ui.glossary``); the
+exact technical labels from ``ui.viewmodel`` live in "Show technical details".
+Heavy objects load once per process (``st.cache_resource``); agent runs go
+through the single background ``JobRunner``.
 """
 
 from __future__ import annotations
@@ -15,10 +14,14 @@ from typing import Any
 import streamlit as st
 
 from twinmind.agents.contracts import AgentResult
+from twinmind.ui import plain as pl
 from twinmind.ui import services as sv
 from twinmind.ui import viewmodel as vm
+from twinmind.ui.glossary import KPIS, SECTIONS, SETTINGS
+from twinmind.ui.jobs import JobRunner
 
-TONE_ICON = {"good": "✅", "warning": "⚠️", "info": "ℹ️", "error": "⛔"}  # noqa: RUF001
+TECH = "Show technical details"
+AI_EXPLANATION = "AI-written explanation (technical wording)"
 
 
 # --------------------------------------------------------------------------- #
@@ -26,8 +29,14 @@ TONE_ICON = {"good": "✅", "warning": "⚠️", "info": "ℹ️", "error": "⛔
 # --------------------------------------------------------------------------- #
 @st.cache_resource
 def run_guard() -> sv.RunGuard:
-    """One heavy job (agent goal or twin verification) at a time, process-wide."""
+    """One twin check on the Try changes page at a time, process-wide."""
     return sv.RunGuard()
+
+
+@st.cache_resource
+def job_runner() -> JobRunner:
+    """The single background runner for agent goals, process-wide."""
+    return JobRunner()
 
 
 @st.cache_resource
@@ -42,17 +51,17 @@ def agent_config() -> Any:
     return load_config("agent")
 
 
-@st.cache_resource(show_spinner="Loading the surrogate and the twin (once per session)…")
+@st.cache_resource(show_spinner="Loading the detailed simulation (first time only)…")
 def twin_state() -> dict[str, Any]:
-    """The surrogate, novelty scorer and twin resources, loaded once."""
+    """The quick-estimate model, familiarity scorer and simulation, loaded once."""
     from twinmind.agents.graph import _shared_state
 
     return _shared_state()
 
 
-@st.cache_resource(show_spinner="Connecting to the language model…")
+@st.cache_resource(show_spinner="Connecting to the AI service…")
 def live_deps() -> Any:
-    """The live agent's dependencies: Groq client and the real toolkit, once."""
+    """The live agent's dependencies, built once."""
     from twinmind.agents.graph import AgentDeps, groq_client, twin_toolkit
     from twinmind.utils.paths import PROJECT_ROOT
 
@@ -66,46 +75,198 @@ def live_deps() -> Any:
     )
 
 
+def demo_by_id(entry_id: str) -> sv.DemoEntry:
+    return next(e for e in demo_cache() if e.id == entry_id)
+
+
 # --------------------------------------------------------------------------- #
-# Chrome
+# Chrome: sidebar, running banner, glossary
 # --------------------------------------------------------------------------- #
 def sidebar(mode: sv.Mode) -> None:
-    """Mode and why, on every page. Never shows a key or an .env value."""
     st.sidebar.markdown("### TwinMind")
-    st.sidebar.caption("An agentic digital twin of a five-machine production line.")
-    if mode.live:
-        st.sidebar.success(mode.label)
-    else:
-        st.sidebar.info(mode.label)
-        for reason in mode.reasons:
-            st.sidebar.caption(f"• {reason}")
     st.sidebar.caption(
-        "Every number comes from the simulator or its surrogate; the language model only "
-        "reads goals and writes explanations."
+        "Finds better production settings for your line and checks them in a detailed "
+        "simulation before recommending anything."
     )
+    if mode.live:
+        st.sidebar.success("Live: plans are worked out now.", icon="🟢")
+    else:
+        st.sidebar.info("Demo mode: showing saved example results.", icon="📁")
+    with st.sidebar.expander("Glossary"):
+        glossary()
 
 
-def replay_banner(provenance: str | None = None) -> None:
-    """The label every replayed result carries, visibly, above everything else."""
-    st.warning(f"**{sv.REPLAY_LABEL.capitalize()}.**", icon="🔁")
-    if provenance:
-        st.caption(provenance)
+def glossary() -> None:
+    st.markdown("**Numbers**")
+    st.markdown(
+        "\n".join(
+            f"- **{t.name}** ({t.unit}, {t.better.lower()} is better): {t.meaning}"
+            + (" *Rough guide.*" if t.rough else "")
+            for t in KPIS.values()
+        )
+    )
+    st.markdown("**Settings**")
+    for section in SECTIONS:
+        names = [s for s in SETTINGS.values() if s.section == section]
+        st.markdown(
+            f"*{section}*\n" + "\n".join(f"- **{s.name}** ({s.unit}): {s.meaning}" for s in names)
+        )
 
 
-def weak_kpi_note() -> None:
-    names = " and ".join(vm.KPI_DISPLAY[k] for k in vm.WEAK_KPIS)
-    st.caption(f"⚠️ {names}: {vm.WEAK_KPI_BADGE}.")
+def _elapsed(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes}:{secs:02d}"
+
+
+@st.fragment(run_every=2.0)
+def running_banner() -> None:
+    """On every page while a plan is being worked out, with Cancel."""
+    import time
+
+    runner = job_runner()
+    status = runner.status()
+    if not status.active:
+        return
+    elapsed = _elapsed(status.elapsed(time.monotonic()))
+    if status.state == "cancelling":
+        text = "Stopping the plan: the current step finishes first (up to about a minute)."
+    elif status.state == "stopping":
+        text = "The plan hit the time limit and is stopping after the current step."
+    else:
+        text = f"A plan is being worked out ({elapsed} so far): “{status.goal_text}”"
+    left, right = st.columns([5, 1])
+    left.info(text, icon="⏳")
+    if status.state == "running" and right.button("Cancel", key="cancel_run", width="stretch"):
+        runner.cancel()
+        st.rerun()
 
 
 # --------------------------------------------------------------------------- #
-# Tables: one source label per table, never mixed
+# Pieces of a result
+# --------------------------------------------------------------------------- #
+def status_chip(chip: pl.Chip) -> None:
+    st.badge(chip.text, icon=chip.icon, color=chip.color)  # type: ignore[arg-type]
+
+
+def metric_cards(cards: Sequence[pl.KPICard]) -> None:
+    """Headline numbers as small cards, two per row, so they stay readable on a
+    tablet; the text wraps instead of being cut off."""
+    for start in range(0, len(cards), 2):
+        columns = st.columns(2)
+        for column, card in zip(columns, cards[start : start + 2], strict=False):
+            with column.container(border=True):
+                st.markdown(f"**{card.label}**", help=card.help)
+                st.subheader(card.after, anchor=False)
+                if card.before is not None:
+                    st.caption(f"Now: {card.before}")
+                if card.change:
+                    st.markdown(f":{card.color}[{card.line}]")
+                if card.rough:
+                    st.caption("⚠ Rough guide: the model is less accurate here.")
+
+
+def trust_block(trust: pl.Trust) -> None:
+    st.markdown(f"{trust.dots} **{trust.label}**")
+    st.caption(trust.conclusion)
+    st.markdown("\n".join(f"- {c.icon} {c.text}" for c in trust.checks))
+
+
+def watch_list(items: Sequence[pl.WatchItem]) -> None:
+    if not items:
+        st.markdown("Nothing to watch.")
+        return
+    st.markdown("\n".join(f"- {i.icon} **{i.severity}** · {i.text}" for i in items))
+
+
+def plan_result(
+    res: AgentResult,
+    *,
+    saved: bool,
+    note: str = "",
+    asked: str = "",
+    unreachable: bool = False,
+) -> None:
+    """The whole plain result: answer first, evidence after, technical last."""
+    if saved:
+        st.warning(f"**{sv.REPLAY_LABEL}.**", icon="📁")
+        st.caption("This result was worked out earlier and saved; nothing was run just now.")
+    if note:
+        st.info(note, icon="ℹ️")
+    trust = pl.trust(res)
+    top_left, top_right = st.columns([3, 2])
+    with top_left:
+        status_chip(pl.chip(res))
+    if trust is not None:
+        top_right.markdown(f"How much to trust this: {trust.dots} **{trust.label}**")
+    if asked:
+        st.caption(f"You asked: “{asked}”")
+    st.caption(f"Goal: {pl.goal_sentence(res)}")
+    st.markdown(f"### {pl.headline(res, unreachable=unreachable)}")
+
+    changes = pl.setting_changes(res) if pl.outcome(res) == "recommended" else []
+    if changes:
+        st.markdown("#### What to change")
+        st.markdown("\n".join(f"- {c.text}" for c in changes[:3]))
+        if len(changes) > 3:
+            with st.expander(f"{len(changes) - 3} more settings"):
+                st.markdown("\n".join(f"- {c.text}" for c in changes[3:]))
+
+    options = pl.closest_lines(res)
+    if pl.outcome(res) == "not_found" and options:
+        st.markdown("#### Closest options")
+        st.markdown(
+            "\n".join(f"- {o}" for o in options)
+            + "\n\nThese are options for you to decide on. Change a limit and press "
+            "Find a plan again."
+        )
+
+    cards = pl.kpi_cards(res)
+    if cards:
+        title = "What you get" if pl.outcome(res) == "recommended" else "The best plan found"
+        st.markdown(f"#### {title}")
+        st.caption(pl.checked_label(res) + ", against your current setup.")
+        metric_cards(cards)
+        rows = pl.more_numbers(res)
+        if rows:
+            with st.expander("More numbers"):
+                st.caption(pl.checked_label(res) + ".")
+                st.dataframe(rows, hide_index=True, width="stretch")
+
+    watch = pl.things_to_watch(res)
+    if res.baseline_comparison:
+        st.markdown("#### Things to watch")
+        watch_list(watch)
+
+    summary = pl.plain_summary(res)
+    if summary:
+        st.markdown("#### Why this plan" if pl.outcome(res) == "recommended" else "#### Summary")
+        st.markdown(summary)
+    if res.explanation:
+        with st.expander(AI_EXPLANATION):
+            st.markdown(res.explanation)
+            source = vm.explanation_source(res.explanation_mode, replayed=saved)
+            if source:
+                st.caption(source)
+            st.markdown("**What this check does not catch**")
+            st.markdown("\n".join(f"- {gap}" for gap in vm.EXPLANATION_CHECK_GAPS))
+
+    if trust is not None:
+        st.markdown("#### How much to trust this")
+        trust_block(trust)
+
+    with st.expander(TECH):
+        technical_details(res, saved=saved)
+
+
+# --------------------------------------------------------------------------- #
+# Technical details: everything v1.0 showed, with the exact labels
 # --------------------------------------------------------------------------- #
 def _note(row: vm.KPIRow) -> str:
     return f"⚠️ {row.badge}" if row.badge else ""
 
 
 def kpi_table(rows: Sequence[vm.KPIRow], *, with_baseline: bool) -> None:
-    """A KPI table. Every row shares one source label, shown in the caption."""
+    """A technical KPI table. Every row shares one source label."""
     if not rows:
         return
     labels = {r.source_label for r in rows}
@@ -127,82 +288,63 @@ def kpi_table(rows: Sequence[vm.KPIRow], *, with_baseline: bool) -> None:
         data.append(line)
     st.caption(f"Numbers below: **{label}**.")
     st.dataframe(data, hide_index=True, width="stretch")
-    weak_kpi_note()
+    names = " and ".join(vm.KPI_DISPLAY[k] for k in vm.WEAK_KPIS)
+    st.caption(f"⚠️ {names}: {vm.WEAK_KPI_BADGE}.")
 
 
-def novelty(view: vm.NoveltyView) -> None:
-    icon = {"inside": "🟢", "edge": "🟡", "outside": "🔴"}.get(view.band, "⚪")
-    st.markdown(f"{icon} **Training coverage:** {view.text}")
-
-
-# --------------------------------------------------------------------------- #
-# A whole result
-# --------------------------------------------------------------------------- #
-def result(res: AgentResult, *, replayed: bool, provenance: str | None = None) -> None:
-    """Card, KPI table, flags, options, coverage, explanation, run status."""
-    if replayed:
-        replay_banner(provenance)
-    card = vm.recommendation_card(res, replayed=replayed)
-    icon = TONE_ICON.get(card.tone, "")
-    st.markdown(f"#### {icon} {card.status_label}")
-    st.markdown(f"> {card.goal_text}")
-    st.markdown(f"**{card.headline}**")
-    if card.question:
-        st.info(f"The agent asks: {card.question}")
-    if card.refusal:
-        st.error(f"Reason: {card.refusal}")
-    if card.objective:
-        constraints = "; ".join(card.constraints) or "none"
-        st.markdown(f"**Objective:** {card.objective}  \n**Constraints:** {constraints}")
-    if card.reason:
-        st.markdown(f"**Verdict reason:** {card.reason}")
-    if card.plan_changes:
-        with st.expander(f"Plan changes ({len(card.plan_changes)} levers)"):
-            st.markdown("\n".join(f"- `{c}`" for c in card.plan_changes))
-
+def technical_details(res: AgentResult, *, saved: bool, provenance: str = "") -> None:
+    if saved:
+        st.caption(f"{sv.TECH_REPLAY_LABEL}. {provenance}".strip())
+    card = vm.recommendation_card(res, replayed=saved)
+    st.markdown(
+        f"Status `{res.status}` · {card.status_label} · {card.headline}  \n"
+        f"Objective: {card.objective or '—'}  \n"
+        f"Constraints: {'; '.join(card.constraints) or 'none'}  \n"
+        f"Verdict reason: {card.reason or '—'}"
+    )
+    effects = vm.side_effects(res)
+    if effects:
+        st.markdown("\n".join(f"- {e.text} ({e.source_label})" for e in effects))
     rows = vm.kpi_table(res)
     if rows:
-        st.markdown("##### Plan against the current policy")
-        effects = vm.side_effects(res)
-        if effects:
-            st.warning(
-                "\n".join(f"- {e.text}" for e in effects)
-                + f"\n\n{effects[0].source_label}: the 95% interval of each change excludes "
-                "the current policy's value, in the unfavourable direction. These KPIs are "
-                "not part of the goal.",
-                icon="⚠️",
-            )
         kpi_table(rows, with_baseline=True)
-
+    if card.plan_changes:
+        st.markdown("Plan changes (scenario levers):  \n" + "  \n".join(card.plan_changes))
     flags = vm.flags_plain(res)
     if flags:
-        st.markdown("##### Critic flags")
-        for f in flags:
-            st.markdown(f"- **{f.code.replace('_', ' ')}**: {f.text}")
-
-    options = vm.closest_options(res)
-    if options:
-        st.markdown("##### Closest achievable (options, not decisions)")
-        for o in options:
-            st.markdown(f"- {o.constraint}. {o.closest}. *{o.option}* — {o.note}")
-
+        st.markdown("\n".join(f"- `{f.code}`: {f.text}" for f in flags))
     if res.plan is not None:
-        novelty(vm.novelty_view(res.plan.get("novelty")))
-
-    if card.explanation:
-        st.markdown("##### Explanation")
-        st.markdown(card.explanation)
-        if card.explanation_source:
-            st.caption(card.explanation_source)
-        with st.expander("What this check does not catch"):
-            st.markdown("\n".join(f"- {gap}" for gap in vm.EXPLANATION_CHECK_GAPS))
-
+        view = vm.novelty_view(res.plan.get("novelty"))
+        score = "n/a" if view.score is None else f"{view.score:.3f}"
+        st.markdown(f"Novelty score {score} ({view.band} band): {view.text}")
     status = vm.run_status(res)
-    if replayed:
-        twin_runs = (res.trace or {}).get("twin_runs", 0)
+    trace = res.trace or {}
+    st.caption(
+        f"{status.detail}; LLM calls {trace.get('llm_calls_total', 0)} of cap "
+        f"{trace.get('llm_call_cap', '?')}; context {res.context_id}."
+    )
+    if card.explanation_source:
+        st.caption(f"Explanation: {card.explanation_source}")
+
+
+# --------------------------------------------------------------------------- #
+# Progress
+# --------------------------------------------------------------------------- #
+STEP_ICON = {"done": "✓", "now": "◌", "todo": "○"}
+
+
+def progress_panel(status: Any, *, card_goal: bool) -> None:
+    import time
+
+    with st.container(border=True):
+        st.markdown(f"**Finding a plan for:** {status.goal_text}")
+        lines = []
+        for text, state in status.steps:
+            if card_goal and text == "Understanding your goal":
+                state = "done"
+            lines.append(f"{STEP_ICON[state]} {text}")
+        st.markdown("  \n".join(lines))
         st.caption(
-            f"Replayed: the plan and its twin numbers are from the benchmark run "
-            f"({twin_runs} twin runs); the explanation is from the benchmark's audit."
+            f"Elapsed {_elapsed(status.elapsed(time.monotonic()))} · usually 2–4 minutes. "
+            "You can keep using the page while it works."
         )
-    else:
-        st.caption(f"Run: {status.label} — {status.detail}.")

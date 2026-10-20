@@ -1,0 +1,23 @@
+# TwinMind dashboard theme: calm, readable, light. Colour only ever repeats
+# what a word or icon already says (status chips, better/worse arrows).
+
+[theme]
+base = "light"
+primaryColor = "#1f5fa8"            # calm blue: the one primary button per page
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f3f5f8"
+textColor = "#1d2733"               # high contrast on white (about 15:1)
+font = "sans serif"
+baseFontSize = 16
+baseRadius = "medium"
+showWidgetBorder = true
+
+[client]
+toolbarMode = "viewer"              # no "Deploy" or developer menu for managers
+showErrorDetails = "none"           # errors are shown in plain words by the app
+
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true

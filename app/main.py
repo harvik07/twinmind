@@ -3,10 +3,11 @@
     streamlit run app/main.py              # live if a key and the local files exist
     streamlit run app/main.py -- --demo    # demo mode regardless
 
-One process, no background workers: the surrogate and the twin load once
-(st.cache_resource), and one agent goal or twin verification runs at a time.
-Without a Groq key or the local model files every page runs in demo mode on
-replayed benchmark results (app/demo_cache/), each one labelled as such.
+One process. The models load once (st.cache_resource). A plan is worked out
+in ONE background thread, one at a time, so clicking around never stops it;
+every page shows a banner with Cancel while it runs. Without a key or the
+local model files every page runs in demo mode on saved example results, each
+labelled as such.
 """
 
 from __future__ import annotations
@@ -24,11 +25,12 @@ if "--demo" in sys.argv[1:]:
 
 st.set_page_config(page_title="TwinMind", page_icon="🏭", layout="wide")
 ui.sidebar(detect_mode())
+ui.running_banner()
 st.navigation(
     [
-        st.Page("views/ask.py", title="Ask", icon="💬", default=True),
-        st.Page("views/whatif.py", title="What-if", icon="🎚️"),
-        st.Page("views/evidence.py", title="Evidence", icon="📊"),
-        st.Page("views/history.py", title="History", icon="🕘"),
+        st.Page("views/plan.py", title="Plan", icon="🧭", default=True),
+        st.Page("views/try_changes.py", title="Try changes", icon="🎚️"),
+        st.Page("views/reliability.py", title="How reliable is this?", icon="🔎"),
+        st.Page("views/past_results.py", title="Past results", icon="🕘"),
     ]
 ).run()

@@ -46,9 +46,13 @@ def _all_text(obj: Any) -> list[str]:
 # --------------------------------------------------------------------------- #
 # The demo cache itself
 # --------------------------------------------------------------------------- #
-def test_the_demo_cache_covers_the_six_roles_and_is_replay_labelled() -> None:
+def test_the_demo_cache_covers_the_eight_examples_and_is_replay_labelled() -> None:
     entries = _entries()
-    assert len(entries) == 6
+    # Six from Stage A, plus G03 s2 and G10 s2 for the cost and breakdown cards.
+    assert [(e["goal_id"], e["seed"]) for e in entries] == [
+        ("G07", 1), ("G01", 1), ("I01", 2), ("N01", 1), ("AA1", 1), ("G09", 1),
+        ("G03", 2), ("G10", 2),
+    ]  # fmt: skip
     assert {e["category"] for e in entries} == {
         "feasible",
         "infeasible",
